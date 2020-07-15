@@ -1,0 +1,21 @@
+[package]
+name = "icfpjit"
+version = "0.0.0"
+authors = ["The Cranelift Project Developers", "Alex Kesling <alex@kesling.co>"]
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/CraneStation/simplejit-demo"
+description = "Toy language implemented using cranelift-simplejit"
+
+[lib]
+name = "icfpjit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "toy"
+path = "src/toy.rs"
+
+[dependencies]
+cranelift = "0.63.0"
+cranelift-module = "0.63.0"
+cranelift-simplejit = "0.63.0"
+peg = "0.6"

@@ -1,12 +1,15 @@
 [package]
 name = "sidecar"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Alex Kesling <alex@kesling.co>"]
 edition = "2018"
 
 [lib]
 name = "sidecar"
 crate-type = ["cdylib"]
+
+[dependencies]
+icfpjit = {path = "../icfpjit"}
 
 [dependencies.pyo3]
 version = "0.11.1"
