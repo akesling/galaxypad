@@ -47,12 +47,15 @@ class _ICFPTokenInterpreter:
                     left_value = active_value
                     right_value = self._run(
                         tokens=[line[ti+1:]], line_offset=li, token_offset=ti+1)
-                    if left_value == right_value:
+                    left_is_variable = isinstance(left_value, Variable)
+                    right_is_variable = isinstance(right_value, Variable)
+                    if (not left_is_variable and not right_is_variable
+                            and left_value == right_value):
                         break
                     else:
-                        left_is_variable = isinstance(left_value, Variable)
-                        right_is_variable = isinstance(right_value, Variable)
                         if left_is_variable and right_is_variable:
+                            # TODO(akesling): Implement definition for two
+                            # variables relative to each other
                             if left_value.is_equivalent_to(right_value):
                                 break
                             raise NotImplementedError(
@@ -97,7 +100,18 @@ class _ICFPTokenInterpreter:
     mul = lambda arg1: lambda arg2: arg1 * arg2
 
     # Integer division rounding toward zero
-    div = lambda arg1: lambda arg2: (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
+    # div = lambda arg1: lambda arg2: (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
+    def div(arg1):
+        def apply(arg2):
+            left_is_variable = isinstance(arg1, Variable)
+            right_is_variable = isinstance(arg2, Variable)
+            # To avoid accumulating unnecessary ops on Variables, distinguish
+            # whether to delegate to the Variable or apply here.
+            if left_is_variable or right_is_variable:
+                return arg1 // arg2
+            else:
+                return (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
+        return apply
 
     inc = lambda arg: arg + 1
     dec = lambda arg: arg - 1
@@ -122,9 +136,9 @@ class Variable:
         self.name = name
         self._ops: [Tuple(str, Union[None, int, Variable])] = []
 
-    def __abs__(self):
-        self._ops.append(('abs', None))
-        return self
+    def __repr__(self):
+        return 'Variable<Name: %s, Ops: %s>' % (
+            self.name, self._ops)
 
     def __add__(self, other):
         if isinstance(other, Variable):
@@ -146,6 +160,9 @@ class Variable:
             'Addition with unknown value/type detected, %s/%s' % (
                 other, type(other)))
 
+    def __radd__(self, other):
+        return self.__add__(other)
+
     def __mul__(self, other):
         if isinstance(other, Variable):
             self._ops.append(('mul', other.copy()))
@@ -165,6 +182,9 @@ class Variable:
         raise Exception(
             'Multiplication with unknown value/type detected, %s/%s' % (
                 other, type(other)))
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
     def __floordiv__(self, other):
         if isinstance(other, Variable):
@@ -186,10 +206,13 @@ class Variable:
             'Addition with unknown value/type detected, %s/%s' % (
                 other, type(other)))
 
+    def __rfloordiv__(self, other):
+        raise NotImplementedError(
+            'A Variable being divided into non-variable is not yet supported')
+
     def __eq__(self, other):
         if isinstance(other, Variable):
-            if (other.name == self.name and
-                sorted(other._ops) == sorted(self._ops)):
+            if self.is_equivalent_to(other):
                 return True
             self._ops.append(('eq', other.copy()))
             return self
@@ -201,6 +224,9 @@ class Variable:
         raise Exception(
             'Equality with unknown value/type detected, %s/%s' % (
                 other, type(other)))
+
+    def __req__(self, other):
+        return self.__eq__(other)
 
     def __lt__(self, other):
         if isinstance(other, Variable):
@@ -215,6 +241,22 @@ class Variable:
             'Less-than with unknown value/type detected, %s/%s' % (
                 other, type(other)))
 
+    def __gt__(self, other):
+        if isinstance(other, Variable):
+            self._ops.append(('gt', other.copy()))
+            return self
+
+        if isinstance(other, int) or isinstance(other, bool):
+            self._ops.append(('gt', other))
+            return self
+
+        raise Exception(
+            'Greater-than with unknown value/type detected, %s/%s' % (
+                other, type(other)))
+
+    def __rlt__(self, other):
+        return self.__gt__(other)
+
     def copy(self):
         new_variable = Variable(self.name)
         new_variable._ops = self._ops[:]
@@ -224,9 +266,15 @@ class Variable:
         return bool(self._ops)
 
     def is_equivalent_to(self, other):
+        print('Comparing %s to %s' % (self, other))
         if isinstance(other, Variable):
             if len(self._ops) == 0 and len(other._ops) == 0:
                 return True
 
+            if (other.name == self.name and
+                sorted(other._ops) == sorted(self._ops)):
+                return True
+
         raise NotImplementedError(
-            'Equivalency between these two values is not yet defined')
+            'Equivalency between these two values is not yet defined: '
+            '%s ?= %s' % (self, other))
