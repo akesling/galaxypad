@@ -50,21 +50,32 @@ class _ICFPTokenInterpreter:
                     if left_value == right_value:
                         break
                     else:
-                        # NOTE(akesling): This style of assignment hasn't been
-                        # seen in the signals so far.
-                        if isinstance(left_value, self.Variable):
-                            variables[left_value.name] = (
-                                self.Variable.copy(left_value))
-                            break
+                        left_is_variable = isinstance(left_value, Variable)
+                        right_is_variable = isinstance(right_value, Variable)
+                        if left_is_variable and right_is_variable:
+                            if left_value.is_equivalent_to(right_value):
+                                break
+                            raise NotImplementedError(
+                                'Resolution of variable co-definition is not '
+                                'yet implemented.')
+                        elif left_is_variable:
+                            # NOTE(akesling): This style of assignment hasn't
+                            # been seen in the signals so far.
+                            variables[left_value.name] = right_value
+                        elif right_is_variable:
+                            # NOTE(akesling): This style of assignment hasn't
+                            # been seen in the signals so far.
+                            variables[right_value.name] = left_value
                         else:
                             raise Exception(
                                 'An unknown error occurred for definition with '
                                 '"left value" (%s) and "right value" (%s)' % (
                                     left_value, right_value))
+                        break
 
                 if tkn.startswith('x'):
                     variables[tkn] = None
-                    active_value = active_value(self.Variable(tkn))
+                    active_value = active_value(Variable(tkn))
                     continue
 
                 if tkn == 't':
@@ -78,17 +89,6 @@ class _ICFPTokenInterpreter:
                 active_value = active_value(int(tkn))
 
         return active_value
-
-    class Variable:
-        # TODO(akesling): Figure out op accumulation
-        def __init__(self, name: str):
-            self.name = name
-            self._ops: [Tuple(str, Union[int, Variable])] = []
-
-        @staticmethod
-        def copy(self, other):
-            raise NotImplementedError(
-                'Variable copying is not yet implemented.')
 
     # Operators
     ap = lambda arg1: lambda arg2: arg1(arg2)
@@ -115,3 +115,118 @@ class _ICFPTokenInterpreter:
         'eq': eq,
         'lt': lt,
     }
+
+class Variable:
+    # TODO(akesling): Figure out op accumulation
+    def __init__(self, name: str):
+        self.name = name
+        self._ops: [Tuple(str, Union[None, int, Variable])] = []
+
+    def __abs__(self):
+        self._ops.append(('abs', None))
+        return self
+
+    def __add__(self, other):
+        if isinstance(other, Variable):
+            self._ops.append(('add', other.copy()))
+            return self
+
+        if isinstance(other, int):
+            if other == 0:
+                return self
+
+            self._ops.append(('add', other))
+            return self
+
+        if isinstance(other, bool):
+            raise NotImplementedError(
+                'Variable addition with booleans is not implemented')
+
+        raise Exception(
+            'Addition with unknown value/type detected, %s/%s' % (
+                other, type(other)))
+
+    def __mul__(self, other):
+        if isinstance(other, Variable):
+            self._ops.append(('mul', other.copy()))
+            return self
+
+        if isinstance(other, int):
+            if other == 1:
+                return self
+
+            self._ops.append(('mul', other))
+            return self
+
+        if isinstance(other, bool):
+            raise NotImplementedError(
+                'Variable multiplication with booleans is not implemented')
+
+        raise Exception(
+            'Multiplication with unknown value/type detected, %s/%s' % (
+                other, type(other)))
+
+    def __floordiv__(self, other):
+        if isinstance(other, Variable):
+            self._ops.append(('floordiv', other.copy()))
+            return self
+
+        if isinstance(other, int):
+            if other == 1:
+                return self
+
+            self._ops.append(('floordiv', other))
+            return self
+
+        if isinstance(other, bool):
+            raise NotImplementedError(
+                'Variable division with booleans is not implemented')
+
+        raise Exception(
+            'Addition with unknown value/type detected, %s/%s' % (
+                other, type(other)))
+
+    def __eq__(self, other):
+        if isinstance(other, Variable):
+            if (other.name == self.name and
+                sorted(other._ops) == sorted(self._ops)):
+                return True
+            self._ops.append(('eq', other.copy()))
+            return self
+
+        if isinstance(other, int) or isinstance(other, bool):
+            self._ops.append(('eq', other))
+            return self
+
+        raise Exception(
+            'Equality with unknown value/type detected, %s/%s' % (
+                other, type(other)))
+
+    def __lt__(self, other):
+        if isinstance(other, Variable):
+            self._ops.append(('lt', other.copy()))
+            return self
+
+        if isinstance(other, int) or isinstance(other, bool):
+            self._ops.append(('lt', other))
+            return self
+
+        raise Exception(
+            'Less-than with unknown value/type detected, %s/%s' % (
+                other, type(other)))
+
+    def copy(self):
+        new_variable = Variable(self.name)
+        new_variable._ops = self._ops[:]
+        return new_variable
+
+    def is_modified(self):
+        return bool(self._ops)
+
+    def is_equivalent_to(self, other):
+        if isinstance(other, Variable):
+            if len(self._ops) == 0 and len(other._ops) == 0:
+                return True
+
+        raise NotImplementedError(
+            'Equivalency between these two values is not yet defined')
