@@ -1,8 +1,11 @@
 from typing import Union, Tuple
+import logging
 
 __all__ = [
     'compile',
 ]
+
+logger = logging.getLogger('lib.icfp_interpreter')
 
 def compile(code: str):
     return _ICFPTokenInterpreter(_tokenize(code.split('\n')))
@@ -19,16 +22,21 @@ class _ICFPTokenInterpreter:
     def __call__(self, *args):
         return self._run(self._program, args)
 
-    def _run(self, tokens: [[str]], *args):
+    def _run(self, tokens: [[str]], *args, line_offset=0, token_offset=0):
         # TODO(akesling): Set initial variables based on args values
         variables = {}
 
-        for line in tokens:
+        for li, line in enumerate(tokens):
             active_value = lambda x: x
-            for i, tkn in enumerate(line):
-                print(tkn)
+            for ti, tkn in enumerate(line):
+                logger.debug(
+                    'Executing Line: %s Token: %s -- %s',
+                    line_offset+li, token_offset+ti, tkn)
 
                 if tkn == '#' or tkn == '...':
+                    logger.debug(
+                        'Skipping comment or block delimeter on line %s',
+                        line_offset+li)
                     break
 
                 if tkn in self.non_terminals:
@@ -37,7 +45,8 @@ class _ICFPTokenInterpreter:
 
                 if tkn == ':=':
                     left_value = active_value
-                    right_value = self._run([line[i+1:]])
+                    right_value = self._run(
+                        tokens=[line[ti+1:]], line_offset=li, token_offset=ti+1)
                     if left_value == right_value:
                         break
                     else:
@@ -56,6 +65,14 @@ class _ICFPTokenInterpreter:
                 if tkn.startswith('x'):
                     variables[tkn] = None
                     active_value = active_value(self.Variable(tkn))
+                    continue
+
+                if tkn == 't':
+                    active_value = active_value(True)
+                    continue
+
+                if tkn == 'f':
+                    active_value = active_value(False)
                     continue
 
                 active_value = active_value(int(tkn))
