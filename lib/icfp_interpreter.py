@@ -67,6 +67,14 @@ class _ICFPTokenInterpreter:
                     active_value = active_value(self.Variable(tkn))
                     continue
 
+                if tkn == 't':
+                    active_value = active_value(True)
+                    continue
+
+                if tkn == 'f':
+                    active_value = active_value(False)
+                    continue
+
                 active_value = active_value(int(tkn))
 
         return active_value
