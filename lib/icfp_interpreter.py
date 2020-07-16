@@ -97,7 +97,7 @@ class _ICFPTokenInterpreter:
     mul = lambda arg1: lambda arg2: arg1 * arg2
 
     # Integer division rounding toward zero
-    div = lambda arg1: lambda arg2: (-1 * (arg1*arg2 < 0)) * (abs(arg1) // abs(arg2))
+    div = lambda arg1: lambda arg2: (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
 
     inc = lambda arg: arg + 1
     dec = lambda arg: arg - 1
