@@ -55,52 +55,8 @@ class _ICFPTokenInterpreter:
                     except StopIteration as result:
                         right_value = result.value
 
-                    left_is_variable = isinstance(left_value, Variable)
-                    right_is_variable = isinstance(right_value, Variable)
-                    if (not left_is_variable and not right_is_variable
-                            and left_value == right_value):
-                        break
-                    else:
-                        if left_is_variable and right_is_variable:
-                            # TODO(akesling): Implement definition for two
-                            # variables relative to each other
-                            if left_value.is_equivalent_to(right_value):
-                                break
-                            raise NotImplementedError(
-                                'Resolution of variable co-definition is not '
-                                'yet implemented.')
-                        elif left_is_variable:
-                            # NOTE(akesling): This style of assignment hasn't
-                            # been seen in the signals so far.
-                            if (left_value.name in variables
-                                    and variables[left_value.name]):
-                                raise Exception(
-                                    'Variable "%s" has been defined twice, '
-                                    'first with value "%s" and second with '
-                                    'value "%s"' % (
-                                        left_value.name,
-                                        variables[left_value.name],
-                                        right_value))
-                            variables[left_value.name] = right_value
-                        elif right_is_variable:
-                            # NOTE(akesling): This style of assignment hasn't
-                            # been seen in the signals so far.
-                            if (right_value.name in variables
-                                    and variables[right_is_variable.name]):
-                                raise Exception(
-                                    'Variable "%s" has been defined twice, '
-                                    'first with value "%s" and second with '
-                                    'value "%s"' % (
-                                        right_value.name,
-                                        variables[right_value.name],
-                                        left_value))
-                            variables[right_value.name] = left_value
-                        else:
-                            raise Exception(
-                                'An unknown error occurred for definition with '
-                                '"left value" (%s) and "right value" (%s)' % (
-                                    left_value, right_value))
-                        break
+                    self._define(left_value, right_value, variables)
+                    break
 
                 try:
                     active_value = active_value(self._parse(tkn))
@@ -154,6 +110,53 @@ class _ICFPTokenInterpreter:
 
         raise ValueError(
             'Value provided is not of a serializable type %s' % value)
+
+    def _define(self, left_value, right_value, variable_lookup):
+        left_is_variable = isinstance(left_value, Variable)
+        right_is_variable = isinstance(right_value, Variable)
+        if (not left_is_variable and not right_is_variable
+                and left_value == right_value):
+            return
+
+        if left_is_variable and right_is_variable:
+            # TODO(akesling): Implement definition for two
+            # variables relative to each other
+            if left_value.is_equivalent_to(right_value):
+                return
+            raise NotImplementedError(
+                'Resolution of variable co-definition is not '
+                'yet implemented.')
+        elif left_is_variable:
+            # NOTE(akesling): This style of assignment hasn't
+            # been seen in the signals so far.
+            if (left_value.name in variable_lookup
+                    and variable_lookup[left_value.name]):
+                raise Exception(
+                    'Variable "%s" has been defined twice, '
+                    'first with value "%s" and second with '
+                    'value "%s"' % (
+                        left_value.name,
+                        variable_lookup[left_value.name],
+                        right_value))
+            variable_lookup[left_value.name] = right_value
+        elif right_is_variable:
+            # NOTE(akesling): This style of assignment hasn't
+            # been seen in the signals so far.
+            if (right_value.name in variable_lookup
+                    and variable_lookup[right_is_variable.name]):
+                raise Exception(
+                    'Variable "%s" has been defined twice, '
+                    'first with value "%s" and second with '
+                    'value "%s"' % (
+                        right_value.name,
+                        variable_lookup[right_value.name],
+                        left_value))
+            variable_lookup[right_value.name] = left_value
+        else:
+            raise Exception(
+                'An unknown error occurred for definition with '
+                '"left value" (%s) and "right value" (%s)' % (
+                    left_value, right_value))
 
     # Operators
     ap = lambda arg1: lambda arg2: arg1(arg2)
