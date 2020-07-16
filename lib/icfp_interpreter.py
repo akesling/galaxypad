@@ -7,6 +7,10 @@ __all__ = [
 
 logger = logging.getLogger('lib.icfp_interpreter')
 
+class Transmission(BaseException):
+    def __init__(self, value):
+        self.value = value
+
 def compile(code: str):
     return _ICFPTokenInterpreter(_tokenize(code.split('\n')))
 
@@ -39,14 +43,18 @@ class _ICFPTokenInterpreter:
                         line_offset+li)
                     break
 
-                if tkn in self.non_terminals:
-                    active_value = active_value(self.non_terminals[tkn])
-                    continue
-
                 if tkn == ':=':
                     left_value = active_value
-                    right_value = self._run(
-                        tokens=[line[ti+1:]], line_offset=li, token_offset=ti+1)
+                    try:
+                        runner = self._run(
+                            tokens=[line[ti+1:]], line_offset=li, token_offset=ti+1)
+                        while True:
+                            # TODO(akesling): Handle the case where the
+                            # subexpression contains tx
+                            runner.send(None)
+                    except StopIteration as result:
+                        right_value = result.value
+
                     left_is_variable = isinstance(left_value, Variable)
                     right_is_variable = isinstance(right_value, Variable)
                     if (not left_is_variable and not right_is_variable
@@ -64,10 +72,28 @@ class _ICFPTokenInterpreter:
                         elif left_is_variable:
                             # NOTE(akesling): This style of assignment hasn't
                             # been seen in the signals so far.
+                            if (left_value.name in variables
+                                    and variables[left_value.name]):
+                                raise Exception(
+                                    'Variable "%s" has been defined twice, '
+                                    'first with value "%s" and second with '
+                                    'value "%s"' % (
+                                        left_value.name,
+                                        variables[left_value.name],
+                                        right_value))
                             variables[left_value.name] = right_value
                         elif right_is_variable:
                             # NOTE(akesling): This style of assignment hasn't
                             # been seen in the signals so far.
+                            if (right_value.name in variables
+                                    and variables[right_is_variable.name]):
+                                raise Exception(
+                                    'Variable "%s" has been defined twice, '
+                                    'first with value "%s" and second with '
+                                    'value "%s"' % (
+                                        right_value.name,
+                                        variables[right_value.name],
+                                        left_value))
                             variables[right_value.name] = left_value
                         else:
                             raise Exception(
@@ -76,28 +102,67 @@ class _ICFPTokenInterpreter:
                                     left_value, right_value))
                         break
 
-                if tkn.startswith('x'):
-                    variables[tkn] = None
-                    active_value = active_value(Variable(tkn))
-                    continue
+                try:
+                    active_value = active_value(self._parse(tkn))
+                except Transmission as t:
+                    tx_value = self._serialize(t.value, variables)
+                    logger.debug('Transmitting value "%s"', tx_value)
 
-                if tkn == 't':
-                    active_value = active_value(True)
-                    continue
+                    received_message = (yield tx_value)
 
-                if tkn == 'f':
-                    active_value = active_value(False)
+                    logger.debug('Received value "%s"', received_message)
+                    active_value = self._parse(received_message)
                     continue
-
-                active_value = active_value(int(tkn))
+                    # TODO(akesling): Figure out what form the received value
+                    # should *actually* be.  Is it a set of arbitrary
+                    # expressions?  If so, we'll need to manage nested
+                    # transmission.
 
         return active_value
+
+    def _parse(self, token):
+        if token in self.non_terminals:
+            return self.non_terminals[token]
+
+        if token.startswith('x'):
+            return Variable(token)
+
+        if token == 't':
+            return True
+
+        if token == 'f':
+            return False
+
+        return int(token)
+
+    def _serialize(self, value, variable_lookup):
+        if isinstance(value, Variable):
+            if value.is_modified():
+                raise NotImplementedError(
+                    'Transmitting modified variables is not yet '
+                    'implemented')
+            return self._serialize(variable_lookup[value.name], variable_lookup)
+
+        if value is True:
+            return 't'
+
+        if value is False:
+            return 'f'
+
+        if isinstance(value, int):
+            return str(value)
+
+        raise ValueError(
+            'Value provided is not of a serializable type %s' % value)
 
     # Operators
     ap = lambda arg1: lambda arg2: arg1(arg2)
 
     add = lambda arg1: lambda arg2: arg1 + arg2
     mul = lambda arg1: lambda arg2: arg1 * arg2
+
+    def transmit(arg1):
+        raise Transmission(arg1)
 
     # Integer division rounding toward zero
     # div = lambda arg1: lambda arg2: (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
@@ -128,6 +193,7 @@ class _ICFPTokenInterpreter:
         'dec': dec,
         'eq': eq,
         'lt': lt,
+        'tx': transmit,
     }
 
 class Variable:
@@ -266,7 +332,6 @@ class Variable:
         return bool(self._ops)
 
     def is_equivalent_to(self, other):
-        print('Comparing %s to %s' % (self, other))
         if isinstance(other, Variable):
             if len(self._ops) == 0 and len(other._ops) == 0:
                 return True

@@ -1,0 +1,5 @@
+# Presuming the "server" returns the identity of the transmitted message
+x0  :=  4
+ap tx x0 := 4
+ap tx 10 := 10
+...
