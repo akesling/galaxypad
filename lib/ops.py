@@ -23,12 +23,10 @@ linear_list_leader = '11'
 def list_to_linear(lst):
     if not lst or lst == [None]:
         return '00'
+
     head = lst[0]
     tail = lst[1:]
-    if tail:
-        return linear_list_leader + to_linear(lst[0]) + to_linear(lst[1:])
-    else:
-        return linear_list_leader + list_to_linear(lst[0])
+    return linear_list_leader + to_linear(head) + to_linear(tail)
 
 def to_linear(value):
     return {
