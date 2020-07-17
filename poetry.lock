@@ -47,12 +47,12 @@ marker = "sys_platform == \"darwin\""
 name = "sidecar"
 optional = false
 python-versions = "*"
-version = "0.1.1"
+version = "0.2.0"
 
 [package.source]
 reference = ""
 type = "file"
-url = "sidecar/artifacts/wheels/sidecar-0.1.1-cp37-cp37m-macosx_10_7_x86_64.whl"
+url = "sidecar/artifacts/wheels/sidecar-0.2.0-cp37-cp37m-macosx_10_7_x86_64.whl"
 
 [[package]]
 category = "main"
@@ -68,7 +68,7 @@ secure = ["certifi", "cryptography (>=1.3.4)", "idna (>=2.0.0)", "pyOpenSSL (>=0
 socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7,<2.0)"]
 
 [metadata]
-content-hash = "c619fd21c06f42ac6ce3ab2fce44e6fab6c9c402ac00d1b5abb067409a516465"
+content-hash = "0f84a9c7cfe3723c5f345df58a19e88678256fe2c9e29918927367dc45ce617f"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -89,7 +89,7 @@ requests = [
     {file = "requests-2.24.0.tar.gz", hash = "sha256:b3559a131db72c33ee969480840fff4bb6dd111de7dd27c8ee1f820f4f00231b"},
 ]
 sidecar = [
-    {file = "sidecar-0.1.1-cp37-cp37m-macosx_10_7_x86_64.whl", hash = "sha256:29010ee2dc9cb42bb40a6b081fc95280d1181868359ecbf31bcc036d97e8763f"},
+    {file = "sidecar-0.2.0-cp37-cp37m-macosx_10_7_x86_64.whl", hash = "sha256:95ba06e263cca181e630f9d293c672e3afab0a5694def42685b2b406fef39838"},
 ]
 urllib3 = [
     {file = "urllib3-1.25.9-py2.py3-none-any.whl", hash = "sha256:88206b0eb87e6d677d424843ac5209e3fb9d0190d0ee169599165ec25e9d9115"},
