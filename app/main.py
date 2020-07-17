@@ -19,6 +19,9 @@ def main():
 
     alien_url = server_url + '/aliens/send'
     res = req(alien_url, player_key)
+    res = req(alien_url, res.text)
+    res = req(alien_url, res.text)
+    res = req(alien_url, res.text)
 
 if __name__ == '__main__':
     main()
