@@ -18,6 +18,10 @@ def main():
     player_key = sys.argv[2]
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
 
+    # Announce
+    res = req(server_url, player_key)
+
+    # Make request to aliens API
     alien_url = server_url + '/aliens/send'
     res = req(alien_url, '"1101000"')
 #    res = req(alien_url, res.text)
