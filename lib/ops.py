@@ -62,3 +62,25 @@ def grid_to_linear(grid):
         return ''.join(bin_list)
 
     raise NotImplementedError('Grid represents an unknown type: %s' % grid)
+
+def linear_to_int(linear):
+    is_negative = linear[0] == '1'
+    num_bits = 0
+    for bit in linear[2:]:
+        if bit == '1':
+            num_bits = num_bits + 4
+        else:
+            break
+    bin_string = linear[-num_bits:]
+    number = int(bin_string, 2)
+    if is_negative:
+        return -1 * number
+    return number
+
+def linear_to_grid(linear):
+    is_int = int(linear[0]) != int(linear[1])
+    if is_int:
+        number = linear_to_int(linear)
+        return int_to_grid(number)
+
+    raise NotImplementedError('Linear represents an unknown type: %s' % linear)
