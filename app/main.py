@@ -1,7 +1,7 @@
 import requests
 import sys
 
-def req(data):
+def req(server_url, data):
     res = requests.post(server_url, data=str(i))
     if res.status_code != 200:
         print('Unexpected server response:')
@@ -16,9 +16,9 @@ def main():
     player_key = sys.argv[2]
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
 
-    req(player_key)
+    req(server_url, player_key)
     for i in range(100000):
-        res = req(str(i))
+        res = req(server_url, str(i))
 
 if __name__ == '__main__':
     main()
