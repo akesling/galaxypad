@@ -17,25 +17,21 @@ def req(server_url, data):
 def main():
     server_url = sys.argv[1]
     player_key = sys.argv[2]
+    print('Reading parameters from command line arguments')
+    print(sys.argv)
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
-
-    res = requests.post(server_url, data=player_key)
-    if res.status_code != 200:
-        print('Unexpected server response:')
-        print('HTTP code:', res.status_code)
-        print('Response body:', res.text)
-        exit(2)
-    print('Server response:', res.text)
 
     # Announce
     res = req(server_url, player_key)
+    print(res)
+    print(repr(res))
 
     # Make request to aliens API
-    alien_url = 'https://icfpc2020-api.testkontur.ru/aliens/send'
+    alien_url = server_url + '/aliens/send'
+    print('aliens send url', alien_url)
     res = req(alien_url, '"1101000"')
-#    res = req(alien_url, res.text)
-#    res = req(alien_url, res.text)
-#    res = req(alien_url, res.text)
+    print(res)
+    print(repr(res))
 
 if __name__ == '__main__':
     main()
