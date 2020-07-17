@@ -1,4 +1,4 @@
-from typing import Union, Tuple
+from typing import Union, Tuple, List
 import logging
 
 __all__ = [
@@ -17,6 +17,51 @@ def compile(code: str):
 def _tokenize(code: [str]):
     return [list(filter(lambda x: x, line.strip().split(' '))) for line in code]
 
+# Operators
+ap = lambda arg1: lambda arg2: arg1(arg2)
+substitution = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2(arg3))
+
+add = lambda arg1: lambda arg2: arg1 + arg2
+mul = lambda arg1: lambda arg2: arg1 * arg2
+neg = lambda arg1: arg1 * -1
+
+def transmit(arg1):
+    raise Transmission(arg1)
+
+# Integer division rounding toward zero
+# div = lambda arg1: lambda arg2: (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
+def div(arg1):
+    def apply(arg2):
+        left_is_variable = isinstance(arg1, Variable)
+        right_is_variable = isinstance(arg2, Variable)
+        # To avoid accumulating unnecessary ops on Variables, distinguish
+        # whether to delegate to the Variable or apply here.
+        if left_is_variable or right_is_variable:
+            return arg1 // arg2
+        else:
+            return (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
+    return apply
+
+inc = lambda arg: arg + 1
+dec = lambda arg: arg - 1
+
+eq = lambda arg1: lambda arg2: arg1 == arg2
+lt = lambda arg1: lambda arg2: arg1 < arg2
+
+non_terminals = {
+    'ap': ap,
+    'add': add,
+    'mul': mul,
+    'neg': neg,
+    'div': div,
+    'inc': inc,
+    'dec': dec,
+    'eq': eq,
+    'lt': lt,
+    'tx': transmit,
+    's': substitution,
+}
+
 # Make sure to preserve the interface between this Interpreter and the ICFP JIT
 # in `sidecar`.
 class _ICFPTokenInterpreter:
@@ -26,40 +71,63 @@ class _ICFPTokenInterpreter:
     def __call__(self, *args):
         return self._run(self._program, args)
 
-    def _run(self, tokens: [[str]], *args, line_offset=0, token_offset=0):
+    def _run(self, tokens: [[str]], *args, line_offset=0, token_offset=0) -> (
+                List[List]):
         # TODO(akesling): Set initial variables based on args values
         variables = {}
 
+        line_results = []
         for li, line in enumerate(tokens):
-            active_value = lambda x: x
-            for ti, tkn in enumerate(line):
+            if len(line) and (line[0] == '#' or line[0] == '...'):
+                logger.debug(
+                    'Skipping comment or block delimeter on line %s',
+                    line_offset+li)
+                continue
+
+            definition_index = [i for i,x in enumerate(line) if x == ':=']
+            if len(definition_index):
+                definition_index = definition_index[0]
+                try:
+                    runner = self._run(
+                        tokens=[line[:definition_index]],
+                        line_offset=li,
+                        token_offset=0)
+                    while True:
+                        # TODO(akesling): Handle the case where the
+                        # subexpression contains tx
+                        runner.send(None)
+                except StopIteration as result:
+                    left_value = result.value
+
+                try:
+                    runner = self._run(
+                        tokens=[line[definition_index+1:]],
+                        line_offset=li,
+                        token_offset=definition_index+1)
+                    while True:
+                        # TODO(akesling): Handle the case where the
+                        # subexpression contains tx
+                        runner.send(None)
+                except StopIteration as result:
+                    right_value = result.value
+
+                self._define(left_value[0][0], right_value[0][0], variables)
+                continue
+
+            stack = []
+            for ti, tkn in reversed(list(enumerate(line))):
                 logger.debug(
                     'Executing Line: %s Token: %s -- %s',
                     line_offset+li, token_offset+ti, tkn)
 
-                if tkn == '#' or tkn == '...':
-                    logger.debug(
-                        'Skipping comment or block delimeter on line %s',
-                        line_offset+li)
-                    break
-
-                if tkn == ':=':
-                    left_value = active_value
-                    try:
-                        runner = self._run(
-                            tokens=[line[ti+1:]], line_offset=li, token_offset=ti+1)
-                        while True:
-                            # TODO(akesling): Handle the case where the
-                            # subexpression contains tx
-                            runner.send(None)
-                    except StopIteration as result:
-                        right_value = result.value
-
-                    self._define(left_value, right_value, variables)
-                    break
-
                 try:
-                    active_value = active_value(self._parse(tkn))
+                    parsed_token = self._parse(tkn)
+                    if parsed_token == ap:
+                        tmp = parsed_token(stack.pop())
+                        stack.append(tmp(stack.pop()))
+                    else:
+                        stack.append(parsed_token)
+
                 except Transmission as t:
                     tx_value = self._serialize(t.value, variables)
                     logger.debug('Transmitting value "%s"', tx_value)
@@ -73,12 +141,13 @@ class _ICFPTokenInterpreter:
                     # should *actually* be.  Is it a set of arbitrary
                     # expressions?  If so, we'll need to manage nested
                     # transmission.
+            line_results.append(stack)
 
-        return active_value
+        return line_results
 
     def _parse(self, token):
-        if token in self.non_terminals:
-            return self.non_terminals[token]
+        if token in non_terminals:
+            return non_terminals[token]
 
         if token.startswith('x'):
             return Variable(token)
@@ -116,6 +185,8 @@ class _ICFPTokenInterpreter:
         right_is_variable = isinstance(right_value, Variable)
         if (not left_is_variable and not right_is_variable
                 and left_value == right_value):
+            logger.debug('Left and right values are equal in definition %s' %
+                left_value)
             return
 
         if left_is_variable and right_is_variable:
@@ -157,51 +228,6 @@ class _ICFPTokenInterpreter:
                 'An unknown error occurred for definition with '
                 '"left value" (%s) and "right value" (%s)' % (
                     left_value, right_value))
-
-    # Operators
-    ap = lambda arg1: lambda arg2: arg1(arg2)
-    substitution = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2(arg3))
-
-    add = lambda arg1: lambda arg2: arg1 + arg2
-    mul = lambda arg1: lambda arg2: arg1 * arg2
-    neg = lambda arg1: arg1 * -1
-
-    def transmit(arg1):
-        raise Transmission(arg1)
-
-    # Integer division rounding toward zero
-    # div = lambda arg1: lambda arg2: (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
-    def div(arg1):
-        def apply(arg2):
-            left_is_variable = isinstance(arg1, Variable)
-            right_is_variable = isinstance(arg2, Variable)
-            # To avoid accumulating unnecessary ops on Variables, distinguish
-            # whether to delegate to the Variable or apply here.
-            if left_is_variable or right_is_variable:
-                return arg1 // arg2
-            else:
-                return (abs(arg1) // abs(arg2)) * (-1 if (arg1*arg2 < 0) else 1)
-        return apply
-
-    inc = lambda arg: arg + 1
-    dec = lambda arg: arg - 1
-
-    eq = lambda arg1: lambda arg2: arg1 == arg2
-    lt = lambda arg1: lambda arg2: arg1 < arg2
-
-    non_terminals = {
-        'ap': ap,
-        'add': add,
-        'mul': mul,
-        'neg': neg,
-        'div': div,
-        'inc': inc,
-        'dec': dec,
-        'eq': eq,
-        'lt': lt,
-        'tx': transmit,
-        's': substitution,
-    }
 
 class Variable:
     # TODO(akesling): Figure out op accumulation
