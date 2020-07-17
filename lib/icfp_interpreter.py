@@ -32,31 +32,48 @@ class _ICFPTokenInterpreter:
 
         for li, line in enumerate(tokens):
             active_value = lambda x: x
+            stack = []
+
+            if len(line) and (line[0] == '#' or line[0] == '...'):
+                logger.debug(
+                    'Skipping comment or block delimeter on line %s',
+                    line_offset+li)
+                continue
+
+            definition_index = [i for i,x in enumerate(line) if x == ':=']
+            if len(definition_index):
+                definition_index = definition_index[0]
+                try:
+                    runner = self._run(
+                        tokens=[line[:definition_index]],
+                        line_offset=li,
+                        token_offset=0)
+                    while True:
+                        # TODO(akesling): Handle the case where the
+                        # subexpression contains tx
+                        runner.send(None)
+                except StopIteration as result:
+                    left_value = result.value
+
+                try:
+                    runner = self._run(
+                        tokens=[line[definition_index+1:]],
+                        line_offset=li,
+                        token_offset=definition_index+1)
+                    while True:
+                        # TODO(akesling): Handle the case where the
+                        # subexpression contains tx
+                        runner.send(None)
+                except StopIteration as result:
+                    right_value = result.value
+
+                self._define(left_value, right_value, variables)
+                continue
+
             for ti, tkn in enumerate(line):
                 logger.debug(
                     'Executing Line: %s Token: %s -- %s',
                     line_offset+li, token_offset+ti, tkn)
-
-                if tkn == '#' or tkn == '...':
-                    logger.debug(
-                        'Skipping comment or block delimeter on line %s',
-                        line_offset+li)
-                    break
-
-                if tkn == ':=':
-                    left_value = active_value
-                    try:
-                        runner = self._run(
-                            tokens=[line[ti+1:]], line_offset=li, token_offset=ti+1)
-                        while True:
-                            # TODO(akesling): Handle the case where the
-                            # subexpression contains tx
-                            runner.send(None)
-                    except StopIteration as result:
-                        right_value = result.value
-
-                    self._define(left_value, right_value, variables)
-                    break
 
                 try:
                     active_value = active_value(self._parse(tkn))
