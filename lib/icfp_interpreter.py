@@ -160,6 +160,7 @@ class _ICFPTokenInterpreter:
 
     # Operators
     ap = lambda arg1: lambda arg2: arg1(arg2)
+    substitution = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2(arg3))
 
     add = lambda arg1: lambda arg2: arg1 + arg2
     mul = lambda arg1: lambda arg2: arg1 * arg2
@@ -199,6 +200,7 @@ class _ICFPTokenInterpreter:
         'eq': eq,
         'lt': lt,
         'tx': transmit,
+        's': substitution,
     }
 
 class Variable:
