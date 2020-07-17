@@ -17,7 +17,7 @@ def main():
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
 
     req(server_url, player_key)
-    req(server_url, '101010')
+    req(server_url, '1101000')
 
 if __name__ == '__main__':
     main()
