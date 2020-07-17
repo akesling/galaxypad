@@ -16,8 +16,13 @@ def main():
     player_key = sys.argv[2]
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
 
-    req(server_url, player_key)
-    req(server_url, '1101000')
+    alien_url = server_url + '/aliens/send'
+    req(alien_url, player_key)
+    req(alien_url, '1101000')
+    req(alien_url, '1101000')
+    res = req(alien_url, '1101000')
+    res = req(alien_url, res)
+    res = req(alien_url, res)
 
 if __name__ == '__main__':
     main()
