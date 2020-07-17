@@ -21,7 +21,7 @@ def parse_args():
 def execute_with_identity_tx(coroutine):
     try:
         still_running = True
-        tx_message = coroutine.send(None)
+        tx_message = None
         while still_running:
             tx_message = coroutine.send(tx_message)
     except StopIteration as result:
