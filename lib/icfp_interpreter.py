@@ -20,6 +20,7 @@ def _tokenize(code: [str]):
 # Operators
 ap = lambda arg1: lambda arg2: arg1(arg2)
 substitution = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2(arg3))
+flip = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2)
 
 add = lambda arg1: lambda arg2: arg1 + arg2
 mul = lambda arg1: lambda arg2: arg1 * arg2
@@ -60,6 +61,7 @@ non_terminals = {
     'lt': lt,
     'send': transmit,
     's': substitution,
+    'c': flip,
 }
 
 # Make sure to preserve the interface between this Interpreter and the ICFP JIT
@@ -126,7 +128,7 @@ class _ICFPTokenInterpreter:
 
                 try:
                     parsed_token = self._parse(tkn)
-                    if (not isinstance(parsed_token, Variable) 
+                    if (not isinstance(parsed_token, Variable)
                             and parsed_token == ap):
                         tmp = parsed_token(stack.pop())
                         stack.append(tmp(stack.pop()))
