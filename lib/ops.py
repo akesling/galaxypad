@@ -70,10 +70,13 @@ def grid_to_linear(grid):
         and all((grid[i+1][0] for i in range(len(grid)-1))))
 
     if is_int:
+        number = grid_to_int(grid)
+        if number == 0:
+            return '010'
+
         is_negative = height > width
         bin_list = [str(0 + (is_negative*1)), str(1 - (is_negative*1))]
 
-        number = grid_to_int(grid)
         number_bin_string = '{0:b}'.format(abs(number))
 
         block_spacing = math.ceil(len(number_bin_string)/4)
