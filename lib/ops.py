@@ -3,7 +3,7 @@ import math
 def int_to_grid(number):
     bin_string = '{0:b}'.format(abs(number))
     negative = number < 0
-    size = math.ceil(math.sqrt(len(bin_string)))
+    size = int(math.ceil(math.sqrt(len(bin_string))))
     grid = [[0]*(size+1) for i in range(size + 1 + (negative*1))]
 
     for i in range(len(grid[0])):
@@ -73,7 +73,7 @@ def grid_to_linear(grid):
 
         number_bin_string = '{0:b}'.format(abs(number))
 
-        block_spacing = math.ceil(len(number_bin_string)/4)
+        block_spacing = int(math.ceil(len(number_bin_string)/4))
         bin_list.extend(['1']*block_spacing)
         bin_list.append('0')
         bin_list.extend(['0']*(block_spacing*4 - len(number_bin_string)))
