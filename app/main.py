@@ -2,7 +2,7 @@ import requests
 import sys
 
 def req(server_url, data):
-    res = requests.post(server_url, data=str(i))
+    res = requests.post(server_url, data=data)
     if res.status_code != 200:
         print('Unexpected server response:')
         print('HTTP code:', res.status_code)
