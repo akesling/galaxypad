@@ -4,11 +4,12 @@ import sys
 def req(server_url, data):
     res = requests.post(server_url, data=data)
     if res.status_code != 200:
-        print('Unexpected server response:')
+        print('Unexpected server response from URL %s:' % server_url)
         print('HTTP code:', res.status_code)
         print('Response body:', res.text)
-        exit(2)
-    print('Server response:', res.text)
+        # exit(2)
+    else:
+        print('Server response:', res.text)
     return res
 
 def main():
