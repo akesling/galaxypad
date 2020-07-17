@@ -19,7 +19,7 @@ def main():
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
 
     alien_url = server_url + '/aliens/send'
-    res = req(alien_url, '1101000')
+    res = req(alien_url, '"1101000"')
 #    res = req(alien_url, res.text)
 #    res = req(alien_url, res.text)
 #    res = req(alien_url, res.text)
