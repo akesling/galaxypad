@@ -36,8 +36,17 @@ class TestLinear(unittest.TestCase):
         for i in range(-10000, 10000):
             self.assertEqual(linear_to_int(grid_to_linear(int_to_grid(i))), i)
 
-    # def check_list_example(self, data, result):
-    #     linear=
+    def check_list_example(self, data, result):
+        linear = data # XXX: 
+        self.assertEqual(linear, result)
+
+    def test_linear_list_examples(self):
+        self.check_list_example([], '00')
+        self.check_list_example([], '110000')
+        self.check_list_example([], '1101000')
+        self.check_list_example([], '110110000101100010')
+        self.check_list_example([], '1101100001110110001000')
+        self.check_list_example([], '1101100001111101100010110110001100110110010000')
 
 
 if __name__ == "__main__":
