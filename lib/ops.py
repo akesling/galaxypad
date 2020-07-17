@@ -23,14 +23,19 @@ def list_to_cons_form(lst):
     if not isinstance(lst, list):
         return lst
 
-    if not lst or lst == [None]:
+    if len(lst) == 0 or lst == [None]:
         return [None]
 
     if len(lst) == 1:
         return [lst[0], None]
 
+    if len(lst) == 2 and lst[1] is None:
+        return lst
+
     head = lst[0]
     tail = lst[1:]
+    if len(tail) == 1 and isinstance(tail[0], list):
+        tail = tail[0]
     return [list_to_cons_form(head), list_to_cons_form(tail)]
 
 linear_list_leader = '11'
