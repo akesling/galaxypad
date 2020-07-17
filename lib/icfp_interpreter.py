@@ -71,10 +71,14 @@ class _ICFPTokenInterpreter:
     def __call__(self, *args):
         return self._run(self._program, args)
 
-    def _run(self, tokens: [[str]], *args, line_offset=0, token_offset=0) -> (
+    def _run(
+            self, tokens: [[str]], *args, line_offset=0, token_offset=0,
+            init_variables=None) -> (
                 List[List]):
         # TODO(akesling): Set initial variables based on args values
         variables = {}
+        if init_variables:
+            variables.update(init_variables)
 
         line_results = []
         for li, line in enumerate(tokens):
@@ -91,11 +95,11 @@ class _ICFPTokenInterpreter:
                     runner = self._run(
                         tokens=[line[:definition_index]],
                         line_offset=li,
-                        token_offset=0)
+                        token_offset=0,
+                        init_variables=variables)
+                    msg_received = None
                     while True:
-                        # TODO(akesling): Handle the case where the
-                        # subexpression contains tx
-                        runner.send(None)
+                        msg_received = (yield runner.send(msg_received))
                 except StopIteration as result:
                     left_value = result.value
 
@@ -103,11 +107,11 @@ class _ICFPTokenInterpreter:
                     runner = self._run(
                         tokens=[line[definition_index+1:]],
                         line_offset=li,
-                        token_offset=definition_index+1)
+                        token_offset=definition_index+1,
+                        init_variables=variables)
+                    msg_received = None
                     while True:
-                        # TODO(akesling): Handle the case where the
-                        # subexpression contains tx
-                        runner.send(None)
+                        msg_received = (yield runner.send(msg_received))
                 except StopIteration as result:
                     right_value = result.value
 
@@ -122,7 +126,8 @@ class _ICFPTokenInterpreter:
 
                 try:
                     parsed_token = self._parse(tkn)
-                    if parsed_token == ap:
+                    if (not isinstance(parsed_token, Variable) 
+                            and parsed_token == ap):
                         tmp = parsed_token(stack.pop())
                         stack.append(tmp(stack.pop()))
                     else:
@@ -135,7 +140,8 @@ class _ICFPTokenInterpreter:
                     received_message = (yield tx_value)
 
                     logger.debug('Received value "%s"', received_message)
-                    active_value = self._parse(received_message)
+                    # NOTE(akesling): If this is `ap`, it won't be applied
+                    stack.append(self._parse(received_message))
                     continue
                     # TODO(akesling): Figure out what form the received value
                     # should *actually* be.  Is it a set of arbitrary
@@ -166,7 +172,11 @@ class _ICFPTokenInterpreter:
                 raise NotImplementedError(
                     'Transmitting modified variables is not yet '
                     'implemented')
-            return self._serialize(variable_lookup[value.name], variable_lookup)
+            if value.name not in variable_lookup:
+                raise ValueError(
+                    'Variable cannot be serialized as it is not yet defined.')
+            return self._serialize(
+                variable_lookup[value.name], variable_lookup)
 
         if value is True:
             return 't'
@@ -201,7 +211,8 @@ class _ICFPTokenInterpreter:
             # NOTE(akesling): This style of assignment hasn't
             # been seen in the signals so far.
             if (left_value.name in variable_lookup
-                    and variable_lookup[left_value.name]):
+                    and variable_lookup[left_value.name]
+                    and variable_lookup[left_value.name] != right_value):
                 raise Exception(
                     'Variable "%s" has been defined twice, '
                     'first with value "%s" and second with '
