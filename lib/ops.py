@@ -21,26 +21,22 @@ def int_to_grid(number):
 
 linear_list_leader = '11'
 def list_to_linear(lst):
-    if not lst:
-        return linear_list_leader
-    bin_values = [linear_list_leader]
-    for item in lst:
-        if isinstance(item, int):
-            bin_values.append(grid_to_linear(int_to_grid(item)))
-            continue
+    if not lst or lst == [None]:
+        return '00'
+    head = lst[0]
+    tail = lst[1:]
+    if tail:
+        return linear_list_leader + to_linear(lst[0]) + to_linear(lst[1:])
+    else:
+        return linear_list_leader + list_to_linear(lst[0])
 
-        if item is None:
-            bin_values.append('00')
-            continue
-
-        if isinstance(item, list):
-            bin_values.append(list_to_linear(item))
-            continue
-
-        raise NotImplementedError(
-            "List contained type that doesn't yet support becoming linear" % linear)
-
-    return ''.join(bin_values)
+def to_linear(value):
+    return {
+        type(None): lambda x: '00',
+        list: list_to_linear,
+        int: lambda x: grid_to_linear(int_to_grid(x)),
+        str: lambda x: x,
+    }[type(value)](value)
 
 def grid_to_int(grid):
     height = len(grid)
@@ -89,8 +85,13 @@ def grid_to_linear(grid):
 
     raise NotImplementedError('Grid represents an unknown type: %s' % grid)
 
+def linear_to_list(linear):
+    raise NotImplementedError('Linear represents an unknown type: %s' % grid)
 
 def linear_to_int(linear):
+    if linear == '010':
+        return 0
+
     is_negative = linear[0] == '1'
     num_bits = 0
     for bit in linear[2:]:
