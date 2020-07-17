@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
 import unittest
+
 from ops import (  # noqa
     grid_to_int,
     grid_to_linear,
     int_to_grid,
     linear_to_grid,
     linear_to_int,
-    list_to_linear,
+    linear_to_list,
     list_to_cons_form,
+    list_to_linear,
 )
 
 
@@ -43,19 +45,23 @@ class TestLinear(unittest.TestCase):
         self.assertEqual(linear, result)
 
     def test_linear_list_examples(self):
-        self.check_list_example([None], '00')
-        self.check_list_example([None, None], '110000')
-        self.check_list_example([0, None], '1101000')
-        self.check_list_example([1, 2], '110110000101100010')
-        self.check_list_example([1, [2, None]], '1101100001110110001000')
+        self.check_list_example([None], "00")
+        self.check_list_example([None, None], "110000")
+        self.check_list_example([0, None], "1101000")
+        self.check_list_example([1, 2], "110110000101100010")
+        self.check_list_example([1, [2, None]], "1101100001110110001000")
         t1 = list_to_cons_form([1, 2])
-        self.check_list_example(t1, '1101100001110110001000')
+        self.check_list_example(t1, "1101100001110110001000")
         t2 = list_to_cons_form([1, [2, 3], 4])
-        self.check_list_example(t2, '1101100001111101100010110110001100110110010000')
+        self.check_list_example(t2, "1101100001111101100010110110001100110110010000")
 
     def test_list_to_cons_form(self):
         self.assertEqual(list_to_cons_form([1, 2, None]), [1, [2, None]])
         self.assertEqual(list_to_cons_form([1, [2, None]]), [1, [2, None]])
+
+    def test_reverse_list_linear(self):
+        pass
+
 
 if __name__ == "__main__":
     unittest.main()

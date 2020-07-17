@@ -121,6 +121,14 @@ def grid_to_linear(grid):
 
 
 def linear_to_list(linear):
+    if linear.startswith('00'):
+        if linear == '00':
+            return [None]
+        raise ValueError("Don't know how to handle LONG linear starting with 00")
+    if not linear.startswith('11'):
+        raise ValueError("Don't know how to handle linear starting with !{00,11}")
+    if len(linear < 6):
+        raise ValueError("Don't know how to handle SHORT linear starting w/ 11")
     raise NotImplementedError("Linear represents an unknown type: %s" % linear)
 
 
