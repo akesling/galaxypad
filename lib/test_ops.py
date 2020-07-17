@@ -53,7 +53,9 @@ class TestLinear(unittest.TestCase):
         t2 = list_to_cons_form([1, [2, 3], 4])
         self.check_list_example(t2, '1101100001111101100010110110001100110110010000')
 
-
+    def test_list_to_cons_form(self):
+        self.assertEqual(list_to_cons_form([1, 2, None]), [1, [2, None]])
+        self.assertEqual(list_to_cons_form([1, [2, None]]), [1, [2, None]])
 
 if __name__ == "__main__":
     unittest.main()
