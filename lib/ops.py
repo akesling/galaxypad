@@ -62,3 +62,4 @@ def grid_to_linear(grid):
         return ''.join(bin_list)
 
     raise NotImplementedError('Grid represents an unknown type: %s' % grid)
+
