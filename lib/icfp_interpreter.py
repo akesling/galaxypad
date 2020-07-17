@@ -163,6 +163,7 @@ class _ICFPTokenInterpreter:
 
     add = lambda arg1: lambda arg2: arg1 + arg2
     mul = lambda arg1: lambda arg2: arg1 * arg2
+    neg = lambda arg1: arg1 * -1
 
     def transmit(arg1):
         raise Transmission(arg1)
@@ -191,6 +192,7 @@ class _ICFPTokenInterpreter:
         'ap': ap,
         'add': add,
         'mul': mul,
+        'neg': neg,
         'div': div,
         'inc': inc,
         'dec': dec,
