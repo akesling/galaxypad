@@ -31,7 +31,7 @@ def main():
     res = req(server_url, player_key)
 
     # Make request to aliens API
-    alien_url = 'icfpc2020-api.testkontur.ru/aliens/send'
+    alien_url = 'https://icfpc2020-api.testkontur.ru/aliens/send'
     res = req(alien_url, '"1101000"')
 #    res = req(alien_url, res.text)
 #    res = req(alien_url, res.text)
