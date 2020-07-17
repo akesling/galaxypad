@@ -17,8 +17,7 @@ def main():
     print('ServerUrl: %s; PlayerKey: %s' % (server_url, player_key))
 
     req(server_url, player_key)
-    for i in range(100000):
-        res = req(server_url, str(i))
+    req(server_url, '101010')
 
 if __name__ == '__main__':
     main()
