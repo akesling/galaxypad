@@ -40,7 +40,7 @@ def main():
     req(server_url, player_key)
 
     # Make request to aliens API
-    alien_url = server_url + '/aliens/send'
+    alien_url = 'https://icfpc2020-api.testkontur.ru/aliens/send'
     print('aliens send url', alien_url)
     print('sending ""')
     req(alien_url, "")
