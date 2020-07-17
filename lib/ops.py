@@ -19,6 +19,20 @@ def int_to_grid(number):
 
     return grid
 
+def list_to_cons_form(lst):
+    if not isinstance(lst, list):
+        return lst
+
+    if not lst or lst == [None]:
+        return [None]
+
+    if len(lst) == 1:
+        return [lst[0], None]
+
+    head = lst[0]
+    tail = lst[1:]
+    return [list_to_cons_form(head), list_to_cons_form(tail)]
+
 linear_list_leader = '11'
 def list_to_linear(lst):
     if not lst or lst == [None]:
@@ -26,15 +40,23 @@ def list_to_linear(lst):
 
     head = lst[0]
     tail = lst[1:]
-    return linear_list_leader + to_linear(head) + to_linear(tail)
+    if not tail:
+        tail_string = ''
+    elif len(tail) == 1:
+        tail_string = to_linear(tail[0])
+    else:
+        tail_string = to_linear(tail)
+    linear = linear_list_leader + to_linear(head) + tail_string
+    return linear
 
 def to_linear(value):
-    return {
+    linear = {
         type(None): lambda x: '00',
         list: list_to_linear,
         int: lambda x: grid_to_linear(int_to_grid(x)),
         str: lambda x: x,
     }[type(value)](value)
+    return linear
 
 def grid_to_int(grid):
     height = len(grid)
