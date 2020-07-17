@@ -58,7 +58,7 @@ non_terminals = {
     'dec': dec,
     'eq': eq,
     'lt': lt,
-    'tx': transmit,
+    'send': transmit,
     's': substitution,
 }
 
@@ -88,7 +88,7 @@ class _ICFPTokenInterpreter:
                     line_offset+li)
                 continue
 
-            definition_index = [i for i,x in enumerate(line) if x == ':=']
+            definition_index = [i for i,x in enumerate(line) if x == '=']
             if len(definition_index):
                 definition_index = definition_index[0]
                 try:
