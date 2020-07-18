@@ -248,4 +248,4 @@ if __name__ == "__main__":
         print(compute_fully(tree))
     else:
         print("Help: Run with a string argument to compute")
-        print("  > python tree.py 'ap ap add 1 2'")
+        print("  > python compute.py 'ap ap add 1 2'")

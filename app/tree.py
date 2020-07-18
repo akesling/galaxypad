@@ -61,6 +61,7 @@ class Tree:  # I wish I could make this a NamedTuple, but mypy hates it
     right: Optional[Union["Tree", Value, Placeholder, Procedure]] = None
 
 
+
 # Taking a line from the "git" book on naming things
 Treeish = Optional[Union[Tree, Value, Placeholder, Procedure]]
 PlaceDict = Dict[int, Treeish]
@@ -86,6 +87,28 @@ def parse_tree(tokens: List[str],) -> Tuple[Treeish, List[str]]:
     if PROC_REGEX.match(token):
         return Procedure(int(token[1:])), tokens
     raise ValueError(f"Unknown token {token}")
+
+
+def deserialize(serial: str) -> Treeish:
+    """ Read 'ap ap add 1 2' language into a Tree """
+    treeish, remainder = parse_tree(serial.strip().split())
+    assert remainder == [], f"Deserialize failed {serial} -> {remainder}"
+    return treeish
+
+
+def serialize(treeish: Treeish) -> str:
+    """ Reverse back into the 'ap ap add 1 2' language form """
+    if treeish is None:
+        return ''
+    if isinstance(treeish, Value):
+        return f'{treeish.value}'
+    if isinstance(treeish, Placeholder):
+        return f's{treeish.x}'
+    if isinstance(treeish, Procedure):
+        return f':{treeish.name}'
+    if isinstance(treeish, Tree):
+        return ' '.join(['ap', serialize(treeish.left), serialize(treeish.right)]).strip()
+    raise ValueError(f"Don't know how to serialize {treeish}")
 
 
 class Rewrite(NamedTuple):
@@ -158,11 +181,14 @@ def unvector(vec: Vector) -> Treeish:
 
 
 if __name__ == "__main__":
-    d = [[2, 3]]
-    print("d", d)
-    t = unvector(d)
-    print("t\n", t)
-    v = vector(t)
-    print("v", v)
-    print(d == v)
+    import sys
 
+    if len(sys.argv) == 2:
+        tree, leftover = parse_tree(sys.argv[1].strip().split())
+        if leftover:
+            print("Missed this bit", leftover)
+        print("tree")
+        print(tree)
+    else:
+        print("Help: Run with a string argument to deserialize")
+        print("  > python tree.py 'ap ap add 1 2'")
