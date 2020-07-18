@@ -176,9 +176,11 @@ def compute(
     Returns tree, True if the tree was modified, tree, false if failed.
     If this returns True, possibly more rewrites can happen.
     """
-    logger.debug("Computing Tree", tree)
+    logger.debug(f"Computing Tree {tree}")
     if tree is None:
         return tree, False
+    if not isinstance(tree, (Tree, Value, Placeholder, Procedure)):
+        raise ValueError(f"Bad type for tree {tree} {type(tree)}")
     if isinstance(tree, Tree):
         # Check subtrees before this tree because matches are more likely in leaves
         tree.left, result = compute(tree.left, rewrite_rules)
@@ -188,7 +190,10 @@ def compute(
         tree_changed = False
         for rewrite in rewrite_rules:
             pd: PlaceDict = {}
-            if match(rewrite.pattern, tree, pd):
+            if match(rewrite.pattern, tree, pd) and rewrite.process(pd):
+                # Awkwardly recompute this since we just consumed it
+                pd = {}
+                match(rewrite.pattern, tree, pd)
                 # This is a little awkward because we want processing to occur
                 # immediately after expansion without another expansion
                 # opportunity to prevent infinite expansion of recursive
@@ -197,13 +202,18 @@ def compute(
                     tree.right, result = compute(tree.right, rewrite_rules)
                     if result:
                         tree_changed = True
-                logger.debug("Tree matches", rewrite)
+                logger.debug(f"Tree matches {rewrite}")
                 processing_occurred = rewrite.process(pd)
                 if processing_occurred:
                     logger.debug("Processing occurred")
                     return apply(rewrite.replace, pd), True
-        return tree, tree_changed
-    raise ValueError(f"Bad type for tree {tree} {type(tree)}")
+        if tree_changed:
+            return tree, True
+    if isinstance(tree, Tree):
+        tree.right, result = compute(tree.right, rewrite_rules)
+        if result:
+            return tree, True
+    return tree, False
 
 
 def compute_fully(
@@ -217,7 +227,7 @@ def compute_fully(
     return tree
 
 
-def extract_procedures(script_lines: [str]):
+def extract_procedures(script_lines: List[str]):
     procedures = []
     for line in script_lines:
         if line.startswith(":"):
