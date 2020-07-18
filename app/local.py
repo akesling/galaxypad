@@ -5,7 +5,7 @@ server_url = "https://icfpc2020-api.testkontur.ru"
 api_key = "8f96a989734a45688a78d530f60cce97"
 
 from tree import unvector
-from mod_parser import parse_partial, unparse
+from mod_parser import parse_partial, unparse_vector
 
 
 def get_reply(data):
@@ -32,7 +32,7 @@ def send(data):
 
 def main():
     send("")
-    send(unparse([0, []]))
+    send(unparse_vector([0]))
 
 
 if __name__ == "__main__":
