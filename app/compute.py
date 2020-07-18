@@ -159,8 +159,9 @@ def apply(
 
 
 def compute(
-    tree: Optional[Union[Tree, Value, Placeholder, Procedure]]
-) -> Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]:
+        tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
+        rewrite_rules: List[Rewrite] = REWRITES) -> (
+            Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]):
     """
     NOTE: THIS POSSIBLY MUTATES THE TREE !!! 
     Returns tree, True if the tree was modified, tree, false if failed.
@@ -171,16 +172,20 @@ def compute(
         return tree, False
     if isinstance(tree, Tree):
         # Check subtrees before this tree because matches are more likely in leaves
-        tree.left, result = compute(tree.left)
+        tree.left, result = compute(tree.left, rewrite_rules)
         if result:
             return tree, True
     if isinstance(tree, (Tree, Value, Placeholder, Procedure)):
         tree_changed = False
-        for rewrite in REWRITES:
+        for rewrite in rewrite_rules:
             pd: PlaceDict = {}
             if match(rewrite.pattern, tree, pd):
+                # This is a little awkward because we want processing to occur
+                # immediately after expansion without another expansion
+                # opportunity to prevent infinite expansion of recursive
+                # right-hand recursive procedures.
                 if isinstance(tree, Tree) and tree.right:
-                    tree.right, result = compute(tree.right)
+                    tree.right, result = compute(tree.right, rewrite_rules)
                     if result:
                         tree_changed = True
                 logger.debug("Tree matches", rewrite)
@@ -193,14 +198,31 @@ def compute(
 
 
 def compute_fully(
-    tree: Optional[Union[Tree, Value, Placeholder, Procedure]]
-) -> Optional[Union[Tree, Value, Placeholder, Procedure]]:
+        tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
+        rewrite_rules: List[Rewrite] = REWRITES) -> (
+            Optional[Union[Tree, Value, Placeholder, Procedure]]):
     """ Call compute on a tree until it converges """
     result = True
     while result:
-        tree, result = compute(tree)
+        tree, result = compute(tree, rewrite_rules)
     return tree
 
+def extract_procedures(script_lines: [str]):
+    procedures = []
+    for line in script_lines:
+        if line.startswith(':'):
+            procedures.append(Rewrite.from_str(line))
+    return procedures
+
+def compute_script_fully(script: str):
+    lines = script.strip().split("\n")
+    procedures = extract_procedures(lines)
+    for i, line in enumerate(lines):
+        if not line.startswith(':'):
+            left, right = line.strip().split('=')
+            right_tree = parse_tree(right.strip().split())[0]
+            print('Executing', right_tree)
+            print(compute(right_tree, REWRITES + procedures))
 
 if __name__ == "__main__":
     import sys
