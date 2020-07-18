@@ -10,11 +10,9 @@ from tree import (
     Tree,
     Treeish,
     Value,
-    Vector,
     pair,
-    unvector,
-    vector,
 )
+from vector import Vector, vector, unvector
 
 MOD_PATTERN = re.compile(r"[01]*")
 INT_PREFIX = re.compile(r"(01|10)(1*)0([01]*)")

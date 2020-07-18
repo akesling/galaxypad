@@ -1,27 +1,20 @@
 #!/usr/bin/env python
 
 import unittest
-from tree import parse_tree
+from serial import deserialize
 from compute import compute_fully
 
 
 class TestImages(unittest.TestCase):
-    def check_tree(self, string):
-        """ Process a string into a tree and return it """
-        tokens = string.strip().split()
-        tree, leftover = parse_tree(tokens)
-        self.assertEqual(leftover, [])  # Should be empty
-        return tree
-
     def check_line(self, line, line_number):
         """ Check that a single equality line is correct """
         assert line.count("=") == 1, f"Bad test line #{line_number} {line}"
         left_s, right_s = line.split("=")
-        left = self.check_tree(left_s)
-        right = self.check_tree(right_s)
+        left = deserialize(left_s)
+        right = deserialize(right_s)
         self.assertEqual(
-            compute_fully(left), compute_fully(right),
-            f'line number {line_number}')
+            compute_fully(left), compute_fully(right), f"line number {line_number}"
+        )
 
     def check_lines(self, lines):
         """ Check a bunch of lines are correct """
@@ -138,9 +131,9 @@ class TestImages(unittest.TestCase):
 
     def test_compare_equals(self):
         self.check_lines(
-#            """
-#            ap ap eq x0 x0   =   t
-#            """
+            #            """
+            #            ap ap eq x0 x0   =   t
+            #            """
             """
             ap ap eq 0 -2   =   f
             ap ap eq 0 -1   =   f
@@ -373,16 +366,19 @@ class TestImages(unittest.TestCase):
         )
 
     def test_if0(self):
-        self.check_lines("""
+        self.check_lines(
+            """
             ap ap ap if0 0 x0 x1   =   x0
             ap ap ap if0 1 x0 x1   =   x1
         """
         )
 
     def test_send(self):
-        self.check_lines("""
+        self.check_lines(
+            """
             ap send nil = ap ap cons 0 nil
-        """)
+        """
+        )
 
 
 if __name__ == "__main__":

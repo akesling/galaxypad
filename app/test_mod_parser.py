@@ -2,8 +2,9 @@
 
 import unittest
 
+from tree import Value, pair
+from vector import unvector
 from mod_parser import Modulation, parse, unparse, unparse_vector
-from tree import Value, pair, unvector
 
 
 class TestParser(unittest.TestCase):

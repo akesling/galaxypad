@@ -13,10 +13,10 @@ from tree import (
     Treeish,
     Placeholder,
     Procedure,
-    Rewrite,
-    parse_tree,
-    vector, unvector,
 )
+from vector import vector, unvector
+from rewrite import Rewrite
+from serial import deserialize
 from mod_parser import parse_partial, unparse
 import renderer
 
@@ -69,6 +69,7 @@ def pd_draw(pd: PlaceDict) -> bool:
         pd[1] = renderer.draw(vector(pd[0]))
         return True
     return False
+
 
 def pd_multidraw(pd: PlaceDict) -> bool:
     if 0 in pd:
@@ -124,13 +125,15 @@ REWRITES = (
             ("ap ap add x0 x1 = x2", lambda x, y: x + y),  # Addition
             ("ap ap mul x0 x1 = x2", lambda x, y: x * y),  # Multiplication
             (  # https://stackoverflow.com/a/19919449
-                "ap ap div x0 x1 = x2",
+                "ap ap div x0 x1 = x2",  # Division
                 lambda a, b: a // b if a * b > 0 else (a + (-a % b)) // b,
-            ),  # Division
+            ),
             ("ap ap eq x0 x1 = x2", lambda x, y: "t" if x == y else "f"),  # Equals
             ("ap ap lt x0 x1 = x2", lambda x, y: "t" if x < y else "f"),  # Less Than
-            ("ap ap checkerboard x0 x1 = x2",
-                lambda x, y: renderer.checkerboard((x, y))),
+            (
+                "ap ap checkerboard x0 x1 = x2",
+                lambda x, y: renderer.checkerboard((x, y)),
+            ),
         ]
     ]
     + [
@@ -253,20 +256,18 @@ def compute_script_fully(script: str):
     for i, line in enumerate(lines):
         if not line.startswith(":"):
             left, right = line.strip().split("=")
-            right_tree = parse_tree(right.strip().split())[0]
+            right_tree = deserialize(right)
             print("Executing", right_tree)
             print(compute(right_tree, REWRITES + procedures))
 
 
 if __name__ == "__main__":
     import sys
+    from serial import serialize, deserialize
 
     if len(sys.argv) == 2:
-        tree, leftover = parse_tree(sys.argv[1].strip().split())
-        if leftover:
-            print("Missed this bit", leftover)
-        print("tree")
-        print(compute_fully(tree))
+        tree = deserialize(sys.argv[1])
+        print(serialize(compute_fully(tree)))
     else:
         print("Help: Run with a string argument to compute")
         print("  > python compute.py 'ap ap add 1 2'")

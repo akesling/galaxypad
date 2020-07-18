@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import NamedTuple, Union, Optional, Callable, Dict, List, Tuple
 
+from tree import Value, Placeholder, Procedure, Tree, Treeish
+
 
 INT_REGEX = re.compile(r"(-?\d+)")
 VAR_REGEX = re.compile(r"x(\d+)")
@@ -32,20 +34,28 @@ KNOWN_TOKENS = [
     "vec",
     "if0",
     "send",
+    "checkerboard",
+    "draw",
+    "multipledraw",
 ]
 
-from tree import Value, Placeholder, Procedure, Tree, Treeish
+
+def deserialize(serial: str) -> Treeish:
+    """ Read 'ap ap add 1 2' language into a Tree """
+    treeish, remainder = deserialize_tokens(serial.strip().split())
+    assert remainder == [], f"Deserialize failed {serial} -> {remainder}"
+    return treeish
 
 
-def parse_tree(tokens: List[str],) -> Tuple[Treeish, List[str]]:
+def deserialize_tokens(tokens: List[str],) -> Tuple[Treeish, List[str]]:
     """ Returns parsed tree, and leftover tokens """
     assert isinstance(tokens, list), f"bad tokens {tokens}"
     if tokens == []:
         return None, []
     token, tokens = tokens[0], tokens[1:]
     if token == "ap":
-        left, tokens = parse_tree(tokens)
-        right, tokens = parse_tree(tokens)
+        left, tokens = deserialize_tokens(tokens)
+        right, tokens = deserialize_tokens(tokens)
         return Tree(left, right), tokens
     if INT_REGEX.match(token):
         return Value(int(token)), tokens
@@ -58,25 +68,20 @@ def parse_tree(tokens: List[str],) -> Tuple[Treeish, List[str]]:
     raise ValueError(f"Unknown token {token} (probably add to KNOWN_TOKENS)")
 
 
-def deserialize(serial: str) -> Treeish:
-    """ Read 'ap ap add 1 2' language into a Tree """
-    treeish, remainder = parse_tree(serial.strip().split())
-    assert remainder == [], f"Deserialize failed {serial} -> {remainder}"
-    return treeish
-
-
 def serialize(treeish: Treeish) -> str:
     """ Reverse back into the 'ap ap add 1 2' language form """
     if treeish is None:
-        return ''
+        return ""
     if isinstance(treeish, Value):
-        return f'{treeish.value}'
+        return f"{treeish.value}"
     if isinstance(treeish, Placeholder):
-        return f's{treeish.x}'
+        return f"s{treeish.x}"
     if isinstance(treeish, Procedure):
-        return f':{treeish.name}'
+        return f":{treeish.name}"
     if isinstance(treeish, Tree):
-        return ' '.join(['ap', serialize(treeish.left), serialize(treeish.right)]).strip()
+        return " ".join(
+            ["ap", serialize(treeish.left), serialize(treeish.right)]
+        ).strip()
     raise ValueError(f"Don't know how to serialize {treeish}")
 
 
@@ -84,11 +89,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) == 2:
-        tree, leftover = parse_tree(sys.argv[1].strip().split())
-        if leftover:
-            print("Missed this bit", leftover)
-        print("tree")
-        print(tree)
+        print(deserialize(sys.argv[1]))
     else:
         print("Help: Run with a string argument to deserialize")
-        print("  > python serial.py 'ap ap add 1 2'")
+        print("  > python app/serial.py 'ap ap add 1 2'")
