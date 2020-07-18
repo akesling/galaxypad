@@ -77,16 +77,19 @@ class _ICFPTokenInterpreter:
         self._program = tokens
 
     def __call__(self, *args):
-        return self._run(self._program, args)
+        return self._run(self._program)
 
     def _run(
-            self, tokens: [[str]], *args, line_offset=0, token_offset=0,
-            init_variables=None) -> (
+            self, tokens: [[str]], line_offset=0, token_offset=0,
+            init_variables=None, init_procedures=None) -> (
                 List[List]):
-        # TODO(akesling): Set initial variables based on args values
         variables = {}
         if init_variables:
             variables.update(init_variables)
+
+        procedures = {}
+        if init_procedures:
+            procedures.update(init_procedures)
 
         line_results = []
         for li, line in enumerate(tokens):
@@ -96,15 +99,29 @@ class _ICFPTokenInterpreter:
                     line_offset+li)
                 continue
 
-            definition_index = [i for i,x in enumerate(line) if x == '=']
-            if len(definition_index):
-                definition_index = definition_index[0]
+            definition_index_list = [i for i,x in enumerate(line) if x == '=']
+            if (len(line)
+                    and line[0].startswith(':')
+                    and len(definition_index_list)):
+                procedure_name = line[0]
+                definition_index = definition_index_list[0]
+                procedures[procedure_name] = (
+                    Procedure(
+                        procedure_name,
+                        Expression(line[definition_index+1:]),
+                        start=(li+line_offset, definition_index+1),
+                        end=(li+line_offset, len(line))))
+                continue
+
+            if len(definition_index_list):
+                definition_index = definition_index_list[0]
                 try:
                     runner = self._run(
                         tokens=[line[:definition_index]],
                         line_offset=li,
                         token_offset=0,
-                        init_variables=variables)
+                        init_variables=variables,
+                        init_procedures=procedures)
                     msg_received = None
                     while True:
                         msg_received = (yield runner.send(msg_received))
@@ -116,7 +133,8 @@ class _ICFPTokenInterpreter:
                         tokens=[line[definition_index+1:]],
                         line_offset=li,
                         token_offset=definition_index+1,
-                        init_variables=variables)
+                        init_variables=variables,
+                        init_procedures=procedures)
                     msg_received = None
                     while True:
                         msg_received = (yield runner.send(msg_received))
@@ -127,17 +145,25 @@ class _ICFPTokenInterpreter:
                 continue
 
             stack = []
-            for ti, tkn in reversed(list(enumerate(line))):
+            instructions = list(reversed(line))
+            cursor = 0
+            while cursor < len(instructions):
+                ti, tkn = cursor, instructions[cursor]
+                cursor += 1
+
                 logger.debug(
-                    'Executing Line: %s Token: %s -- %s',
+                    'Executing Line: %s Token (after proc expansion): %s -- %s',
                     line_offset+li, token_offset+ti, tkn)
 
                 try:
-                    parsed_token = self._parse(tkn)
-                    if (not isinstance(parsed_token, Variable)
-                            and parsed_token == ap):
+                    parsed_token = self._parse(tkn, procedures)
+                    if parsed_token == ap:
                         tmp = parsed_token(stack.pop())
                         stack.append(tmp(stack.pop()))
+                    elif isinstance(parsed_token, Procedure):
+                        instructions = (instructions[:cursor] +
+                            list(reversed(parsed_token.expression.tokens)) +
+                            instructions[cursor:])
                     else:
                         stack.append(parsed_token)
 
@@ -149,7 +175,7 @@ class _ICFPTokenInterpreter:
 
                     logger.debug('Received value "%s"', received_message)
                     # NOTE(akesling): If this is `ap`, it won't be applied
-                    stack.append(self._parse(received_message))
+                    value = self._parse(received_message, procedures)
                     continue
                     # TODO(akesling): Figure out what form the received value
                     # should *actually* be.  Is it a set of arbitrary
@@ -159,12 +185,15 @@ class _ICFPTokenInterpreter:
 
         return line_results
 
-    def _parse(self, token):
+    def _parse(self, token, procedure_lookup):
         if token in non_terminals:
             return non_terminals[token]
 
         if token.startswith('x'):
             return Variable(token)
+
+        if token.startswith(':'):
+            return procedure_lookup[token]
 
         if token == 't':
             return True
@@ -248,150 +277,34 @@ class _ICFPTokenInterpreter:
                 '"left value" (%s) and "right value" (%s)' % (
                     left_value, right_value))
 
+class Expression:
+    def __init__(self, tokens: [str]):
+        self.tokens = tokens
+
+    def __repr__(self):
+        return 'Expression<Tokens: %s>' % (self.tokens)
+
+class Procedure:
+    def __init__(self,
+            name: str,
+            expr: Expression,
+            start: Tuple[int, int],
+            end: Tuple[int, int]):
+        self.name = name
+        self.expression = expr
+        self.start = start
+        self.end = end
+
+    def __repr__(self):
+        return 'Procedure<Name: %s, Expr: %s>' % (self.name, self.expression)
+
+    def get_span(self):
+        return (self.start, self.end)
+
 class Variable:
     # TODO(akesling): Figure out op accumulation
     def __init__(self, name: str):
         self.name = name
-        self._ops: [Tuple(str, Union[None, int, Variable])] = []
 
     def __repr__(self):
-        return 'Variable<Name: %s, Ops: %s>' % (
-            self.name, self._ops)
-
-    def __add__(self, other):
-        if isinstance(other, Variable):
-            self._ops.append(('add', other.copy()))
-            return self
-
-        if isinstance(other, int):
-            if other == 0:
-                return self
-
-            self._ops.append(('add', other))
-            return self
-
-        if isinstance(other, bool):
-            raise NotImplementedError(
-                'Variable addition with booleans is not implemented')
-
-        raise Exception(
-            'Addition with unknown value/type detected, %s/%s' % (
-                other, type(other)))
-
-    def __radd__(self, other):
-        return self.__add__(other)
-
-    def __mul__(self, other):
-        if isinstance(other, Variable):
-            self._ops.append(('mul', other.copy()))
-            return self
-
-        if isinstance(other, int):
-            if other == 1:
-                return self
-
-            self._ops.append(('mul', other))
-            return self
-
-        if isinstance(other, bool):
-            raise NotImplementedError(
-                'Variable multiplication with booleans is not implemented')
-
-        raise Exception(
-            'Multiplication with unknown value/type detected, %s/%s' % (
-                other, type(other)))
-
-    def __rmul__(self, other):
-        return self.__mul__(other)
-
-    def __floordiv__(self, other):
-        if isinstance(other, Variable):
-            self._ops.append(('floordiv', other.copy()))
-            return self
-
-        if isinstance(other, int):
-            if other == 1:
-                return self
-
-            self._ops.append(('floordiv', other))
-            return self
-
-        if isinstance(other, bool):
-            raise NotImplementedError(
-                'Variable division with booleans is not implemented')
-
-        raise Exception(
-            'Addition with unknown value/type detected, %s/%s' % (
-                other, type(other)))
-
-    def __rfloordiv__(self, other):
-        raise NotImplementedError(
-            'A Variable being divided into non-variable is not yet supported')
-
-    def __eq__(self, other):
-        if isinstance(other, Variable):
-            if self.is_equivalent_to(other):
-                return True
-            self._ops.append(('eq', other.copy()))
-            return self
-
-        if isinstance(other, int) or isinstance(other, bool):
-            self._ops.append(('eq', other))
-            return self
-
-        raise Exception(
-            'Equality with unknown value/type detected, %s/%s' % (
-                other, type(other)))
-
-    def __req__(self, other):
-        return self.__eq__(other)
-
-    def __lt__(self, other):
-        if isinstance(other, Variable):
-            self._ops.append(('lt', other.copy()))
-            return self
-
-        if isinstance(other, int) or isinstance(other, bool):
-            self._ops.append(('lt', other))
-            return self
-
-        raise Exception(
-            'Less-than with unknown value/type detected, %s/%s' % (
-                other, type(other)))
-
-    def __gt__(self, other):
-        if isinstance(other, Variable):
-            self._ops.append(('gt', other.copy()))
-            return self
-
-        if isinstance(other, int) or isinstance(other, bool):
-            self._ops.append(('gt', other))
-            return self
-
-        raise Exception(
-            'Greater-than with unknown value/type detected, %s/%s' % (
-                other, type(other)))
-
-    def __rlt__(self, other):
-        return self.__gt__(other)
-
-    def copy(self):
-        new_variable = Variable(self.name)
-        new_variable._ops = self._ops[:]
-        return new_variable
-
-    def is_modified(self):
-        return bool(self._ops)
-
-    def is_equivalent_to(self, other):
-        if isinstance(other, Variable):
-            if len(self._ops) == 0 and len(other._ops) == 0:
-                return True
-
-            if (other.name == self.name and
-                sorted(other._ops) == sorted(self._ops)):
-                return True
-
-        raise NotImplementedError(
-            'Equivalency between these two values is not yet defined: '
-            '%s ?= %s' % (self, other))
+        return 'Variable<Name: %s>' % (self.name)
