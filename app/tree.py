@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import NamedTuple, Union, Optional, Callable, Dict, List, Tuple
 
+from renderer import DrawState
 
 INT_REGEX = re.compile(r"(-?\d+)")
 VAR_REGEX = re.compile(r"x(\d+)")
@@ -32,6 +33,9 @@ KNOWN_TOKENS = [
     "vec",
     "if0",
     "send",
+    "draw",
+    "multipledraw",
+    "checkerboard",
 ]
 
 
@@ -57,13 +61,13 @@ class Procedure(NamedTuple):
 class Tree:  # I wish I could make this a NamedTuple, but mypy hates it
     """ Note this might not be a strict tree, and instead be a digraph """
 
-    left: Optional[Union["Tree", Value, Placeholder, Procedure]] = None
-    right: Optional[Union["Tree", Value, Placeholder, Procedure]] = None
+    left: Optional[Union["Tree", Value, Placeholder, Procedure, DrawState]] = None
+    right: Optional[Union["Tree", Value, Placeholder, Procedure, DrawState]] = None
 
 
 
 # Taking a line from the "git" book on naming things
-Treeish = Optional[Union[Tree, Value, Placeholder, Procedure]]
+Treeish = Optional[Union[Tree, Value, Placeholder, Procedure, DrawState]]
 PlaceDict = Dict[int, Treeish]
 ProcessFn = Callable[[PlaceDict], bool]
 
@@ -114,8 +118,8 @@ def serialize(treeish: Treeish) -> str:
 class Rewrite(NamedTuple):
     """ Pattern match to a reduction """
 
-    pattern: Union[Tree, Value, Placeholder, Procedure]
-    replace: Union[Tree, Value, Placeholder, Procedure]
+    pattern: Union[Tree, Value, Placeholder, Procedure, DrawState]
+    replace: Union[Tree, Value, Placeholder, Procedure, DrawState]
     # Extra processing on the placeholders dictionary
     # good place for arithmetic, or side effects.
     # Returns False if this rewrite is invalid (for misc criterion, like numbers)

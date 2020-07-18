@@ -15,8 +15,10 @@ from tree import (
     Procedure,
     Rewrite,
     parse_tree,
+    vector, unvector,
 )
 from mod_parser import parse_partial, unparse
+import renderer
 
 logger = logging.getLogger("app.compute")
 
@@ -60,6 +62,19 @@ def send(pd: PlaceDict) -> bool:
     assert remainder == "", f"got remainder parsing message {res.text}"
     pd[1] = response
     return True
+
+
+def pd_draw(pd: PlaceDict) -> bool:
+    if 0 in pd:
+        pd[1] = renderer.draw(vector(pd[0]))
+        return True
+    return False
+
+def pd_multidraw(pd: PlaceDict) -> bool:
+    if 0 in pd:
+        pd[1] = unvector(renderer.multidraw(vector(pd[0])))
+        return True
+    return False
 
 
 REWRITES = (
@@ -114,9 +129,15 @@ REWRITES = (
             ),  # Division
             ("ap ap eq x0 x1 = x2", lambda x, y: "t" if x == y else "f"),  # Equals
             ("ap ap lt x0 x1 = x2", lambda x, y: "t" if x < y else "f"),  # Less Than
+            ("ap ap checkerboard x0 x1 = x2",
+                lambda x, y: renderer.checkerboard((x, y))),
         ]
     ]
-    + [Rewrite.from_str("ap send x0 = x1", send)]
+    + [
+        Rewrite.from_str("ap send x0 = x1", send),
+        Rewrite.from_str("ap draw x0 = x1", pd_draw),
+        Rewrite.from_str("ap multipledraw x0 = x1", pd_multidraw),
+    ]
 )
 
 
