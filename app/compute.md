@@ -84,7 +84,8 @@ Adding the missing functions via rewrite rules and a new datatype for draw might
 
 Run `python app/compute.py 'ap ap add 1 2'` to evaluate a string.
 
-Run `python app/compute.py 'ap send 0'` to try sending to the server
+Run `python app/compute.py 'ap ap add ap ap add 2 3 4'` to evaluate a bigger example.
 
+Run `python app/compute.py 'ap send 0'` to try sending to the server
 
 Run `python app/compute.py 'ap send ap ap cons 0 nil'` to try sending to the server

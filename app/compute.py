@@ -10,6 +10,7 @@ from tree import (
     ProcessFn,
     PlaceDict,
     Value,
+    Treeish,
     Placeholder,
     Procedure,
     Rewrite,
@@ -119,11 +120,7 @@ REWRITES = (
 )
 
 
-def match(
-    pattern: Optional[Union[Tree, Value, Placeholder, Procedure]],
-    data: Optional[Union[Tree, Value, Placeholder, Procedure]],
-    placedict: PlaceDict,
-) -> bool:
+def match(pattern: Treeish, data: Treeish, placedict: PlaceDict,) -> bool:
     """ Return true if data matches pattern, also fills out placedict dict """
     if pattern is None and data is None:
         return True
@@ -140,7 +137,7 @@ def match(
             pattern.right, Placeholder
         )
         if left_matches and right_matches:
-            logger.debug("Candidates", pattern, data)
+            logger.debug(f"Candidates {pattern} {data}")
         return left_matches and right_matches
     if isinstance(pattern, Procedure) and isinstance(data, Procedure):
         if pattern.name == data.name:
@@ -148,9 +145,7 @@ def match(
     return False
 
 
-def apply(
-    replace: Optional[Union[Tree, Value, Placeholder, Procedure]], placedict: PlaceDict,
-) -> Optional[Union[Tree, Value, Placeholder, Procedure]]:
+def apply(replace: Treeish, placedict: PlaceDict,) -> Treeish:
     """ Apply the replacement to this tree and return result """
     if replace is None:
         return None
@@ -168,9 +163,8 @@ def apply(
 
 
 def compute(
-    tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
-    rewrite_rules: List[Rewrite] = REWRITES,
-) -> (Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]):
+    tree: Treeish, rewrite_rules: List[Rewrite] = REWRITES,
+) -> (Tuple[Treeish, bool]):
     """
     NOTE: THIS POSSIBLY MUTATES THE TREE !!! 
     Returns tree, True if the tree was modified, tree, false if failed.
@@ -216,10 +210,7 @@ def compute(
     return tree, False
 
 
-def compute_fully(
-    tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
-    rewrite_rules: List[Rewrite] = REWRITES,
-) -> (Optional[Union[Tree, Value, Placeholder, Procedure]]):
+def compute_fully(tree: Treeish, rewrite_rules: List[Rewrite] = REWRITES,) -> (Treeish):
     """ Call compute on a tree until it converges """
     result = True
     while result:

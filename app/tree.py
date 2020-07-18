@@ -60,13 +60,15 @@ class Tree:  # I wish I could make this a NamedTuple, but mypy hates it
     right: Optional[Union["Tree", Value, Placeholder, Procedure]] = None
 
 
-PlaceDict = Dict[int, Optional[Union[Tree, Value, Placeholder, Procedure]]]
+# Taking a line from the "git" book on naming things
+Treeish = Optional[Union[Tree, Value, Placeholder, Procedure]]
+PlaceDict = Dict[int, Treeish]
 ProcessFn = Callable[[PlaceDict], bool]
 
 
 def parse_tree(
     tokens: List[str],
-) -> Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], List[str]]:
+) -> Tuple[Treeish, List[str]]:
     """ Returns parsed tree, and leftover tokens """
     assert isinstance(tokens, list), f"bad tokens {tokens}"
     if tokens == []:

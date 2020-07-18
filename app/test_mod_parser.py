@@ -2,21 +2,16 @@
 
 import unittest
 from tree import Value, vector, pair
-from mod_parser import parse_partial, unparse
+from mod_parser import parse, unparse
 
 
 class TestParser(unittest.TestCase):
     def test_int_reverse(self):
         for i in range(-10000, 10000):
-            modulation = unparse(i)
-            value, remainder = parse_partial(modulation)
-            self.assertEqual(value, Value(i))
-            self.assertEqual(remainder, '')
+            self.assertEqual(parse(unparse(i)), Value(i))
 
     def check_int_example(self, i, modulation):
-        value, remainder = parse_partial(modulation)
-        self.assertEqual(Value(i), value)
-        self.assertEqual(remainder, '')
+        self.assertEqual(Value(i), parse(modulation))
         self.assertEqual(unparse(i), modulation)
 
     def test_linear_int_examples(self):
@@ -33,9 +28,7 @@ class TestParser(unittest.TestCase):
         self.check_int_example(-256, "101110000100000000")
 
     def check_list_example(self, l, modulation):
-        value, remainder = parse_partial(modulation)
-        self.assertEqual(l, value)
-        self.assertEqual(remainder, '')
+        self.assertEqual(l, parse(modulation))
         self.assertEqual(unparse(l), modulation)
 
     def test_linear_list_examples(self):

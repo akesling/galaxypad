@@ -2,37 +2,59 @@
 
 import math
 import re
+from typing import NamedTuple, Tuple, Union
 
-from tree import Value, pair, Tree, unvector
+from tree import Value, pair, Tree, unvector, Treeish
 
-
+MOD_PATTERN = re.compile(r"[01]*")
 INT_PREFIX = re.compile(r"(01|10)(1*)0([01]*)")
 INT_SIGN = {"01": 1, "10": -1}
 
 
-def parse_partial(modulation):
-    """ Parse the first complete item out of a modulation,
-    and return the item and the remainder of the modulation """
-    assert isinstance(modulation, str), f"bad type {type(modulation)}"
-    assert modulation.count("1") + modulation.count("0") == len(modulation), modulation
+class Modulation(NamedTuple):
+    """ Type for modulation strings """
+
+    bits: str = ""
+
+
+def parse(modulation: Modulation) -> Treeish:
+    """ Wrap parse_partial with assertion that parse is complete """
+    treeish, remainder = parse_partial(modulation)
+    assert remainder == "", f"failed to fully parse {modulation}"
+    return treeish
+
+
+def parse_partial(modulation: Union[Modulation, str]) -> Tuple[Treeish, str]:
+    """
+    Parse the first complete item out of a modulation,
+    and return the item and the remainder of the modulation
+    """
+    # For convenience we can just call this method on a bit string
+    if isinstance(modulation, Modulation):
+        bits = modulation.bits
+    elif isinstance(modulation, str):
+        bits = modulation
+    else:
+        raise ValueError(f"Improper modulation {modulation}")
+    assert MOD_PATTERN.fullmatch(bits), f"bad bits {bits}"
     # Numbers:
-    if INT_PREFIX.match(modulation):
+    int_match = INT_PREFIX.match(bits)
+    if int_match is not None:
         # Integer prefix, follow with ones and a zero
         # The length of the first group is the rest of the length // 4
-        match = INT_PREFIX.match(modulation)
-        sign, length_specifier, remainder = match.groups()
+        sign, length_specifier, remainder = int_match.groups()
         length = len(length_specifier) * 4
         binary, unparsed = remainder[:length], remainder[length:]
         value = sum(int(n) * 2 ** i for i, n in enumerate(binary[::-1]))
         return Value(INT_SIGN[sign] * value), unparsed
     # Empty list
-    if modulation.startswith("00"):
+    if bits.startswith("00"):
         # Hardcode this for now
-        return Value('nil'), modulation[2:]
+        return Value("nil"), bits[2:]
     # List
-    if modulation.startswith("11"):
+    if bits.startswith("11"):
         # I'm pretty sure this is how this works
-        remainder = modulation[2:]
+        remainder = bits[2:]
         head, remainder = parse_partial(remainder)
         tail, remainder = parse_partial(remainder)
         return pair(head, tail), remainder
@@ -44,7 +66,7 @@ def unparse(value):
     if isinstance(value, Value):
         if isinstance(value.value, int):
             value = value.value  # Unpack from value object
-        if value == Value('nil'):
+        if value == Value("nil"):
             value = []
         else:
             raise ValueError(f"Can't parse value {value}")
