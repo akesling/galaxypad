@@ -9,24 +9,24 @@ from vector import vector, unvector
 from modulate import modulate, demodulate, Modulation
 
 
-def get_reply(data):
+def get_reply(data: Modulation) -> Modulation:
     res = requests.post(
-        server_url + "/aliens/send", params=dict(apiKey=api_key), data=data
+        server_url + "/aliens/send", params=dict(apiKey=api_key), data=data.bits
     )
     if res.status_code != 200:
         print('Unexpected server response from URL "%s":' % server_url)
         print("HTTP code:", res.status_code)
         print("Response body:", res.text)
         raise ValueError("Server response:", res.text)
-    return res.text
+    return Modulation(res.text)
 
 
 def send(tree: Treeish):
-    data = modulate(tree).bits
+    data = modulate(tree)
     print("sending data", data)
     data = get_reply(data)
     print("got data", data)
-    print("parsed vector", vector(demodulate(Modulation(data))))
+    print("parsed vector", vector(demodulate(data)))
 
 
 def main():
