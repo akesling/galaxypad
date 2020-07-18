@@ -389,3 +389,8 @@ class Variable:
         raise NotImplementedError(
             'Equivalency between these two values is not yet defined: '
             '%s ?= %s' % (self, other))
+
+
+if __name__ == '__main__':
+    import sys
+    print(compile(sys.argv[1]))
