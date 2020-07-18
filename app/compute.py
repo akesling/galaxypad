@@ -47,7 +47,6 @@ class Tree:
 
     left: Optional[Union["Tree", Callable, int]] = None
     right: Optional[Union["Tree", Callable, int]] = None
-    parent: Optional["Tree"] = None
 
     def is_leaf(self):
         return not isinstance(tree.left, Tree) and not isinstance(tree.right, Tree)
