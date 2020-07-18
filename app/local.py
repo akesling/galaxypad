@@ -26,7 +26,7 @@ def send(tree: Treeish):
     print("sending data", data)
     data = get_reply(data)
     print("got data", data)
-    print("parsed vector", vector(demodulate(data)))
+    print("parsed vector", vector(demodulate(Modulation(data))))
 
 
 def main():
