@@ -244,7 +244,8 @@ if __name__ == "__main__":
         tree, leftover = parse_tree(sys.argv[1].strip().split())
         if leftover:
             print("Missed this bit", leftover)
-        print("computed", compute_fully(tree))
+        print("tree")
+        print(compute_fully(tree))
     else:
         print("Help: Run with a string argument to compute")
         print("  > python tree.py 'ap ap add 1 2'")

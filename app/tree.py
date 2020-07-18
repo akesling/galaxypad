@@ -158,10 +158,10 @@ def unvector(vec: Vector) -> Treeish:
 
 
 if __name__ == "__main__":
-    d = [1, [2, 3], 4]
+    d = [[2, 3]]
     print("d", d)
     t = unvector(d)
-    print("d", d)
+    print("t\n", t)
     v = vector(t)
     print("v", v)
     print(d == v)
