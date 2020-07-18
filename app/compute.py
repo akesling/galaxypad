@@ -13,7 +13,7 @@ import re
 @dataclass
 class Tree:
     token: str
-    value: Union[List, int]
+    number: Union[List, int]
     left: Optional["Tree"]
     right: Optional["Tree"]
 
@@ -28,9 +28,6 @@ def tokens_to_tree(tokens):
         right, remainder = tokens_to_tree(right_tokens)
         return Tree('ap', left, right), remainder
     return tokens[0], tokens[1:]
-
-
-
 
 
 if __name__ == '__main__':
