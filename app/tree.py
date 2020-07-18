@@ -46,6 +46,7 @@ class Placeholder(NamedTuple):
 
     x: int
 
+
 class Procedure(NamedTuple):
     """ A procedure to be lazily invoked through rewriting """
 
@@ -66,9 +67,7 @@ PlaceDict = Dict[int, Treeish]
 ProcessFn = Callable[[PlaceDict], bool]
 
 
-def parse_tree(
-    tokens: List[str],
-) -> Tuple[Treeish, List[str]]:
+def parse_tree(tokens: List[str],) -> Tuple[Treeish, List[str]]:
     """ Returns parsed tree, and leftover tokens """
     assert isinstance(tokens, list), f"bad tokens {tokens}"
     if tokens == []:
@@ -114,52 +113,56 @@ class Rewrite(NamedTuple):
         return cls(pattern=pattern, replace=replace, process=process)
 
 
-def pair(x, y):
+def pair(x: Treeish, y: Treeish) -> Treeish:
     """ Helper function to get the tree representation of a pair"""
-    return Tree(Tree(Value('cons'), x), y)
+    return Tree(Tree(Value("cons"), x), y)
 
 
-def vector(l):
+Vector = Union[List, int]
+
+
+def unvector(vec: Vector) -> Treeish:
     """ Helper to get a tree version of a vector """
-    if isinstance(l, Value):
-        return l
-    if isinstance(l, int):
-        return Value(l)
-    assert isinstance(l, list), f"Bad vector {l}"
-    if len(l) == 0:
-        return Value('nil')
-    if len(l) == 1:
-        return pair(vector(l[0]), Value('nil'))
-    head, *tail = l
-    return pair(vector(head), vector(tail))
+    if isinstance(vec, int):
+        return Value(vec)
+    if vec == []:
+        return Value("nil")
+    if isinstance(vec, list):
+        head, *tail = vec
+        return pair(unvector(head), unvector(tail))
+    raise ValueError(f"Can't vectorize {vec}")
 
 
-def unvector(tree):
+def vector(treeish: Treeish) -> Vector:
     """ Reverse of the vector function """
-    if tree == Value('nil'):
-        return []
-    if isinstance(tree, Value) and isinstance(tree.value, int):
-        return tree.value
-    if isinstance(tree, int):
-        return tree
-    if isinstance(tree.left, Tree) and tree.left.left == Value('cons'):
-        v0 = unvector(tree.left.right)
-        v1 = unvector(tree.right)
-        if v1 == []:
-            return [v0]
-        if isinstance(v1, list):
-            return [v0] + v1
-        return [v0, v1]
-    raise ValueError(f"Don't know how to unvector {tree}")
-        
+    if isinstance(treeish, Value):
+        if treeish == Value("nil"):
+            return []
+        if isinstance(treeish.value, int):
+            return treeish.value
+        raise ValueError(f"Can't vector value {treeish}")
+    if isinstance(treeish, Tree):
+        left_tree = treeish.left
+        # Specifically match the cons construction pattern
+        if isinstance(left_tree, Tree) and left_tree.left in (
+            # This is a bit ugly but both are valid unfortunately
+            Value("cons"),
+            Value("vec"),
+        ):
+            left = vector(left_tree.right)
+            right = vector(treeish.right)
+            if isinstance(right, list):
+                return [left] + right
+            return [left, right]
+    raise ValueError(f"Don't know how to vector {treeish}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     d = [1, [2, 3], 4]
-    print('d', d)
+    print("d", d)
     v = vector(d)
-    print('v', v)
+    print("v", v)
     u = unvector(v)
-    print('u', u)
+    print("u", u)
     print(d == u)
 

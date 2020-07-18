@@ -4,7 +4,7 @@ import math
 import re
 from typing import NamedTuple, Tuple, Union
 
-from tree import Value, pair, Tree, unvector, Treeish
+from tree import Value, pair, Tree, unvector, Treeish, Placeholder, Procedure
 
 MOD_PATTERN = re.compile(r"[01]*")
 INT_PREFIX = re.compile(r"(01|10)(1*)0([01]*)")
@@ -61,27 +61,20 @@ def parse_partial(modulation: Union[Modulation, str]) -> Tuple[Treeish, str]:
     raise ValueError(f"Unmatched modulation {modulation}")
 
 
-def unparse(value):
+def unparse(treeish: Treeish) -> Modulation:
     """ Unparse a value into a modulation """
-    if isinstance(value, Value):
-        if isinstance(value.value, int):
-            value = value.value  # Unpack from value object
-        if value == Value("nil"):
-            value = []
-        else:
-            raise ValueError(f"Can't parse value {value}")
-    if value == 0:
-        return "010"
-    if isinstance(value, int):
+    if treeish is None:
+        return Modulation("")
+    if isinstance(treeish, Value) and isinstance(treeish.value, int):
+        value = treeish.value
         sign_mod = "01" if value >= 0 else "10"
         length = len(bin(abs(value))) - 2  # Use the python bin() function
         length_units = math.ceil(length / 4)
         prefix = sign_mod + "1" * length_units + "0"
         binary = "0" * (length_units * 4 - length) + bin(abs(value))[2:]
-        return prefix + binary
+        return Modulation(prefix + binary)
     if isinstance(value, Tree):
         value = unvector(value)  # Unpack a cons list
-    if isinstance(value, list):
         # Special case empty list
         if value == []:
             return "00"
