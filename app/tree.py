@@ -181,7 +181,7 @@ def unvector(vec: Vector) -> Treeish:
     if isinstance(vec, list):
         head, *tail = vec
         return pair(unvector(head), unvector(tail))
-    raise ValueError(f"Can't vectorize {vec}")
+    raise ValueError(f"Can't unvector (maybe you want vector) {vec}")
 
 
 if __name__ == "__main__":

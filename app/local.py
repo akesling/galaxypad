@@ -4,7 +4,7 @@ import sys
 server_url = "https://icfpc2020-api.testkontur.ru"
 api_key = "8f96a989734a45688a78d530f60cce97"
 
-from tree import unvector
+from tree import vector
 from mod_parser import parse_partial, unparse_vector
 
 
@@ -27,12 +27,13 @@ def send(data):
         print("got data", data)
         value, remainder = parse_partial(data)
         print("parsed value", value)
-        print("parsed vector", unvector(value))
+        print("parsed vector", vector(value))
         print("parsed remainder", remainder)
+
 
 def main():
     send("")
-    send(unparse_vector([0]))
+    send(unparse_vector([0]).bits)
 
 
 if __name__ == "__main__":
