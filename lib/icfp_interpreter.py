@@ -206,12 +206,6 @@ class _ICFPTokenInterpreter:
         if token.startswith(':'):
             return procedure_lookup[token]
 
-        if token == 't':
-            return True
-
-        if token == 'f':
-            return False
-
         return int(token)
 
     def _serialize(self, value, variable_lookup):
@@ -226,10 +220,10 @@ class _ICFPTokenInterpreter:
             return self._serialize(
                 variable_lookup[value.name], variable_lookup)
 
-        if value is True:
+        if value is t:
             return 't'
 
-        if value is False:
+        if value is f:
             return 'f'
 
         if isinstance(value, int):
