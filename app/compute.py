@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Tuple, List, Optional, Union, Dict, NamedTuple, Callable
 
 from tree import Tree, ProcessFn, PlaceDict, Value, Placeholder, Rewrite, parse_tree
-from parser import parse_partial, unparse
+from mod_parser import parse_partial, unparse
 
 
 def unop(fn: Callable[[int], int]) -> ProcessFn:
