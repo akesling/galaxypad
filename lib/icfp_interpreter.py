@@ -22,9 +22,10 @@ ap = lambda arg1: lambda arg2: arg1(arg2)
 substitution = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2(arg3))
 flip = lambda arg1: lambda arg2: lambda arg3: arg1(arg3)(arg2)
 b_combinator = lambda arg1: lambda arg2: lambda arg3: arg1(arg2(arg3))
-true = lambda arg1: lambda arg2: arg1
+t = lambda arg1: lambda arg2: arg1
 false = lambda arg1: lambda arg2: arg2
 i_combinator = lambda arg1: arg1
+nil = lambda arg1: t
 
 add = lambda arg1: lambda arg2: arg1 + arg2
 mul = lambda arg1: lambda arg2: arg1 * arg2
@@ -67,9 +68,10 @@ non_terminals = {
     's': substitution,
     'c': flip,
     'b': b_combinator,
-    't': true,
+    't': t,
     'f': false,
     'i': i_combinator,
+    'nil': nil,
 }
 
 # Make sure to preserve the interface between this Interpreter and the ICFP JIT
