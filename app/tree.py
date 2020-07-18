@@ -103,7 +103,30 @@ def binop(fn: Callable[[int, int], int]) -> Callable[[PlaceDict], bool]:
     return process
 
 
-KNOWN_TOKENS = ["add", "inc", "dec", "i", "t", "f", "mul"]
+KNOWN_TOKENS = [
+    "add",
+    "inc",
+    "dec",
+    "i",
+    "t",
+    "f",
+    "mul",
+    "div",
+    "eq",
+    "lt",
+    "neg",
+    "s",
+    "c",
+    "b",
+    "pwr2",
+    "cons",
+    "car",
+    "cdr",
+    "nil",
+    "isnil",
+    "vec",
+    "if0",
+]
 REWRITES = (
     [
         Rewrite.from_str(s)
@@ -111,6 +134,7 @@ REWRITES = (
             "ap i x0 = x0",  # Identity
             "ap add 0 = i",  # Addition -> Identity
             "ap add 1 = inc",  # Addition -> Increment
+            "ap add -1 = dec",  # Addition -> Increment
             "ap ap add x0 0 = x0",  # Additive Identity
             "ap ap t x0 x1 = x0",  # True
             "ap f x0 = i",  # False -> Identity
@@ -118,6 +142,21 @@ REWRITES = (
             "ap mul 1 = i",  # Multiplication -> Identity
             "ap ap mul x0 0 = 0",  # Multiplication by Zero
             "ap ap mul x0 1 = x0",  # Multiplicative Identity
+            "ap ap div x0 1 = x0",  # Division Identity
+            "ap ap eq x0 x0 = t",  # Equality Comparison (matching subtrees)
+            "ap dec ap inc x0 = x0",  # Increment/Decrement Annihilation
+            "ap inc ap dec x0 = x0",  # Decrement/Increment Annihilation
+            "ap ap ap s x0 x1 x2 = ap ap x0 x2 ap x1 x2",  # S Combinator
+            "ap ap ap c x0 x1 x2 = ap ap x0 x2 x1",  # C Combinator
+            "ap ap ap b x0 x1 x2 = ap x0 ap x1 x2",  # B Combinator
+            "ap ap ap cons x0 x1 x2 = ap ap x2 x0 x1",  # Pair
+            "ap car ap ap cons x0 x1 = x0",  # Head
+            "ap cdr ap ap cons x0 x1 = x1",  # Tail
+            "ap nil x0 = t",  # Nil (Empty List)
+            "ap isnil nil = t",  # Is Nil (Is Empty List)
+            "ap isnil ap ap cons x0 x1 = f",  # Is Not Empty List
+            "vec = cons",  # Vector (Alias)
+            "if0 = ap eq 0",  # If equal to zero
         ]
     ]
     + [
@@ -125,6 +164,8 @@ REWRITES = (
         for s, fn in [
             ("ap inc x0 = x1", lambda x: x + 1),  # Increment
             ("ap dec x0 = x1", lambda x: x - 1),  # Decrement
+            ("ap neg x0 = x1", lambda x: -x),  # Negate
+            ("ap pwr2 x0 = x1", lambda x: 2**x),  # Power of 2
         ]
     ]
     + [
@@ -132,6 +173,12 @@ REWRITES = (
         for s, fn in [
             ("ap ap add x0 x1 = x2", lambda x, y: x + y),  # Addition
             ("ap ap mul x0 x1 = x2", lambda x, y: x * y),  # Multiplication
+            (  # https://stackoverflow.com/a/19919449
+                "ap ap div x0 x1 = x2",
+                lambda a, b: a // b if a * b > 0 else (a + (-a % b)) // b,
+            ),  # Division
+            ("ap ap eq x0 x1 = x2", lambda x, y: "t" if x == y else "f"),  # Equals
+            ("ap ap lt x0 x1 = x2", lambda x, y: "t" if x < y else "f"),  # Less Than
         ]
     ]
 )
@@ -184,24 +231,23 @@ def compute(
     Returns tree, True if the tree was modified, tree, false if failed.
     If this returns True, possibly more rewrites can happen.
     """
-    if tree is None or isinstance(tree, Value) or isinstance(tree, Placeholder):
+    if tree is None:
         return tree, False
-    if not isinstance(tree, Tree):
-        raise ValueError(f"bad tree {tree}")
-    # Check subtrees before this tree because matches are more likely in leaves
-    if isinstance(tree.left, Tree):
+    if isinstance(tree, Tree):
+        # Check subtrees before this tree because matches are more likely in leaves
         tree.left, result = compute(tree.left)
         if result:
             return tree, True
-    if isinstance(tree.right, Tree):
         tree.right, result = compute(tree.right)
         if result:
             return tree, True
-    for rewrite in REWRITES:
-        pd: PlaceDict = {}
-        if match(rewrite.pattern, tree, pd) and rewrite.process(pd):
-            return apply(rewrite.replace, pd), True
-    return tree, False
+    if isinstance(tree, (Tree, Value, Placeholder)):
+        for rewrite in REWRITES:
+            pd: PlaceDict = {}
+            if match(rewrite.pattern, tree, pd) and rewrite.process(pd):
+                return apply(rewrite.replace, pd), True
+        return tree, False
+    raise ValueError(f"Bad type for tree {tree} {type(tree)}")
 
 
 def compute_fully(
@@ -216,6 +262,7 @@ def compute_fully(
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) == 2:
         tree, leftover = parse_tree(sys.argv[1].strip().split())
         if leftover:
