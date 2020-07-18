@@ -79,3 +79,12 @@ The simplest thing would be to test it against the interpreter and check that it
 Parsing the `galaxy.txt` file line-by-line and then seeing how the tree-replacement strategy does might be useful.
 
 Adding the missing functions via rewrite rules and a new datatype for draw might be cool too.
+
+## Tinkering
+
+Run `python app/compute.py 'ap ap add 1 2'` to evaluate a string.
+
+Run `python app/compute.py 'ap send 0'` to try sending to the server
+
+
+Run `python app/compute.py 'ap send ap ap cons 0 nil'` to try sending to the server
