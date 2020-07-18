@@ -31,6 +31,10 @@ add = lambda arg1: lambda arg2: arg1 + arg2
 mul = lambda arg1: lambda arg2: arg1 * arg2
 neg = lambda arg1: arg1 * -1
 
+make_pair = lambda arg1: lambda arg2: [arg1, arg2]
+pick_head = lambda arg1: arg1[0]
+pick_tail = lambda arg1: arg1[1]
+
 def transmit(arg1):
     raise Transmission(arg1)
 
@@ -72,6 +76,9 @@ non_terminals = {
     'f': false,
     'i': i_combinator,
     'nil': nil,
+    'cons': make_pair,
+    'car': pick_head,
+    'cdr': pick_tail,
 }
 
 # Make sure to preserve the interface between this Interpreter and the ICFP JIT
