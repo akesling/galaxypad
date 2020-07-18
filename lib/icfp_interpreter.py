@@ -145,9 +145,14 @@ class _ICFPTokenInterpreter:
                 continue
 
             stack = []
-            for ti, tkn in reversed(list(enumerate(line))):
+            instructions = list(reversed(line))
+            cursor = 0
+            while cursor < len(instructions):
+                ti, tkn = cursor, instructions[cursor]
+                cursor += 1
+
                 logger.debug(
-                    'Executing Line: %s Token: %s -- %s',
+                    'Executing Line: %s Token (after proc expansion): %s -- %s',
                     line_offset+li, token_offset+ti, tkn)
 
                 try:
@@ -156,8 +161,9 @@ class _ICFPTokenInterpreter:
                         tmp = parsed_token(stack.pop())
                         stack.append(tmp(stack.pop()))
                     elif isinstance(parsed_token, Procedure):
-                        stack.extend(
-                            reversed(self._expand(parsed_token, procedures)))
+                        instructions = (instructions[:cursor] +
+                            list(reversed(parsed_token.expression.tokens)) +
+                            instructions[cursor:])
                     else:
                         stack.append(parsed_token)
 
@@ -178,18 +184,6 @@ class _ICFPTokenInterpreter:
             line_results.append(stack)
 
         return line_results
-
-    def _expand(self, proc, procedure_lookup):
-        tokens = proc.expression.tokens
-        expanded_tokens = []
-        for token in tokens:
-            parsed_token = self._parse(token, procedure_lookup)
-            if isinstance(parsed_token, Procedure):
-                expanded_tokens.extend(
-                    self._expand(parsed_token, procedure_lookup))
-            else:
-                expanded_tokens.append(parsed_token)
-        return expanded_tokens
 
     def _parse(self, token, procedure_lookup):
         if token in non_terminals:
