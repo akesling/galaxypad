@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
-INT_PREFIX = re.compile(r"01(1*)0([01]*)")
-NEG_PREFIX = re.compile(r"10(1*)0([01]*)")
+import math
+import re
+
+INT_PREFIX = re.compile(r"(01|10)(1*)0([01]*)")
+INT_SIGN = {'01': 1, '10': -1}
 
 def parse_binary_int(binary):
     """ Directly parse a sequence into a binary int """
@@ -18,16 +21,20 @@ def parse_partial(modulation):
         # Integer prefix, follow with ones and a zero
         # The length of the first group is the rest of the length // 4
         match = INT_PREFIX.match(modulation)
-        length_specifier, remainder = match.groups()
+        sign, length_specifier, remainder = match.groups()
         length = len(length_specifier) * 4
         binary, unparsed = remainder[:length], remainder[length:]
         value = parse_binary_int(binary)
-        return value, unparsed
-    if NEG_PREFIX.match(modulation):
-        # Same as integer but for negative numbers
-        match = NEG_PREFIX.match(modulation)
-        length_specifier, remainder = match.groups()
-        length = len(length_specifier) * 4
-        binary, unparsed = remainder[:length], remainder[length:]
-        value = -parse_binary_int(binary)  # Negative!
-        return value, unparsed
+        return INT_SIGN[sign] * value, unparsed
+
+
+def unparse(value):
+    """ Unparse a value into a modulation """
+    if isinstance(value, int):
+        sign_mod = '01' if value >= 0 else '10'
+        length = len(bin(abs(value))) - 2  # Use the python bin() function
+        length_units = math.ceil(length / 4) * 4
+        prefix = sign_mod + '1' * length_units + '0'
+        binary = '0' * (length_units * 4 - length) + bin(abs(value))[2:]
+        return prefix + binary
+    raise ValueError(f"Don't know what to do with {value}")
