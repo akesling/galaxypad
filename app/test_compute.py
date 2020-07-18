@@ -138,8 +138,10 @@ class TestImages(unittest.TestCase):
 
     def test_compare_equals(self):
         self.check_lines(
+#            """
+#            ap ap eq x0 x0   =   t
+#            """
             """
-            ap ap eq x0 x0   =   t
             ap ap eq 0 -2   =   f
             ap ap eq 0 -1   =   f
             ap ap eq 0 0   =   t
