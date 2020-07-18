@@ -21,7 +21,7 @@ class Value(NamedTuple):
 
 
 class Placeholder(NamedTuple):
-    """ Placeholder value for using in reduce expressions """
+    """ Placeholder value for using in Rewrite expressions """
 
     x: int
 
@@ -34,7 +34,7 @@ class Tree:  # I wish I could make this a NamedTuple, but mypy hates it
     right: Optional[Union["Tree", Value, Placeholder]] = None
 
 
-class Reduce(NamedTuple):
+class Rewrite(NamedTuple):
     """ Pattern match to a reduction """
 
     pattern: Tree
@@ -46,9 +46,9 @@ _add = Value("add")
 _0 = Value(0)
 x0 = Placeholder(0)
 REDUCTIONS = [
-    Reduce(Tree(_i, x0), x0),  # Identity
-    Reduce(Tree(_add, _0), _i),  # Additive identity
-    Reduce(Tree(Tree(_add, x0), _0), x0),  # Additive identity
+    Rewrite(Tree(_i, x0), x0),  # Identity
+    Rewrite(Tree(_add, _0), _i),  # Additive identity
+    Rewrite(Tree(Tree(_add, x0), _0), x0),  # Additive identity
 ]
 
 PlaceDict = Dict[int, Optional[Union[Tree, Value, Placeholder]]]
@@ -105,6 +105,8 @@ def compute(
         return tree, False
     if not isinstance(tree, Tree):
         raise ValueError(f'bad tree {tree}')
+    for evaluation in EVALUATIONS:
+
     for reduction in REDUCTIONS:
         placedict: PlaceDict = {}
         if match(reduction.pattern, tree, placedict):
