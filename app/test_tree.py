@@ -62,6 +62,33 @@ class TestImages(unittest.TestCase):
         """
         )
 
+    def test_decrement(self):
+        self.check_lines(
+            """
+            ap dec 1   =   0
+            ap dec 2   =   1
+            ap dec 3   =   2
+            ap dec 4   =   3
+            ...
+            ap dec 1024   =   1023
+            ...
+            ap dec 0   =   -1
+            ap dec -1   =   -2
+            ap dec -2   =   -3
+        """
+        )
+
+    def test_addition(self):
+        self.check_lines(
+            """
+            ap ap add 1 2   =   3
+            ap ap add 2 1   =   3
+            ap ap add 0 1   =   1
+            ap ap add 2 3   =   5
+            ap ap add 3 5   =   8
+        """
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
