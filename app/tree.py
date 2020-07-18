@@ -7,6 +7,7 @@ from typing import NamedTuple, Union, Optional, Callable, Dict, List, Tuple
 
 INT_REGEX = re.compile(r"(-?\d+)")
 VAR_REGEX = re.compile(r"x(\d+)")
+PROC_REGEX = re.compile(r":(\d+)")
 KNOWN_TOKENS = [
     "add",
     "inc",
@@ -45,22 +46,27 @@ class Placeholder(NamedTuple):
 
     x: int
 
+class Procedure(NamedTuple):
+    """ A procedure to be lazily invoked through rewriting """
+
+    name: int
+
 
 @dataclass
 class Tree:  # I wish I could make this a NamedTuple, but mypy hates it
     """ Note this might not be a strict tree, and instead be a digraph """
 
-    left: Optional[Union["Tree", Value, Placeholder]] = None
-    right: Optional[Union["Tree", Value, Placeholder]] = None
+    left: Optional[Union["Tree", Value, Placeholder, Procedure]] = None
+    right: Optional[Union["Tree", Value, Placeholder, Procedure]] = None
 
 
-PlaceDict = Dict[int, Optional[Union[Tree, Value, Placeholder]]]
+PlaceDict = Dict[int, Optional[Union[Tree, Value, Placeholder, Procedure]]]
 ProcessFn = Callable[[PlaceDict], bool]
 
 
 def parse_tree(
     tokens: List[str],
-) -> Tuple[Optional[Union[Tree, Value, Placeholder]], List[str]]:
+) -> Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], List[str]]:
     """ Returns parsed tree, and leftover tokens """
     assert isinstance(tokens, list), f"bad tokens {tokens}"
     if tokens == []:
@@ -76,14 +82,16 @@ def parse_tree(
         return Value(token), tokens
     if VAR_REGEX.match(token):
         return Placeholder(int(token[1:])), tokens
+    if PROC_REGEX.match(token):
+        return Procedure(int(token[1:])), tokens
     raise ValueError(f"Unknown token {token}")
 
 
 class Rewrite(NamedTuple):
     """ Pattern match to a reduction """
 
-    pattern: Union[Tree, Value, Placeholder]
-    replace: Union[Tree, Value, Placeholder]
+    pattern: Union[Tree, Value, Placeholder, Procedure]
+    replace: Union[Tree, Value, Placeholder, Procedure]
     # Extra processing on the placeholders dictionary
     # good place for arithmetic, or side effects.
     # Returns False if this rewrite is invalid (for misc criterion, like numbers)

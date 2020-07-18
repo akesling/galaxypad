@@ -4,7 +4,7 @@ import requests
 from dataclasses import dataclass
 from typing import Tuple, List, Optional, Union, Dict, NamedTuple, Callable
 
-from tree import Tree, ProcessFn, PlaceDict, Value, Placeholder, Rewrite, parse_tree
+from tree import Tree, ProcessFn, PlaceDict, Value, Placeholder, Procedure, Rewrite, parse_tree
 from mod_parser import parse_partial, unparse
 
 
@@ -108,8 +108,8 @@ REWRITES = (
 
 
 def match(
-    pattern: Optional[Union[Tree, Value, Placeholder]],
-    data: Optional[Union[Tree, Value, Placeholder]],
+    pattern: Optional[Union[Tree, Value, Placeholder, Procedure]],
+    data: Optional[Union[Tree, Value, Placeholder, Procedure]],
     placedict: PlaceDict,
 ) -> bool:
     """ Return true if data matches pattern, also fills out placedict dict """
@@ -126,12 +126,15 @@ def match(
         return match(pattern.left, data.left, placedict) and match(
             pattern.right, data.right, placedict
         )
+    if isinstance(pattern, Procedure) and isinstance(data, Procedure):
+        if pattern.name == data.name:
+            return True
     return False
 
 
 def apply(
-    replace: Optional[Union[Tree, Value, Placeholder]], placedict: PlaceDict,
-) -> Optional[Union[Tree, Value, Placeholder]]:
+    replace: Optional[Union[Tree, Value, Placeholder, Procedure]], placedict: PlaceDict,
+) -> Optional[Union[Tree, Value, Placeholder, Procedure]]:
     """ Apply the replacement to this tree and return result """
     if replace is None:
         return None
@@ -139,6 +142,8 @@ def apply(
         return replace
     if isinstance(replace, Placeholder):
         return placedict[replace.x]
+    if isinstance(replace, Procedure):
+        return replace
     if isinstance(replace, Tree):
         left = apply(replace.left, placedict)
         right = apply(replace.right, placedict)
@@ -147,8 +152,8 @@ def apply(
 
 
 def compute(
-    tree: Optional[Union[Tree, Value, Placeholder]]
-) -> Tuple[Optional[Union[Tree, Value, Placeholder]], bool]:
+    tree: Optional[Union[Tree, Value, Placeholder, Procedure]]
+) -> Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]:
     """
     NOTE: THIS POSSIBLY MUTATES THE TREE !!! 
     Returns tree, True if the tree was modified, tree, false if failed.
@@ -161,10 +166,10 @@ def compute(
         tree.left, result = compute(tree.left)
         if result:
             return tree, True
-        tree.right, result = compute(tree.right)
-        if result:
-            return tree, True
-    if isinstance(tree, (Tree, Value, Placeholder)):
+        # tree.right, result = compute(tree.right)
+        # if result:
+        #     return tree, True
+    if isinstance(tree, (Tree, Value, Placeholder, Procedure)):
         for rewrite in REWRITES:
             pd: PlaceDict = {}
             if match(rewrite.pattern, tree, pd) and rewrite.process(pd):
@@ -174,8 +179,8 @@ def compute(
 
 
 def compute_fully(
-    tree: Optional[Union[Tree, Value, Placeholder]]
-) -> Optional[Union[Tree, Value, Placeholder]]:
+    tree: Optional[Union[Tree, Value, Placeholder, Procedure]]
+) -> Optional[Union[Tree, Value, Placeholder, Procedure]]:
     """ Call compute on a tree until it converges """
     result = True
     while result:
