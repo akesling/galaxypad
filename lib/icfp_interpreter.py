@@ -27,6 +27,7 @@ false = lambda arg1: lambda arg2: arg2
 i_combinator = lambda arg1: arg1
 nil = lambda arg1: t
 isnil = lambda arg1: t if arg1 == nil else false
+pwr2 = lambda arg1: pow(2, arg1)
 
 add = lambda arg1: lambda arg2: arg1 + arg2
 mul = lambda arg1: lambda arg2: arg1 * arg2
@@ -81,6 +82,7 @@ non_terminals = {
     'cons': make_pair,
     'car': pick_head,
     'cdr': pick_tail,
+    'pwr2': pwr2,
 }
 
 # Make sure to preserve the interface between this Interpreter and the ICFP JIT
