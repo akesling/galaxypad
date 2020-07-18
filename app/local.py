@@ -6,7 +6,7 @@ api_key = "8f96a989734a45688a78d530f60cce97"
 
 from tree import Treeish
 from vector import vector, unvector
-from modulate import modulate, demodulate
+from modulate import modulate, demodulate, Modulation
 
 
 def get_reply(data):
