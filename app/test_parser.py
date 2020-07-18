@@ -2,7 +2,7 @@
 
 import unittest
 from tree import Value, vector, pair
-from parser import parse_partial, unparse
+from mod_parser import parse_partial, unparse
 
 
 class TestParser(unittest.TestCase):

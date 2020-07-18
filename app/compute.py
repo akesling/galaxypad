@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 import re
 import requests
+import logging
 from dataclasses import dataclass
 from typing import Tuple, List, Optional, Union, Dict, NamedTuple, Callable
 
-from tree import Tree, ProcessFn, PlaceDict, Value, Placeholder, Rewrite, parse_tree
-from parser import parse_partial, unparse
+from tree import Tree, ProcessFn, PlaceDict, Value, Placeholder, Procedure, Rewrite, parse_tree
+from mod_parser import parse_partial, unparse
 
+logger = logging.getLogger('app.compute')
 
 def unop(fn: Callable[[int], int]) -> ProcessFn:
     """ Helper to build unary operator functions for arithmetic """
@@ -65,7 +67,7 @@ REWRITES = (
             "ap ap mul x0 0 = 0",  # Multiplication by Zero
             "ap ap mul x0 1 = x0",  # Multiplicative Identity
             "ap ap div x0 1 = x0",  # Division Identity
-            "ap ap eq x0 x0 = t",  # Equality Comparison (matching subtrees)
+#            "ap ap eq x0 x0 = t",  # Equality Comparison (matching subtrees)
             "ap dec ap inc x0 = x0",  # Increment/Decrement Annihilation
             "ap inc ap dec x0 = x0",  # Decrement/Increment Annihilation
             "ap ap ap s x0 x1 x2 = ap ap x0 x2 ap x1 x2",  # S Combinator
@@ -108,8 +110,8 @@ REWRITES = (
 
 
 def match(
-    pattern: Optional[Union[Tree, Value, Placeholder]],
-    data: Optional[Union[Tree, Value, Placeholder]],
+    pattern: Optional[Union[Tree, Value, Placeholder, Procedure]],
+    data: Optional[Union[Tree, Value, Placeholder, Procedure]],
     placedict: PlaceDict,
 ) -> bool:
     """ Return true if data matches pattern, also fills out placedict dict """
@@ -123,15 +125,23 @@ def match(
         placedict[pattern.x] = data  # Else add to placeholders dict
         return True
     if isinstance(pattern, Tree) and isinstance(data, Tree):
-        return match(pattern.left, data.left, placedict) and match(
-            pattern.right, data.right, placedict
+        left_matches = match(pattern.left, data.left, placedict)
+        right_matches = (
+            match(pattern.right, data.right, placedict) or
+            isinstance(pattern.right, Placeholder)
         )
+        if left_matches and right_matches:
+            logger.debug("Candidates", pattern, data)
+        return left_matches and right_matches
+    if isinstance(pattern, Procedure) and isinstance(data, Procedure):
+        if pattern.name == data.name:
+            return True
     return False
 
 
 def apply(
-    replace: Optional[Union[Tree, Value, Placeholder]], placedict: PlaceDict,
-) -> Optional[Union[Tree, Value, Placeholder]]:
+    replace: Optional[Union[Tree, Value, Placeholder, Procedure]], placedict: PlaceDict,
+) -> Optional[Union[Tree, Value, Placeholder, Procedure]]:
     """ Apply the replacement to this tree and return result """
     if replace is None:
         return None
@@ -139,6 +149,8 @@ def apply(
         return replace
     if isinstance(replace, Placeholder):
         return placedict[replace.x]
+    if isinstance(replace, Procedure):
+        return replace
     if isinstance(replace, Tree):
         left = apply(replace.left, placedict)
         right = apply(replace.right, placedict)
@@ -147,41 +159,70 @@ def apply(
 
 
 def compute(
-    tree: Optional[Union[Tree, Value, Placeholder]]
-) -> Tuple[Optional[Union[Tree, Value, Placeholder]], bool]:
+        tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
+        rewrite_rules: List[Rewrite] = REWRITES) -> (
+            Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]):
     """
     NOTE: THIS POSSIBLY MUTATES THE TREE !!! 
     Returns tree, True if the tree was modified, tree, false if failed.
     If this returns True, possibly more rewrites can happen.
     """
+    logger.debug("Computing Tree", tree)
     if tree is None:
         return tree, False
     if isinstance(tree, Tree):
         # Check subtrees before this tree because matches are more likely in leaves
-        tree.left, result = compute(tree.left)
+        tree.left, result = compute(tree.left, rewrite_rules)
         if result:
             return tree, True
-        tree.right, result = compute(tree.right)
-        if result:
-            return tree, True
-    if isinstance(tree, (Tree, Value, Placeholder)):
-        for rewrite in REWRITES:
+    if isinstance(tree, (Tree, Value, Placeholder, Procedure)):
+        tree_changed = False
+        for rewrite in rewrite_rules:
             pd: PlaceDict = {}
-            if match(rewrite.pattern, tree, pd) and rewrite.process(pd):
-                return apply(rewrite.replace, pd), True
-        return tree, False
+            if match(rewrite.pattern, tree, pd):
+                # This is a little awkward because we want processing to occur
+                # immediately after expansion without another expansion
+                # opportunity to prevent infinite expansion of recursive
+                # right-hand recursive procedures.
+                if isinstance(tree, Tree) and tree.right:
+                    tree.right, result = compute(tree.right, rewrite_rules)
+                    if result:
+                        tree_changed = True
+                logger.debug("Tree matches", rewrite)
+                processing_occurred = rewrite.process(pd)
+                if processing_occurred:
+                    logger.debug("Processing occurred")
+                    return apply(rewrite.replace, pd), True
+        return tree, tree_changed
     raise ValueError(f"Bad type for tree {tree} {type(tree)}")
 
 
 def compute_fully(
-    tree: Optional[Union[Tree, Value, Placeholder]]
-) -> Optional[Union[Tree, Value, Placeholder]]:
+        tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
+        rewrite_rules: List[Rewrite] = REWRITES) -> (
+            Optional[Union[Tree, Value, Placeholder, Procedure]]):
     """ Call compute on a tree until it converges """
     result = True
     while result:
-        tree, result = compute(tree)
+        tree, result = compute(tree, rewrite_rules)
     return tree
 
+def extract_procedures(script_lines: [str]):
+    procedures = []
+    for line in script_lines:
+        if line.startswith(':'):
+            procedures.append(Rewrite.from_str(line))
+    return procedures
+
+def compute_script_fully(script: str):
+    lines = script.strip().split("\n")
+    procedures = extract_procedures(lines)
+    for i, line in enumerate(lines):
+        if not line.startswith(':'):
+            left, right = line.strip().split('=')
+            right_tree = parse_tree(right.strip().split())[0]
+            print('Executing', right_tree)
+            print(compute(right_tree, REWRITES + procedures))
 
 if __name__ == "__main__":
     import sys

@@ -13,21 +13,23 @@ class TestImages(unittest.TestCase):
         self.assertEqual(leftover, [])  # Should be empty
         return tree
 
-    def check_line(self, line):
+    def check_line(self, line, line_number):
         """ Check that a single equality line is correct """
-        assert line.count("=") == 1, f"Bad test line {line}"
+        assert line.count("=") == 1, f"Bad test line #{line_number} {line}"
         left_s, right_s = line.split("=")
         left = self.check_tree(left_s)
         right = self.check_tree(right_s)
-        self.assertEqual(compute_fully(left), compute_fully(right))
+        self.assertEqual(
+            compute_fully(left), compute_fully(right),
+            f'line number {line_number}')
 
     def check_lines(self, lines):
         """ Check a bunch of lines are correct """
-        for line in lines.strip().split("\n"):
+        for i, line in enumerate(lines.strip().split("\n")):
             line = line.strip()
             if line == "...":
                 continue
-            self.check_line(line)
+            self.check_line(line, i)
 
     def test_equality(self):
         """ Basically that numbers equal themselves """
@@ -136,8 +138,10 @@ class TestImages(unittest.TestCase):
 
     def test_compare_equals(self):
         self.check_lines(
+#            """
+#            ap ap eq x0 x0   =   t
+#            """
             """
-            ap ap eq x0 x0   =   t
             ap ap eq 0 -2   =   f
             ap ap eq 0 -1   =   f
             ap ap eq 0 0   =   t
