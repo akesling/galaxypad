@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import unittest
-from tree import parse_tree, compute_fully
+from tree import parse_tree
+from compute import compute_fully
 
 
 class TestImages(unittest.TestCase):
@@ -373,6 +374,11 @@ class TestImages(unittest.TestCase):
             ap ap ap if0 1 x0 x1   =   x1
         """
         )
+
+    def test_send(self):
+        self.check_lines("""
+            ap send nil = ap ap cons 0 nil
+        """)
 
 
 if __name__ == "__main__":
