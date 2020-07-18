@@ -4,7 +4,17 @@ import math
 import re
 from typing import NamedTuple, Tuple, Union
 
-from tree import Value, pair, Tree, vector, Treeish, Placeholder, Procedure, Vector
+from tree import (
+    Placeholder,
+    Procedure,
+    Tree,
+    Treeish,
+    Value,
+    Vector,
+    pair,
+    unvector,
+    vector,
+)
 
 MOD_PATTERN = re.compile(r"[01]*")
 INT_PREFIX = re.compile(r"(01|10)(1*)0([01]*)")
@@ -78,21 +88,26 @@ def unparse(treeish: Treeish) -> Modulation:
         binary = "0" * (length_units * 4 - length) + bin(abs(value))[2:]
         return Modulation(prefix + binary)
     if isinstance(treeish, Tree):
-        return unparse_vector(vector(treeish))
+        # Note: this replicates some of the work in vector()
+        # We have to do that because sometimes we unparse improper lists
+        # Such as the list "ap ap cons 0 1"
+        left_tree = treeish.left
+        if isinstance(left_tree, Tree) and left_tree.left in (
+            # This is a bit ugly but both are valid unfortunately
+            Value("cons"),
+            Value("vec"),
+        ):
+            left_bits = unparse(left_tree.right).bits
+            right_bits = unparse(treeish.right).bits
+            return Modulation("11" + left_bits + right_bits)
     raise ValueError(f"Don't know what to do with {treeish}")
 
 
 def unparse_vector(vec: Vector) -> Modulation:
     """ Unparse a compact vector into a modulation """
-    if isinstance(vec, int):
-        return unparse(Value(vec))
-    if isinstance(vec, list):
-        if vec == []:  # Special case empty list
-            return Modulation("00")
-        head, *tail = vec
-        head_bits = unparse_vector(head).bits
-        tail_bits = unparse_vector(tail).bits
-        return Modulation("11" + head_bits + tail_bits)
+    if isinstance(vec, (int, list)):
+        return unparse(unvector(vec))
+    raise ValueError(f"Can't unparse vector {vec}")
 
 
 if __name__ == "__main__":
@@ -106,7 +121,10 @@ if __name__ == "__main__":
         print("remainder", remainder)
         vec = vector(tree)
         print("vector", vec)
+        mod = unparse(unvector(vec))
+        print("mod", mod)
     else:
         print("Help: Run with a string argument to demodulate")
-        print("  > python mod_parser.py '1101100001111101100010110110001100110110010000'")
-
+        print(
+            "  > python mod_parser.py '1101100001111101100010110110001100110110010000'"
+        )

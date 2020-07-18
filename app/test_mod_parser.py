@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 import unittest
-from tree import Value, vector, pair
-from mod_parser import parse, unparse, Modulation
+
+from mod_parser import Modulation, parse, unparse, unparse_vector
+from tree import Value, pair, unvector
 
 
 class TestParser(unittest.TestCase):
@@ -30,21 +31,28 @@ class TestParser(unittest.TestCase):
         self.check_int_example(256, "011110000100000000")
         self.check_int_example(-256, "101110000100000000")
 
-    # def check_list_example(self, l, modulation):
-    #     self.assertEqual(l, parse(modulation))
-    #     self.assertEqual(unparse(l), modulation)
+    def check_tree_example(self, tree, bits):
+        modulation = Modulation(bits)
+        self.assertEqual(unparse(tree), modulation)
+        self.assertEqual(parse(modulation), tree)
 
-    # def test_linear_list_examples(self):
-    #     nil = Value('nil')
-    #     self.check_list_example(nil, "00")
-    #     self.check_list_example(pair(nil, nil), "110000")
-    #     self.check_list_example(pair(0, nil), "1101000")
-    #     self.check_list_example(pair(1, 2), "110110000101100010")
-    #     self.check_list_example(pair(1, pair(2, nil)), "1101100001110110001000")
-    #     self.check_list_example(vector([1, 2]), "1101100001110110001000")
-    #     v = vector([1, [2, 3], 4])
-    #     self.check_list_example(v, "1101100001111101100010110110001100110110010000")
+    def test_tree_examples(self):
+        nil = Value("nil")
+        _0 = Value(0)
+        _1 = Value(1)
+        _2 = Value(2)
+        self.check_tree_example(nil, "00")
+        self.check_tree_example(pair(nil, nil), "110000")
+        self.check_tree_example(pair(_0, nil), "1101000")
+        self.check_tree_example(pair(_1, _2), "110110000101100010")
+        self.check_tree_example(pair(_1, pair(_2, nil)), "1101100001110110001000")
+
+    def test_vec_examples(self):
+        self.check_tree_example(unvector([1, 2]), "1101100001110110001000")
+        self.check_tree_example(
+            unvector([1, [2, 3], 4]), "1101100001111101100010110110001100110110010000"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
