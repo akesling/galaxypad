@@ -5,10 +5,20 @@ import logging
 from dataclasses import dataclass
 from typing import Tuple, List, Optional, Union, Dict, NamedTuple, Callable
 
-from tree import Tree, ProcessFn, PlaceDict, Value, Placeholder, Procedure, Rewrite, parse_tree
+from tree import (
+    Tree,
+    ProcessFn,
+    PlaceDict,
+    Value,
+    Placeholder,
+    Procedure,
+    Rewrite,
+    parse_tree,
+)
 from mod_parser import parse_partial, unparse
 
-logger = logging.getLogger('app.compute')
+logger = logging.getLogger("app.compute")
+
 
 def unop(fn: Callable[[int], int]) -> ProcessFn:
     """ Helper to build unary operator functions for arithmetic """
@@ -67,7 +77,7 @@ REWRITES = (
             "ap ap mul x0 0 = 0",  # Multiplication by Zero
             "ap ap mul x0 1 = x0",  # Multiplicative Identity
             "ap ap div x0 1 = x0",  # Division Identity
-#            "ap ap eq x0 x0 = t",  # Equality Comparison (matching subtrees)
+            #            "ap ap eq x0 x0 = t",  # Equality Comparison (matching subtrees)
             "ap dec ap inc x0 = x0",  # Increment/Decrement Annihilation
             "ap inc ap dec x0 = x0",  # Decrement/Increment Annihilation
             "ap ap ap s x0 x1 x2 = ap ap x0 x2 ap x1 x2",  # S Combinator
@@ -126,9 +136,8 @@ def match(
         return True
     if isinstance(pattern, Tree) and isinstance(data, Tree):
         left_matches = match(pattern.left, data.left, placedict)
-        right_matches = (
-            match(pattern.right, data.right, placedict) or
-            isinstance(pattern.right, Placeholder)
+        right_matches = match(pattern.right, data.right, placedict) or isinstance(
+            pattern.right, Placeholder
         )
         if left_matches and right_matches:
             logger.debug("Candidates", pattern, data)
@@ -159,9 +168,9 @@ def apply(
 
 
 def compute(
-        tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
-        rewrite_rules: List[Rewrite] = REWRITES) -> (
-            Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]):
+    tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
+    rewrite_rules: List[Rewrite] = REWRITES,
+) -> (Tuple[Optional[Union[Tree, Value, Placeholder, Procedure]], bool]):
     """
     NOTE: THIS POSSIBLY MUTATES THE TREE !!! 
     Returns tree, True if the tree was modified, tree, false if failed.
@@ -198,31 +207,34 @@ def compute(
 
 
 def compute_fully(
-        tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
-        rewrite_rules: List[Rewrite] = REWRITES) -> (
-            Optional[Union[Tree, Value, Placeholder, Procedure]]):
+    tree: Optional[Union[Tree, Value, Placeholder, Procedure]],
+    rewrite_rules: List[Rewrite] = REWRITES,
+) -> (Optional[Union[Tree, Value, Placeholder, Procedure]]):
     """ Call compute on a tree until it converges """
     result = True
     while result:
         tree, result = compute(tree, rewrite_rules)
     return tree
 
+
 def extract_procedures(script_lines: [str]):
     procedures = []
     for line in script_lines:
-        if line.startswith(':'):
+        if line.startswith(":"):
             procedures.append(Rewrite.from_str(line))
     return procedures
+
 
 def compute_script_fully(script: str):
     lines = script.strip().split("\n")
     procedures = extract_procedures(lines)
     for i, line in enumerate(lines):
-        if not line.startswith(':'):
-            left, right = line.strip().split('=')
+        if not line.startswith(":"):
+            left, right = line.strip().split("=")
             right_tree = parse_tree(right.strip().split())[0]
-            print('Executing', right_tree)
+            print("Executing", right_tree)
             print(compute(right_tree, REWRITES + procedures))
+
 
 if __name__ == "__main__":
     import sys
