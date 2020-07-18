@@ -17,7 +17,7 @@ from tree import (
 from vector import vector, unvector
 from rewrite import Rewrite
 from serial import deserialize
-from mod_parser import parse_partial, unparse
+from modulate import demodulate, modulate
 import renderer
 
 logger = logging.getLogger("app.compute")
@@ -50,17 +50,14 @@ def binop(fn: Callable[[int, int], int]) -> Callable[[PlaceDict], bool]:
 
 
 def send(pd: PlaceDict) -> bool:
-    data = unparse(pd[0])
     res = requests.post(
         "https://icfpc2020-api.testkontur.ru/aliens/send",
         params=dict(apiKey="8f96a989734a45688a78d530f60cce97"),
-        data=data,
+        data=modulate(pd[0]),
     )
     if res.status_code != 200:
         raise ValueError("Server response:", res.text)
-    response, remainder = parse_partial(res.text)
-    assert remainder == "", f"got remainder parsing message {res.text}"
-    pd[1] = response
+    pd[1] = demodulate(res.text)
     return True
 
 

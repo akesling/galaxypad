@@ -25,14 +25,14 @@ class Modulation(NamedTuple):
     bits: str = ""
 
 
-def parse(modulation: Modulation) -> Treeish:
-    """ Wrap parse_partial with assertion that parse is complete """
-    treeish, remainder = parse_partial(modulation)
-    assert remainder == "", f"failed to fully parse {modulation}"
+def demodulate(modulation: Modulation) -> Treeish:
+    """ Demodulate a complete modulation, Error if leftover """
+    treeish, remainder = demodulate_partial(modulation)
+    assert remainder == "", f"failed to fully parse {modulation} -> {remainder}"
     return treeish
 
 
-def parse_partial(modulation: Union[Modulation, str]) -> Tuple[Treeish, str]:
+def demodulate_partial(modulation: Union[Modulation, str]) -> Tuple[Treeish, str]:
     """
     Parse the first complete item out of a modulation,
     and return the item and the remainder of the modulation
@@ -63,14 +63,14 @@ def parse_partial(modulation: Union[Modulation, str]) -> Tuple[Treeish, str]:
     if bits.startswith("11"):
         # I'm pretty sure this is how this works
         remainder = bits[2:]
-        head, remainder = parse_partial(remainder)
-        tail, remainder = parse_partial(remainder)
+        head, remainder = demodulate_partial(remainder)
+        tail, remainder = demodulate_partial(remainder)
         return pair(head, tail), remainder
     raise ValueError(f"Unmatched modulation {modulation}")
 
 
-def unparse(treeish: Treeish) -> Modulation:
-    """ Unparse a value into a modulation """
+def modulate(treeish: Treeish) -> Modulation:
+    """ modulate a value into a modulation """
     if treeish is None:
         return Modulation("")
     if treeish == Value("nil"):
@@ -87,7 +87,7 @@ def unparse(treeish: Treeish) -> Modulation:
         return Modulation(prefix + binary)
     if isinstance(treeish, Tree):
         # Note: this replicates some of the work in vector()
-        # We have to do that because sometimes we unparse improper lists
+        # We have to do that because sometimes we modulate improper lists
         # Such as the list "ap ap cons 0 1"
         left_tree = treeish.left
         if isinstance(left_tree, Tree) and left_tree.left in (
@@ -95,17 +95,17 @@ def unparse(treeish: Treeish) -> Modulation:
             Value("cons"),
             Value("vec"),
         ):
-            left_bits = unparse(left_tree.right).bits
-            right_bits = unparse(treeish.right).bits
+            left_bits = modulate(left_tree.right).bits
+            right_bits = modulate(treeish.right).bits
             return Modulation("11" + left_bits + right_bits)
     raise ValueError(f"Don't know what to do with {treeish}")
 
 
-def unparse_vector(vec: Vector) -> Modulation:
-    """ Unparse a compact vector into a modulation """
+def modulate_vector(vec: Vector) -> Modulation:
+    """ modulate a compact vector into a modulation """
     if isinstance(vec, (int, list)):
-        return unparse(unvector(vec))
-    raise ValueError(f"Can't unparse vector {vec}")
+        return modulate(unvector(vec))
+    raise ValueError(f"Can't modulate vector {vec}")
 
 
 if __name__ == "__main__":
@@ -114,12 +114,12 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         modulation = Modulation(sys.argv[1])
         print("parsing Modulation", modulation)
-        tree, remainder = parse_partial(modulation)
+        tree, remainder = demodulate_partial(modulation)
         print("tree", tree)
         print("remainder", remainder)
         vec = vector(tree)
         print("vector", vec)
-        mod = unparse(unvector(vec))
+        mod = modulate(unvector(vec))
         print("mod", mod)
     else:
         print("Help: Run with a string argument to demodulate")

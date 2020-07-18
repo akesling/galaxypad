@@ -4,20 +4,20 @@ import unittest
 
 from tree import Value, pair
 from vector import unvector
-from mod_parser import Modulation, parse, unparse, unparse_vector
+from modulate import Modulation, demodulate, modulate, modulate_vector
 
 
-class TestParser(unittest.TestCase):
+class TestModulate(unittest.TestCase):
     def test_ints(self):
         for i in range(-10000, 10000):
             value = Value(i)
-            self.assertEqual(parse(unparse(value)), value)
+            self.assertEqual(demodulate(modulate(value)), value)
 
     def check_int_example(self, i, bits):
         value = Value(i)
         modulation = Modulation(bits)
-        self.assertEqual(value, parse(modulation))
-        self.assertEqual(unparse(value), modulation)
+        self.assertEqual(value, demodulate(modulation))
+        self.assertEqual(modulate(value), modulation)
 
     def test_int_examples(self):
         self.check_int_example(0, "010")
@@ -34,8 +34,8 @@ class TestParser(unittest.TestCase):
 
     def check_tree_example(self, tree, bits):
         modulation = Modulation(bits)
-        self.assertEqual(unparse(tree), modulation)
-        self.assertEqual(parse(modulation), tree)
+        self.assertEqual(modulate(tree), modulation)
+        self.assertEqual(demodulate(modulation), tree)
 
     def test_tree_examples(self):
         nil = Value("nil")
