@@ -22,15 +22,15 @@ def get_reply(data):
 def send(data):
     print("sending data", data)
     data = get_reply(data)
-    print("got data", data)
-    value, remainder = parse_partial(data)
-    print("parsed value", value)
-    print("parsed remainder", remainder)
+    if data != '1101000':
+        print("got data", data)
+        value, remainder = parse_partial(data)
+        print("parsed value", value)
+        print("parsed remainder", remainder)
 
 def main():
     send("")
     send(unparse([0, []]))
-    send("")
 
 
 if __name__ == "__main__":
