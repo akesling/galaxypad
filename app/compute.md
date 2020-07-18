@@ -89,3 +89,5 @@ Run `python app/compute.py 'ap ap add ap ap add 2 3 4'` to evaluate a bigger exa
 Run `python app/compute.py 'ap send 0'` to try sending to the server
 
 Run `python app/compute.py 'ap send ap ap cons 0 nil'` to try sending to the server
+
+Run `python app/mod_parser.py '1101100001111101100010110110001100110110010000'` to try demodulating a string

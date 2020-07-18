@@ -121,18 +121,6 @@ def pair(x: Treeish, y: Treeish) -> Treeish:
 Vector = Union[List, int]
 
 
-def unvector(vec: Vector) -> Treeish:
-    """ Helper to get a tree version of a vector """
-    if isinstance(vec, int):
-        return Value(vec)
-    if vec == []:
-        return Value("nil")
-    if isinstance(vec, list):
-        head, *tail = vec
-        return pair(unvector(head), unvector(tail))
-    raise ValueError(f"Can't vectorize {vec}")
-
-
 def vector(treeish: Treeish) -> Vector:
     """ Reverse of the vector function """
     if isinstance(treeish, Value):
@@ -157,12 +145,24 @@ def vector(treeish: Treeish) -> Vector:
     raise ValueError(f"Don't know how to vector {treeish}")
 
 
+def unvector(vec: Vector) -> Treeish:
+    """ Helper to get a tree version of a vector """
+    if isinstance(vec, int):
+        return Value(vec)
+    if vec == []:
+        return Value("nil")
+    if isinstance(vec, list):
+        head, *tail = vec
+        return pair(unvector(head), unvector(tail))
+    raise ValueError(f"Can't vectorize {vec}")
+
+
 if __name__ == "__main__":
     d = [1, [2, 3], 4]
     print("d", d)
-    v = vector(d)
+    t = unvector(d)
+    print("d", d)
+    v = vector(t)
     print("v", v)
-    u = unvector(v)
-    print("u", u)
-    print(d == u)
+    print(d == v)
 

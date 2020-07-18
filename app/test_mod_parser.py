@@ -2,17 +2,20 @@
 
 import unittest
 from tree import Value, vector, pair
-from mod_parser import parse, unparse
+from mod_parser import parse, unparse, Modulation
 
 
 class TestParser(unittest.TestCase):
     def test_ints(self):
         for i in range(-10000, 10000):
-            self.assertEqual(parse(unparse(i)), Value(i))
+            value = Value(i)
+            self.assertEqual(parse(unparse(value)), value)
 
-    def check_int_example(self, i, modulation):
-        self.assertEqual(Value(i), parse(modulation))
-        self.assertEqual(unparse(i), modulation)
+    def check_int_example(self, i, bits):
+        value = Value(i)
+        modulation = Modulation(bits)
+        self.assertEqual(value, parse(modulation))
+        self.assertEqual(unparse(value), modulation)
 
     def test_int_examples(self):
         self.check_int_example(0, "010")

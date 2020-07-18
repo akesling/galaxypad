@@ -4,7 +4,7 @@ import math
 import re
 from typing import NamedTuple, Tuple, Union
 
-from tree import Value, pair, Tree, unvector, Treeish, Placeholder, Procedure
+from tree import Value, pair, Tree, vector, Treeish, Placeholder, Procedure, Vector
 
 MOD_PATTERN = re.compile(r"[01]*")
 INT_PREFIX = re.compile(r"(01|10)(1*)0([01]*)")
@@ -65,6 +65,10 @@ def unparse(treeish: Treeish) -> Modulation:
     """ Unparse a value into a modulation """
     if treeish is None:
         return Modulation("")
+    if treeish == Value("nil"):
+        return Modulation("00")
+    if treeish == Value(0):
+        return Modulation("010")
     if isinstance(treeish, Value) and isinstance(treeish.value, int):
         value = treeish.value
         sign_mod = "01" if value >= 0 else "10"
@@ -73,27 +77,36 @@ def unparse(treeish: Treeish) -> Modulation:
         prefix = sign_mod + "1" * length_units + "0"
         binary = "0" * (length_units * 4 - length) + bin(abs(value))[2:]
         return Modulation(prefix + binary)
-    if isinstance(value, Tree):
-        value = unvector(value)  # Unpack a cons list
-        # Special case empty list
-        if value == []:
-            return "00"
-        assert len(value) == 2, "Improper cons list"
-        prefix = "11"
-        head, tail = value
-        return prefix + unparse(head) + unparse(tail)
-    raise ValueError(f"Don't know what to do with {value}")
+    if isinstance(treeish, Tree):
+        return unparse_vector(vector(treeish))
+    raise ValueError(f"Don't know what to do with {treeish}")
+
+
+def unparse_vector(vec: Vector) -> Modulation:
+    """ Unparse a compact vector into a modulation """
+    if isinstance(vec, int):
+        return unparse(Value(vec))
+    if isinstance(vec, list):
+        if vec == []:  # Special case empty list
+            return Modulation("00")
+        head, *tail = vec
+        head_bits = unparse_vector(head).bits
+        tail_bits = unparse_vector(tail).bits
+        return Modulation("11" + head_bits + tail_bits)
 
 
 if __name__ == "__main__":
     import sys
 
-    query = sys.argv[1]
-    print("query", query)
-    value, remainder = parse_partial(query)
-    print("value", value)
-    print("remainder", remainder)
-    modulation = unparse(value)
-    print("unparse")
-    print("modulation", modulation)
+    if len(sys.argv) == 2:
+        modulation = Modulation(sys.argv[1])
+        print("parsing Modulation", modulation)
+        tree, remainder = parse_partial(modulation)
+        print("tree", tree)
+        print("remainder", remainder)
+        vec = vector(tree)
+        print("vector", vec)
+    else:
+        print("Help: Run with a string argument to demodulate")
+        print("  > python mod_parser.py '1101100001111101100010110110001100110110010000'")
 
