@@ -4,8 +4,9 @@ import sys
 server_url = "https://icfpc2020-api.testkontur.ru"
 api_key = "8f96a989734a45688a78d530f60cce97"
 
-from tree import vector
-from mod_parser import parse_partial, unparse_vector
+from tree import Treeish
+from vector import vector, unvector
+from modulate import modulate, demodulate
 
 
 def get_reply(data):
@@ -20,20 +21,17 @@ def get_reply(data):
     return res.text
 
 
-def send(data):
+def send(tree: Treeish):
+    data = modulate(tree).bits
     print("sending data", data)
     data = get_reply(data)
-    if data != '1101000':
-        print("got data", data)
-        value, remainder = parse_partial(data)
-        print("parsed value", value)
-        print("parsed vector", vector(value))
-        print("parsed remainder", remainder)
+    print("got data", data)
+    print("parsed vector", vector(demodulate(data)))
 
 
 def main():
-    send("")
-    send(unparse_vector([0]).bits)
+    send(None)
+    send(unvector([0]))
 
 
 if __name__ == "__main__":

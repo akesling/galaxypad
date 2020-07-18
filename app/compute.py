@@ -17,7 +17,7 @@ from tree import (
 from vector import vector, unvector
 from rewrite import Rewrite
 from serial import deserialize
-from modulate import demodulate, modulate
+from modulate import demodulate, modulate, Modulation
 import renderer
 
 logger = logging.getLogger("app.compute")
@@ -50,14 +50,15 @@ def binop(fn: Callable[[int, int], int]) -> Callable[[PlaceDict], bool]:
 
 
 def send(pd: PlaceDict) -> bool:
+    data: str = modulate(pd[0]).bits
     res = requests.post(
         "https://icfpc2020-api.testkontur.ru/aliens/send",
         params=dict(apiKey="8f96a989734a45688a78d530f60cce97"),
-        data=modulate(pd[0]),
+        data=data,
     )
     if res.status_code != 200:
         raise ValueError("Server response:", res.text)
-    pd[1] = demodulate(res.text)
+    pd[1] = demodulate(Modulation(res.text))
     return True
 
 
