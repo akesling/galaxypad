@@ -42,6 +42,9 @@ KNOWN_TOKENS = [
     "draw",
     "multipledraw",
     "modem",
+    "f38",
+    "statelessdraw",
+    "interact",
 ]
 
 
