@@ -64,7 +64,11 @@ def send(pd: PlaceDict) -> bool:
 
 def modem(pd: PlaceDict) -> bool:
     if 0 in pd:
-        pd[1] = demodulate(modulate(pd[0]))
+        try:
+            pd[1] = demodulate(gst(pd[0]))
+            return True
+        except (ValueError, AssertionError):
+            return False
     return False
 
 
@@ -77,11 +81,8 @@ def pd_draw(pd: PlaceDict) -> bool:
 
 def pd_multidraw(pd: PlaceDict) -> bool:
     if 0 in pd:
-        try:
-            pd[1] = unvector(renderer.multidraw(vector(pd[0])))
-            return True
-        except (ValueError, AssertionError):
-            return False
+        pd[1] = unvector(renderer.multidraw(vector(pd[0])))
+        return True
     return False
 
 
