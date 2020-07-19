@@ -443,7 +443,6 @@ class Engine {
       Log() << "TryEval ref is Ap " << ref << std::endl;
       const auto x_ref = expr.arg;
       const auto func_ref = Eval(expr.func);
-
       const auto& func = deref(func_ref);
       if (IsAtom(func)) {
         if (func.name == "neg") {
@@ -668,16 +667,33 @@ class Engine {
     }
 	}
 
+  struct RGB {
+    int r;
+    int g;
+    int b;
+  };
+
   void PRINT_IMAGES(ExprRef imgs) {
     auto img_list = FlattenList(imgs);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
 
+    const RGB colors[8] = {
+      {64, 64, 64},
+      {128, 64, 64},
+      {64, 128, 64},
+      {64, 64, 128},
+      {255, 64, 64},
+      {64, 255, 64},
+      {64, 64, 255},
+      {255, 255, 255},
+    };
+
     for (int i = 0; i < img_list.size(); ++i) {
       const int idx = img_list.size() - 1 - i;
       auto vlist = FlattenVecList(img_list[idx]);
-      SDL_SetRenderDrawColor(renderer_, 50*(i+1), 50*(i+1), 50*(i+1), 255);
+      SDL_SetRenderDrawColor(renderer_, colors[i].r, colors[i].g, colors[i].b , 255);
       RenderVecList(vlist);
     }
 		SDL_RenderPresent(renderer_);
