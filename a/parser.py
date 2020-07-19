@@ -78,7 +78,7 @@ def parse_file(filename: str) -> Dict[str, Expr]:
         name, _, *tokens = line.strip().split()
         expr, leftover = parse_tokens(tokens)
         assert leftover == [], f"Got leftover tokens {line} -> {tokens}"
-        functions[name] = evaluate(expr)
+        functions[name] = expr
     return functions
 
 
@@ -87,7 +87,7 @@ t: Expr = Atom("t")
 f: Expr = Atom("f")
 nil: Expr = Atom("nil")
 
-functions: Dict[str, Expr] = {}
+functions: Dict[str, Expr] = parse_file("galaxy.txt")
 
 
 def evaluate(expr: Expr) -> Expr:
@@ -203,24 +203,15 @@ def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Atom, Expr, Expr]:
     return Atom("0"), Expr(), Expr()
 
 
-functions = parse_file("galaxy.txt")
-
-state: Expr = nil
-vector: Vect = Vect(0, 0)
-
-
-# main loop
-for _ in range(10):  # while True:
-    click: Expr = Ap(Ap(cons, Atom(vector.X)), Atom(vector.Y))
-    newState, images = interact(state, click)
-    PRINT_IMAGES(images)
-    vector = REQUEST_CLICK_FROM_USER()
-    state = newState
-
-
 if __name__ == "__main__":
-    print(Expr())
-    print(Ap(Expr(), Expr()))
-    print(Expr(Ap(Expr(), Expr(), Expr())))
-    print(Atom("hello", Atom("hi")))
-    print(Ap(Fun=Expr(Evaluated=None), Arg=Expr(Evaluated=None), Evaluated=None))
+    state: Expr = nil
+    vector: Vect = Vect(0, 0)
+
+
+    # main loop
+    for _ in range(10):  # while True:
+        click: Expr = Ap(Ap(cons, Atom(vector.X)), Atom(vector.Y))
+        newState, images = interact(state, click)
+        PRINT_IMAGES(images)
+        vector = REQUEST_CLICK_FROM_USER()
+        state = newState
