@@ -9,6 +9,8 @@ services:
       - 5000:5000
     volumes:
       - ./:/solution
+    environment:
+      - PYTHONUNBUFFERED=1
     entrypoint: "/solution/ui/scripts/start-dev.sh"
   pycharm:
     build:
