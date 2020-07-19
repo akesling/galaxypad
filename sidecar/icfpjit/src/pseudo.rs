@@ -47,14 +47,25 @@ impl Expr for &Ap {
 }
 
 #[derive(Default)]
-struct Vec {
+struct Vector {
     x: u64,
     y: u64,
 }
 
 fn parse_functions(script_string: &str) -> HashMap<String, Rc<dyn Expr>> {
     panic!("Parse functions is not yet implemented");
-    return HashMap::new();
+}
+
+fn interact(state: Rc<dyn Expr>, event: Rc<dyn Expr>) -> (Rc<dyn Expr>, Rc<dyn Expr>) {
+    panic!("Interact is not yet implemented");
+}
+
+fn print_images(points: Rc<dyn Expr>) {
+    panic!("print_images is not yet implemented");
+}
+
+fn request_click_from_user() -> Vector {
+    panic!("request_click_from_user is not yet implemented");
 }
 
 fn main() {
@@ -66,11 +77,11 @@ fn main() {
     let functions = parse_functions("DUMMY VALUE");
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
-    let state: Rc<dyn Expr> = NIL;
-    let vector = Vec{ x: 0, y: 0};
+    let mut state: Rc<dyn Expr> = NIL;
+    let mut vector = Vector{ x: 0, y: 0};
 
     loop {
-        let mut click = Ap{
+        let mut click = Rc::new(Ap{
             func: Some(Rc::new(Ap{
                 func: Some(CONS.clone()),
                 arg: Some(Rc::new(Atom {name: vector.x.to_string(), ..Default::default()})),
@@ -78,11 +89,11 @@ fn main() {
             })),
             arg: Some(Rc::new(Atom{name: vector.y.to_string(), ..Default::default()})),
             ..Default::default()
-        };
-//        var (newState, images) = interact(state, click)
-//        PRINT_IMAGES(images)
-//        vector = REQUEST_CLICK_FROM_USER()
-//        state = newState
+        });
+        let (newState, images) = interact(state.clone(), click);
+        print_images(images);
+        vector = request_click_from_user();
+        state = newState;
     }
 
 // // See https://message-from-space.readthedocs.io/en/latest/message38.html

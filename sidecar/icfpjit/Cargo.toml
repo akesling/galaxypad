@@ -14,7 +14,12 @@ path = "src/lib.rs"
 name = "toy"
 path = "src/toy.rs"
 
+[[bin]]
+name = "pseudo"
+path = "src/pseudo.rs"
+
 [dependencies]
+lazy_static = "1.4.0"
 cranelift = "0.63.0"
 cranelift-module = "0.63.0"
 cranelift-simplejit = "0.63.0"
