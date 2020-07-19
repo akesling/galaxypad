@@ -1,11 +1,8 @@
 #!/usr/bin/env python
-# import re
 import sys
+from itertools import zip_longest
 from dataclasses import dataclass
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple
-
-# sys.setrecursionlimit(10000)
-# INT_REGEX = re.compile(r"(-?\d+)")
+from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Iterable
 
 
 @dataclass
@@ -14,6 +11,13 @@ class Value:
 
     Name: Optional[str] = None
     Evaluated: Optional["Expr"] = None
+
+    def nlr(self) -> Iterable["Expr"]:
+        yield self
+
+    def unparse(self) -> str:
+        assert self.Name is not None, self
+        return self.Name
 
 
 @dataclass
@@ -24,32 +28,32 @@ class Tree:
     Right: Optional["Expr"] = None
     Evaluated: Optional["Expr"] = None
 
-    def flat(self) -> List[Value]:
-        """ Flatten into a preorder list of values """
-        stack: List[Tree] = [self]
-        result: List[Value] = []
+    def nlr(self) -> Iterable["Expr"]:
+        """ Generator for all of the Tree nodes in preorder (NLR) """
+        stack: List["Expr"] = [self]
         while stack:
-            tree: Tree = stack.pop()
-            expr: Optional["Expr"]
-            for expr in [tree.Right, tree.Left]:
-                if isinstance(expr, Value):
-                    result.append(expr)
-                elif isinstance(expr, Tree):
-                    stack.append(expr)
-                else:
-                    raise ValueError(f"Invalid type in tree {type(expr)} {expr}")
-        return result
+            expr: "Expr" = stack.pop()
+            yield expr
+            if isinstance(expr, Tree):
+                assert isinstance(expr.Right, (Value, Tree)), self
+                stack.append(expr.Right)
+                assert isinstance(expr.Left, (Value, Tree)), self
+                stack.append(expr.Left)
 
-
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         """ Non recursive equality checking """
         if type(self) == type(other):
-            return self.flat() == other.flat()
+            is_value = lambda expr: isinstance(expr, Value)
+            self_itr = filter(is_value, self.nlr())
+            other_itr = filter(is_value, other.nlr())
+            return all(s == o for s, o in zip_longest(self_itr, other_itr))
         return False
+
+    def unparse(self) -> str:
+        return "ap"
 
 
 Expr = Union[Tree, Value]
-ExprT = (Tree, Value)
 
 
 def asNum(n: Expr) -> int:
@@ -61,27 +65,6 @@ def asNum(n: Expr) -> int:
 nil: Expr = Value(Name="nil")
 
 
-# @dataclass
-# class Vector(Expr):
-#     Elements: Optional[List[Union[List, int]]] = None
-
-#     def car(self) -> Expr:
-#         assert isinstance(self.Elements, list), self
-#         head = self.Elements[0]
-#         if isinstance(head, int):
-#             return Value(head)
-#         if isinstance(head, list) and len(head):
-#             return Vector(head)
-#         raise ValueError(f"bad head {head}")
-
-#     def cdr(self) -> Expr:
-#         assert isinstance(self.Elements, list), self
-#         tail = self.Elements[1:]
-#         if len(tail):
-#             return Vector(tail)
-#         return nil
-
-
 class Vect(NamedTuple):
     """ X, Y coordinate """
 
@@ -89,80 +72,16 @@ class Vect(NamedTuple):
     Y: int
 
 
-# VECTOR_DETECTOR = re.compile(r"((ap\s+ap\s+cons|\d+|nil)\s+)+nil")
 cons: Expr = Value(Name="cons")
 t: Expr = Value(Name="t")
 f: Expr = Value(Name="f")
 
 
-# def parse(expression: str) -> Expr:
-#     """ Parse a complete expression """
-#     expr, tokens = parse_tokens(expression.strip().split())
-#     assert tokens == [], f"Leftover tokens {expression} -> {tokens}"
-#     return expr
-
-
-# def maybe_vector(expr: Expr) -> Expr:
-#     """ Try to compress a vector if possible """
-#     if isinstance(expr, Tree):
-#         left = expr.Left
-#         if isinstance(left, Tree) and left.Left == cons:  # Possible vector
-#             lr = maybe_vector(left.Right)
-#             right = maybe_vector(expr.Right)
-#             if right == nil:
-#                 right_vector: List[Union[List, int]] = []  # Vector end
-#             elif isinstance(right, Vector):
-#                 right_vector = right.Elements  # Nested
-#             else:
-#             elif isinstance(lr, Vector):
-#                 lr_vector = [lr.Elements]  # Appending
-#             else:
-#                 return expr  # Not a valid vector
-#             return Vector(lr_vector + right_vector)
-#     return expr
-
-
-# def maybe_vector(orig: Expr) -> Expr:
-#     if isinstance(orig, Tree):
-#         stack: List[Tree] = []
-#         current: Tree = orig
-#         while True:
-#             if isinstance(current, Tree):
-
-
-#         expr: Expr = orig
-
-#     return orig
-
-
-# def check_expr_inner(expr: Expr) -> None:
-#     # assert isinstance(expr, (Value, Vector, Tree)), f"type(expr) {type(expr)}"
-#     assert isinstance(expr, (Value, Tree)), f"type(expr) {type(expr)}"
-#     if isinstance(expr, Tree):
-#         check_expr(expr.Left)
-#         check_expr(expr.Right)
-
-
-def check_expr(expr: Expr) -> None:
-    pass
-
-
-#     try:
-#         check_expr_inner(expr)
-#     except Exception as e:
-#         raise ValueError(f"Bad {expr} \n {e}")
-
-
-# def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
-#     """ Parse and return a complete expression, and leftover tokens """
-#     token, *tokens = tokens
-#     if token == "ap":
-#         left, tokens = parse_tokens(tokens)
-#         right, tokens = parse_tokens(tokens)
-#         expr = Tree(Left=left, Right=right)
-#         check_expr(expr)
-#         return maybe_vector(expr), tokens
-#     return Value(token), tokens
+def unparse(expr: Expr) -> str:
+    """ Parse an object back into the ap language """
+    if isinstance(expr, (Value, Tree)):
+        return " ".join(n.unparse() for n in expr.nlr())
+    raise ValueError(f"Can't unparse type {type(expr)} {expr}")
 
 
 def parse(orig: Union[str, List[str]]) -> Expr:
@@ -194,7 +113,7 @@ def parse(orig: Union[str, List[str]]) -> Expr:
             break
 
     assert tokens == [], f"Failed to parse tokens {orig_str} -> {tokens}"
-    assert isinstance(expr, (ExprT)), f"Failed to parse tokens {orig_str}"
+    assert isinstance(expr, (Value, Tree)), f"Failed to parse tokens {orig_str}"
     return expr
 
 
@@ -212,7 +131,6 @@ functions: Dict[str, Expr] = parse_file("galaxy.txt")
 
 def evaluate(expr: Expr) -> Expr:
     """ Evaluate a node in the tree """
-    check_expr(expr)
     if expr.Evaluated is not None:
         return expr.Evaluated
     initialExpr: Expr = expr
@@ -226,7 +144,6 @@ def evaluate(expr: Expr) -> Expr:
 
 def tryEval(expr: Expr) -> Expr:
     """ Try to perform a computation or reduction on the tree """
-    check_expr(expr)
     if expr.Evaluated is not None:
         return expr.Evaluated
     if (
@@ -240,8 +157,6 @@ def tryEval(expr: Expr) -> Expr:
         assert expr.Right is not None, expr
         left: Expr = evaluate(expr.Left)
         x: Expr = expr.Right
-        check_expr(left)
-        check_expr(x)
         if isinstance(left, Value):
             if left.Name == "neg":
                 return Value(Name=str(-asNum(evaluate(x))))
@@ -264,8 +179,6 @@ def tryEval(expr: Expr) -> Expr:
             assert left.Right is not None, left
             left2: Expr = evaluate(left.Left)
             y: Expr = left.Right
-            check_expr(left2)
-            check_expr(y)
             if isinstance(left2, Value):
                 if left2.Name == "t":
                     return y
@@ -289,8 +202,6 @@ def tryEval(expr: Expr) -> Expr:
                 assert left2.Right is not None, left2
                 left3: Expr = evaluate(left2.Left)
                 z: Expr = left2.Right
-                check_expr(left3)
-                check_expr(z)
                 if isinstance(left3, Value):
                     if left3.Name == "s":
                         return Tree(Tree(z, x), Tree(y, x))
@@ -342,16 +253,24 @@ def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
 
 
 if __name__ == "__main__":
-    state: Expr = nil
-    vector: Vect = Vect(0, 0)
+    # state: Expr = nil
+    # vector: Vect = Vect(0, 0)
 
-    # main loop
-    for _ in range(1):  # while True:
-        click: Expr = Tree(Tree(cons, Value(Name=str(vector.X))), Value(Name=str(vector.Y)))
-        newState, images = interact(state, click)
-        PRINT_IMAGES(images)
-        vector = REQUEST_CLICK_FROM_USER()
-        state = newState
-    # print(parse("ap ap cons 7 ap ap cons 123 nil").flat())
+    # # main loop
+    # for _ in range(1):  # while True:
+    #     click: Expr = Tree(Tree(cons, Value(Name=str(vector.X))), Value(Name=str(vector.Y)))
+    #     newState, images = interact(state, click)
+    #     PRINT_IMAGES(images)
+    #     vector = REQUEST_CLICK_FROM_USER()
+    #     state = newState
+    s = "ap ap cons 7 ap ap cons 123 nil"
+    for expr in parse(s).nlr():
+        print(unparse(expr))
+    assert parse(s) == parse(s)
     # print(parse('ap ap cons ap ap cons 0 ap ap cons ap ap :1162 14 ap neg 64 ap ap cons :1043 ap ap cons :1059 ap ap cons ap neg 1 nil ap ap cons ap ap cons 1 ap ap cons ap ap :1162 ap neg 4 94 ap ap cons :1044 ap ap cons :1060 ap ap cons 2 nil ap ap cons ap ap cons 2 ap ap cons ap ap :1162 ap neg 78 ap neg 67 ap ap cons :1045 ap ap cons :1061 ap ap cons 1 nil ap ap cons ap ap cons 3 ap ap cons ap ap :1162 ap neg 38 ap neg 46 ap ap cons :1046 ap ap cons :1062 ap ap cons ap neg 1 nil ap ap cons ap ap cons 4 ap ap cons ap ap :1162 44 ap neg 34 ap ap cons :1047 ap ap cons :1063 ap ap cons ap neg 1 nil ap ap cons ap ap cons 5 ap ap cons ap ap :1162 60 ap neg 30 ap ap cons :1048 ap ap cons :1064 ap ap cons 3 nil ap ap cons ap ap cons 6 ap ap cons ap ap :1162 ap neg 81 11 ap ap cons :1049 ap ap cons :1065 ap ap cons 0 nil ap ap cons ap ap cons 7 ap ap cons ap ap :1162 ap neg 49 34 ap ap cons :1050 ap ap cons :1066 ap ap cons ap neg 1 nil ap ap cons ap ap cons 8 ap ap cons ap ap :1162 52 27 ap ap cons :1051 ap ap cons :1067 ap ap cons ap neg 1 nil ap ap cons ap ap cons 9 ap ap cons ap ap :1162 99 15 ap ap cons :1052 ap ap cons :1068 ap ap cons ap neg 1 nil ap ap cons ap ap cons 10 ap ap cons ap ap :1162 96 35 ap ap cons :1053 ap ap cons :1069 ap ap cons ap neg 1 nil nil'))
-    # parse_file('galaxy.txt')
+    f1 = parse_file("galaxy.txt")
+    f2 = parse_file("galaxy.txt")
+    # b = f1[':1029']
+    # print(unparse(b))
+    for k in f1.keys():
+        assert f1[k] == f2[k], k
