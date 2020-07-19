@@ -1,4 +1,4 @@
-CFLAGS := --std=c++17 -g3
+CFLAGS := --std=c++17 -g3 -lSDL2
 
 all: interp
 

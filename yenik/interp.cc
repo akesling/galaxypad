@@ -4,6 +4,7 @@
 #include <vector>
 #include <functional>
 #include <iostream>
+#include <iomanip>
 #include <unordered_map>
 #include <unordered_set>
 #include <fstream>
@@ -11,6 +12,13 @@
 #include <algorithm> 
 #include <cctype>
 #include <locale>
+
+#include <SDL2/SDL.h>
+
+#define WINDOW_WIDTH 1600
+#define WINDOW_HEIGHT 800
+
+const int kPixScale = 8;
 
 // We can enable and disable debug traces using a null stream.
 class NullBuffer : public std::streambuf {
@@ -21,10 +29,14 @@ class NullBuffer : public std::streambuf {
 NullBuffer null_buffer;
 std::ostream null_stream(&null_buffer);
 
-constexpr bool LogEnabled = false;
+constexpr int kLogLevel = 1;
+
+std::ostream& Log(int level) {
+  return (level <= kLogLevel) ? std::cout : null_stream;
+}
 
 std::ostream& Log() {
-  return LogEnabled ? std::cout : null_stream;
+  return Log(3);
 }
 
 // Routines to trim leading and trailing spaces taken from SO, they should
@@ -144,7 +156,7 @@ inline bool IsAp(const Expr& e) {
 
 // This helper converts an Atom to an Int. If it's not an Atom that can be
 // represented as an int it DESTROYS EVERYTHING.
-inline int AsNum(const Expr& e) {
+inline long AsNum(const Expr& e) {
   if (!IsInteger(e.name)) {
     panic("tried to nummify " + e.name);
   }
@@ -163,8 +175,8 @@ struct Vec {
 // Used for serializaiton.
 const std::unordered_set<std::string> g_atoms = {
     "add",
-    "inc",
-    "dec",
+    //"inc",
+    //"dec",
     "i",
     "t",
     "f",
@@ -176,22 +188,22 @@ const std::unordered_set<std::string> g_atoms = {
     "s",
     "c",
     "b",
-    "pwr2",
+    //"pwr2",
     "cons",
     "car",
     "cdr",
     "nil",
     "isnil",
-    "vec",
-    "if0",
-    "send",
-    "checkerboard",
-    "draw",
-    "multipledraw",
-    "modem",
-    "f38",
-    "statelessdraw",
-    "interact",
+    //"vec",
+    //"if0",
+    //"send",
+    //"checkerboard",
+    //"draw",
+    //"multipledraw",
+    //"modem",
+    //"f38",
+    //"statelessdraw",
+    //"interact",
 };
 
 // The engine does the heavy lifting. It maintains the pool of Exprs and allows
@@ -199,7 +211,7 @@ const std::unordered_set<std::string> g_atoms = {
 // replacements from a file (galaxy.txt mainly).
 class Engine {
  public:
-  Engine(int initial_slots) {
+  Engine(int initial_slots, SDL_Renderer* renderer) {
     // To speed things up we reserve space for a few Exprs off the bat.
     exprs_.reserve(initial_slots);
 
@@ -209,6 +221,11 @@ class Engine {
     t_ = Atom("t");
     f_ = Atom("f");
     nil_ = Atom("nil");
+
+		renderer_ = renderer;
+		
+		//SDL_RenderDrawPoint(renderer, i, i);
+		//SDL_RenderPresent(renderer);
   }
 
   // Gets the Expr given a reference. Important abstraction to have 
@@ -257,8 +274,27 @@ class Engine {
 
   // Looks up the given Expr and converts the name to a number, blows up if it's
   // not an Atom with name as a parseable int.
-  int AsNum(ExprRef ref) const {
+  long AsNum(ExprRef ref) const {
     return ::AsNum(deref(ref));
+  }
+
+  // Tracing functionality helps see recursive evals
+  void StartEvalTrace(ExprRef ref) {
+    for (int i = 0; i < trace_depth_; ++i) {
+      Log(1) << " ";
+    }
+    Log(1) << std::setw(3) << trace_depth_ << " ";
+    Log(1) << "EVAL " << ExprToString(ref) << std::endl;
+    trace_depth_ += 1;
+  }
+
+  void EndEvalTrace(ExprRef ref) {
+    trace_depth_ -= 1;
+    for (int i = 0; i < trace_depth_; ++i) {
+      Log(1) << " ";
+    }
+    Log(1) << std::setw(3) << trace_depth_ << " ";
+    Log(1) << "---> " << ExprToString(ref) << std::endl;
   }
 
   // Recursively looks up and converts the given reference to a string format
@@ -288,7 +324,6 @@ class Engine {
   // needed.
   DeserializeResult Deserialize(size_t pos, const std::vector<std::string>& expr) {
     const auto& str = expr[pos];
-    std::cout << "deserialize " << pos << ": " << str << std::endl;
     if (str == "ap") {
       auto result_left = Deserialize(++pos, expr);
       auto result_right = Deserialize(result_left.pos, expr);
@@ -320,7 +355,6 @@ class Engine {
   void LoadFunc(const std::string& line) {
     const auto fsplit = split(line, "=");
     panic_if(fsplit.size() != 2, "Could not split function by =");
-    std::cout << "func (" << fsplit[0] << "," << fsplit[1] << ")" << std::endl;
 
     // TODO(myenik): No sanity checking on the name being just a single token
 		const auto fname = fsplit[0];
@@ -340,7 +374,6 @@ class Engine {
     std::ifstream file(filename);
     std::string line;
     while(std::getline(file, line)) {
-      std::cout << "loading: " << line << std::endl;
       LoadFunc(line);
     }
   }
@@ -356,9 +389,11 @@ class Engine {
 
   // Eval loop from pseudocode
   ExprRef Eval(ExprRef ref) {
+    StartEvalTrace(ref);
+
     auto& expr = deref(ref);
     if (expr.evaluated != noexpr) {
-      Log() << "Eval cached ref " << ref << std::endl;
+      EndEvalTrace(expr.evaluated);
       return expr.evaluated;
     }
 
@@ -368,6 +403,7 @@ class Engine {
       ExprRef result = TryEval(current_ref);
       if (result == current_ref) {
         deref(initial_ref).evaluated = result;
+        EndEvalTrace(result);
         return result;
       }
       current_ref = result;
@@ -478,48 +514,177 @@ class Engine {
     return res;
   }
 
-  //std::vector<ExprRef> FlattenList(ExprRef ref, std::vector<ExprRef>& flattened) {
-  //  const Expr& first = deref(ref);
-  //  if (!IsAp(first)) {
-  //    panic("failed parsing list");
-  //  }
+  void FlattenList(ExprRef ref, std::vector<ExprRef>& flattened) {
+    const Expr& first = deref(ref);
+    if (!IsAp(first)) {
+      panic("failed parsing list, doesnt start with Ap");
+    }
 
-  //  const auto& second = deref(first.func);
-  //  if (!IsAp(second)) {
-  //    panic("failed parsing list");
-  //  }
-  //  return {};
-  //}
-  //
-  //std::vector<ExprRef> FlattenList(ExprRef ref) {
-  //}
-  //
-  //struct UnpackedProtocolResult {
-  //  ExprRef flag;
-  //  ExprRef new_state;
-  //  ExprRef data;
-  //};
-  //
-  // Unpacks triplet into result
-  //UnpackedProtocolResult GetListItemsFromExpr(ExprRef ref) {
-  //  UnpackedProtocolResult result;
-  //}
-  //
-  //struct InteractResult {
-  //  ExprRef data;
-  //  ExprRef pics;
-  //};
-  //
-  // Takes a state data blob, and event pixel.
-  //
+    const auto& second = deref(first.func);
+    if (!IsAp(second)) {
+      panic("failed parsing list, second not an Ap");
+    }
+
+    const auto& cons = deref(second.func);
+    if (cons.name != "cons") {
+      panic("failed parsing list, no cons");
+    }
+
+    flattened.push_back(second.arg);
+    
+    const auto& next = deref(first.arg);
+    if (next.name != "nil") {
+      FlattenList(first.arg, flattened);
+    }
+  }
+
+  std::vector<ExprRef> FlattenList(ExprRef ref) {
+    std::vector<ExprRef> flattened;
+
+    if (deref(ref).name != "nil") {
+      FlattenList(ref, flattened);
+    }
+    return flattened;
+  }
+
+  Vec FlattenVec(ExprRef ref) {
+    const Expr& first = deref(ref);
+    if (!IsAp(first)) {
+      panic("failed parsing vec, doesnt start with Ap");
+    }
+
+    const auto& second = deref(first.func);
+    if (!IsAp(second)) {
+      panic("failed parsing vec, second not an Ap");
+    }
+
+    const auto& cons = deref(second.func);
+    if (cons.name != "cons") {
+      panic("failed parsing vec, no cons");
+    }
+
+    Vec v;
+    v.x = AsNum(second.arg);
+    v.y = AsNum(first.arg);
+    return v;
+  }
+
+  std::vector<Vec> FlattenVecList(ExprRef ref) {
+    std::vector<Vec> vec_list;
+    auto flattened = FlattenList(ref);
+    for (const auto vec_ref : flattened) {
+      vec_list.push_back(FlattenVec(vec_ref));
+    }
+    return vec_list;
+  }
+
+  void RenderPix(Vec v) {
+    Vec offset = {v.x + WINDOW_WIDTH/kPixScale/2, v.y + WINDOW_HEIGHT/kPixScale/2};
+    for (int i = 0; i < kPixScale; ++i) {
+      for (int j = 0; j < kPixScale; ++j) {
+        SDL_RenderDrawPoint(renderer_, offset.x*kPixScale + i, offset.y*kPixScale + j);
+      }
+    }
+  }
+
+  void RenderVecList(const std::vector<Vec>& vlist) {
+    for (const auto& v: vlist) {
+      RenderPix(v);
+    }
+  }
+  
+  // Fake for now
+  ExprRef SEND_TO_ALIEN_PROXY(ExprRef ref) {
+    panic("send");
+    return ref;
+  }
+
+  struct InteractResult {
+    ExprRef data;
+    ExprRef pics;
+  };
+  
   // Returns a new data blob and a list of "pictures".
-  //InteractResult InteractGalaxy(ExprRef state, ExprRef event) {
-  //  ExprRef eref = Ap(Ap(Atom("galaxy"), state), event);
-  //  ExprRef res = Eval(eref);
-  //  
-  //  // GET_LIST_ITEMS_FROM_EXPR(...)
-  //  return {noexpr, noexpr};
-  //}
+  InteractResult InteractGalaxy(ExprRef state, ExprRef event) {
+    ExprRef eref = Ap(Ap(Atom("galaxy"), state), event);
+    ExprRef res = Eval(eref);
+
+    // GET_LIST_ITEMS_FROM_EXPR(...)
+    auto flat = FlattenList(res);
+    if (flat.size() != 3) {
+      panic("response from galaxy not a triple");
+    }
+
+    const ExprRef flag = flat[0];
+    const ExprRef new_state = flat[1];
+    const ExprRef data = flat[2];
+
+    std::cout << "GALAXY BRAIN : " << ExprToString(flag) << " | "
+              << ExprToString(new_state) << " | "
+              << ExprToString(data) << std::endl;
+    if (AsNum(flag) == 0) {
+      InteractResult result;
+      result.data = new_state;
+      result.pics = data;
+      return result;
+    }
+
+    return InteractGalaxy(new_state, SEND_TO_ALIEN_PROXY(data));
+  }
+
+	bool PollForClick(Vec* v) {
+    std::cout << "waiting for click" << std::endl;
+		SDL_Event e;
+    while (true) {
+      while(SDL_PollEvent(&e)){
+        switch(e.type){
+          case SDL_QUIT:
+            return true;
+        case SDL_MOUSEBUTTONDOWN:
+          if (e.button.button == SDL_BUTTON_LEFT) {
+            std::cout << "CLEEK " << e.button.x << " " << e.button.y << std::endl;
+            v->x = e.button.x/kPixScale - WINDOW_WIDTH/kPixScale/2;
+            v->y = e.button.y/kPixScale - WINDOW_HEIGHT/kPixScale/2;
+            return false;
+          }
+          break;
+        }
+      }
+    }
+	}
+
+  void PRINT_IMAGES(ExprRef imgs) {
+    auto img_list = FlattenList(imgs);
+
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_RenderClear(renderer_);
+
+    for (int i = 0; i < img_list.size(); ++i) {
+      const int idx = img_list.size() - 1 - i;
+      auto vlist = FlattenVecList(img_list[idx]);
+      SDL_SetRenderDrawColor(renderer_, 50*(i+1), 50*(i+1), 50*(i+1), 255);
+      RenderVecList(vlist);
+    }
+		SDL_RenderPresent(renderer_);
+  }
+
+  void MainLoop() {
+    ExprRef state = nil_;
+		Vec click_vec = {0, 0};
+
+		while(true) {
+			ExprRef click = Ap(Ap(cons_, Atom(click_vec.x)), Atom(click_vec.y));
+      auto ires = InteractGalaxy(state, click);
+      PRINT_IMAGES(ires.pics);
+
+      const bool should_quit = PollForClick(&click_vec);
+      if (should_quit) {
+        return;
+      }
+
+      state = ires.data;
+		}
+  }
 
   // Runs the first step of the galaxy protocol, just for debugging, will go
   // away soon...
@@ -529,6 +694,7 @@ class Engine {
 
     ExprRef eref = Ap(Ap(Atom("galaxy"), state), click);
     ExprRef res = Eval(eref);
+
     return res;
   }
 
@@ -540,6 +706,8 @@ class Engine {
   ExprRef f_;
   ExprRef nil_;
 
+  int trace_depth_ = 0;
+
   // The Expr pool. Currently we don't recycle Exprs, they grow in an unbounded
   // fashion until we run out of memory. We can fix this if needed.
   std::vector<Expr> exprs_;
@@ -547,22 +715,57 @@ class Engine {
   // Map of function names to bodies that we use to substitute for the function
   // names during Eval.
   std::unordered_map<std::string, ExprRef> funcs_;
+
+	// SDL state used for shit
+	SDL_Renderer* renderer_;
 };
 
 // Simple main test...
 int main(int argc, char** argv) {
   if (argc != 2) {
     std::cerr << "usage: interp <galaxy.txt path>" << std::endl;
+    std::cerr << "usage (repl): interp repl" << std::endl;
     return -1;
   }
 
-  Engine engine(1000);
+  if (std::string(argv[1]) == "repl") {
+    Engine engine(1000, nullptr);
+    std::cout << "Welcome to REPL mode!" << std::endl;
+    while (true) {
+      std::string line;
+      std::cout << "> ";
+      std::getline(std::cin, line);
+
+      std::cout << std::endl;
+      auto split_line = split(line, " ");
+      const auto result = engine.Deserialize(0, split_line);
+      if (result.pos != split_line.size()) {
+        std::cout << "Bad input" << std::endl;
+      }
+      std::cout << engine.ExprToString(engine.Eval(result.expr));
+      std::cout << std::endl;
+    }
+  }
+
+	SDL_Event event;
+	SDL_Renderer *renderer;
+	SDL_Window *window;
+	int i;
+
+	SDL_Init(SDL_INIT_VIDEO);
+	SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_WIDTH, 0, &window, &renderer);
+
+  Engine engine(1000, renderer);
   engine.LoadFuncs(argv[1]);
-  engine.Dump();
+  engine.MainLoop();
+  //engine.Dump();
 
   // TEST AYY LMAO
   auto res = engine.TestOneStep();
   std::cout << "RESULT: " << std::endl << engine.ExprToString(res) << std::endl;
   std::cout << "NUM EXPRS: " << std::endl << engine.num_exprs() << std::endl;
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
   return 0;
 }
