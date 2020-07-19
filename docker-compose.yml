@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  server:
+    build:
+      dockerfile: ui/Dockerfile
+      context: .
+    ports:
+      - 5000:5000
+    volumes:
+      - ./:/solution
+    entrypoint: "/solution/ui/scripts/start-dev.sh"
+  pycharm:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    entrypoint: []
