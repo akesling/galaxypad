@@ -165,7 +165,7 @@ fn interact(
         );
     }
     let (flag, newState, data) = (items[0].clone(), items[1].clone(), items[2].clone());
-    if (as_num(flag) == 0) {
+    if (as_num(flag).unwrap() == 0) {
         return (newState, data);
     }
     return interact(newState, send_to_alien_proxy(data), functions, constants);
@@ -175,7 +175,7 @@ fn send_to_alien_proxy(expr: ExprRef) -> ExprRef {
     panic!("send_to_alien_proxy is not yet implemented");
 }
 
-fn as_num(expr: ExprRef) -> i64 {
+fn as_num(expr: ExprRef) -> Result<i64, String> {
     panic!("as_num is not yet implemented");
 }
 
@@ -222,13 +222,13 @@ fn try_eval(
                     return Ok(function.clone());
                 }
             } else {
-                let func = eval(expr.clone(), functions, constants);
+                let func = eval(expr.clone(), functions, constants)?;
                 let x = expr.borrow().arg().unwrap().clone();
                 if let Some(name) = expr.borrow().name().as_ref() {
                     match *name {
                         "neg" => {
                             return Ok(Rc::new(RefCell::new(Atom {
-                                name: (-as_num(eval(x, functions, constants)?)).to_string(),
+                                name: (-as_num(eval(x, functions, constants)?)?).to_string(),
                             })));
                         },
                         "i" => {
@@ -268,19 +268,33 @@ fn try_eval(
                         },
                         _ => (),
                     }
-                }
-                //        if (fun is Ap)
-                //            Expr fun2 = eval(fun.Fun)
-                //            Expr y = fun.Arg
-                //            if (fun2 is Atom)
-                //                if (fun2.Name == "t") return y
-                //                if (fun2.Name == "f") return x
+                } else {
+                    let func2 = eval(func.clone(), functions, constants)?.clone();
+                    let y = func.borrow().arg().unwrap().clone();
+                    if let Some(name) = func2.clone().borrow().name().as_ref() {
+                        match *name {
+                            "t" => {
+                                return Ok(y);
+                            },
+                            "f" => {return Ok(x);},
                 //                if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
+                            "add" => {
+                                return Ok(Rc::new(RefCell::new(Atom{
+                                    name: (as_num(eval(x, functions, constants)?)? + as_num(eval(y, functions, constants)?)?).to_string(),
+                                })));
+                            },
                 //                if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
+                            "mul" => (),
                 //                if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
+                            "div" => (),
                 //                if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
+                            "eq" => (),
                 //                if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
+                            "cons" => (),
                 //                if (fun2.Name == "cons") return evalCons(y, x)
+                            _ => (),
+                        }
+                    }
                 //            if (fun2 is Ap)
                 //                Expr fun3 = eval(fun2.Fun)
                 //                Expr z = fun2.Arg
@@ -289,7 +303,7 @@ fn try_eval(
                 //                    if (fun3.Name == "c") return Ap(Ap(z, x), y)
                 //                    if (fun3.Name == "b") return Ap(z, Ap(y, x))
                 //                    if (fun3.Name == "cons") return Ap(Ap(x, z), y)
-                //    return expr
+                }
             }
         }
     }
