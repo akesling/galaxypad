@@ -19,12 +19,20 @@ class Expr:
 
     def __repr__(self):
         fields = ",".join(
-            f"{k}={repr(v)}" for k, v in vars(self).items() if k is not "Evaluated"
+            f"{k}={repr(v)}" for k, v in vars(self).items() if k != "Evaluated"
         )
         return f"{self.__class__.__name__}({fields})"
 
     def __eq__(self, other):
-        return type(self) == type(other) and vars(self) == vars(other)
+        if self is other:
+            return True
+        if type(self) != type(other):
+            return False
+        vs = vars(self)
+        vo = vars(other)
+        if vs.keys() != vo.keys():
+            return False
+        return all(vs[k] == vo[k] for k in vs.keys() if k != "Evaluated")
 
 
 class Value(Expr):
