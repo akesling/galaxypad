@@ -31,7 +31,7 @@ class TestParser(unittest.TestCase):
             self.assertEqual(parse(s), e)
 
     def test_parse_galaxy(self):
-        parse_file('galaxy.txt')
+        parse_file("galaxy.txt")
 
 
 class TestVector(unittest.TestCase):
@@ -43,8 +43,6 @@ class TestVector(unittest.TestCase):
             ("ap ap cons 1 ap ap cons ap ap cons 0 nil nil", [1, [0]]),
         ]:
             self.assertEqual(parse(s), Vector(v))
-
-
 
 
 if __name__ == "__main__":
