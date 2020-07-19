@@ -64,6 +64,8 @@ class Tree:  # I wish I could make this a NamedTuple, but mypy hates it
     left: Optional[Union["Tree", Value, Placeholder, Procedure, DrawState]] = None
     right: Optional[Union["Tree", Value, Placeholder, Procedure, DrawState]] = None
 
+    evaluated: Optional[Union["Tree", Value, Placeholder, Procedure, DrawState]] = None
+
 
 # Taking a line from the "git" book on naming things
 Treeish = Optional[Union[Tree, Value, Placeholder, Procedure, DrawState]]

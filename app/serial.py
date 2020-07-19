@@ -5,11 +5,14 @@ from dataclasses import dataclass
 from typing import NamedTuple, Union, Optional, Callable, Dict, List, Tuple
 
 from tree import Value, Placeholder, Procedure, Tree, Treeish
+from vector import unvector
 
 
 INT_REGEX = re.compile(r"(-?\d+)")
 VAR_REGEX = re.compile(r"x(\d+)")
 PROC_REGEX = re.compile(r":(\d+)")
+# VECTOR_MATCH = re.compile(r"\s*(ap\s+ap\s+cons\s+\d+\s+)+nil\s*")
+# VECTOR_PARSE = re.compile(r"\s*ap\s+ap\s+cons\s+(\d+)\s+")
 KNOWN_TOKENS = [
     "add",
     "inc",
@@ -42,6 +45,12 @@ KNOWN_TOKENS = [
 
 def deserialize(serial: str) -> Treeish:
     """ Read 'ap ap add 1 2' language into a Tree """
+    # HACK: special case super-long vectors
+    # if VECTOR_MATCH.fullmatch(serial) is not None:
+    #     print('vector match')
+    #     vector = [int(i) for i in VECTOR_PARSE.findall(serial)]
+    #     return unvector(vector)
+    # print('vector not match', serial[:100])
     treeish, remainder = deserialize_tokens(serial.strip().split())
     assert remainder == [], f"Deserialize failed {serial} -> {remainder}"
     return treeish
