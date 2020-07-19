@@ -37,6 +37,9 @@ KNOWN_TOKENS = [
     "multipledraw",
     "checkerboard",
     "modem",
+    "f38",
+    "statelessdraw",
+    "interact",
 ]
 
 
