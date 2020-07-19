@@ -65,7 +65,7 @@ def send(pd: PlaceDict) -> bool:
 def modem(pd: PlaceDict) -> bool:
     if 0 in pd:
         try:
-            pd[1] = demodulate(gst(pd[0]))
+            pd[1] = demodulate(modulate(pd[0]))
             return True
         except (ValueError, AssertionError):
             return False
