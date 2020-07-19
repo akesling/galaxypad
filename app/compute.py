@@ -74,15 +74,21 @@ def modem(pd: PlaceDict) -> bool:
 
 def pd_draw(pd: PlaceDict) -> bool:
     if 0 in pd:
-        pd[1] = renderer.draw(vector(pd[0]))
-        return True
+        try:
+            pd[1] = renderer.draw(vector(pd[0]))
+            return True
+        except (ValueError, AssertionError):
+            return False
     return False
 
 
 def pd_multidraw(pd: PlaceDict) -> bool:
     if 0 in pd:
-        pd[1] = unvector(renderer.multidraw(vector(pd[0])))
-        return True
+        try:
+            pd[1] = unvector(renderer.multidraw(vector(pd[0])))
+            return True
+        except (ValueError, AssertionError):
+            return False
     return False
 
 
@@ -279,7 +285,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 2:
         tree = deserialize(sys.argv[1])
-        print(serialize(compute_fully(tree)))
+        print(vector(compute_fully(tree)))
     else:
         print("Help: Run with a string argument to compute")
         print("  > python compute.py 'ap ap add 1 2'")

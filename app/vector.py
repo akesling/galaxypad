@@ -40,3 +40,15 @@ def unvector(vec: Vector) -> Treeish:
         head, *tail = vec
         return pair(unvector(head), unvector(tail))
     raise ValueError(f"Can't unvector (maybe you want vector) {vec}")
+
+
+if __name__ == "__main__":
+    import sys
+    from serial import deserialize
+
+    if len(sys.argv) == 2:
+        tree = deserialize(sys.argv[1])
+        print(vector(tree))
+    else:
+        print("Help: Run with a string argument to compute")
+        print("  > python app/vector.py 'ap ap add 1 2'")
