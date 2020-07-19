@@ -130,7 +130,7 @@ fn parse_functions(script_string: &str) -> HashMap<String, ExprRef> {
     panic!("Parse functions is not yet implemented");
 }
 
-fn interact(state: ExprRef, event: ExprRef, functions: &HashMap<String, ExprRef>) -> (ExprRef, ExprRef) {
+fn interact(state: ExprRef, event: ExprRef, functions: &HashMap<String, ExprRef>, constants: &HashMap<String, ExprRef>) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Rc::new(RefCell::new(Ap{
         func: Rc::new(RefCell::new(Ap{
@@ -141,7 +141,7 @@ fn interact(state: ExprRef, event: ExprRef, functions: &HashMap<String, ExprRef>
         arg: event.clone(),
         _evaluated: None,
     }));
-    let res: ExprRef = eval(expr, functions).unwrap();
+    let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
@@ -151,7 +151,7 @@ fn interact(state: ExprRef, event: ExprRef, functions: &HashMap<String, ExprRef>
     if (as_num(flag) == 0) {
         return (newState, data);
     }
-    return interact(newState, send_to_alien_proxy(data), functions);
+    return interact(newState, send_to_alien_proxy(data), functions, constants);
 }
 
 fn send_to_alien_proxy(expr: ExprRef) -> ExprRef {
@@ -166,7 +166,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     panic!("Eval is not yet implemented");
 }
 
-fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
+fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
     match expr.borrow().evaluated() {
         Some(expr) => {
             panic!("Eval is not yet implemented");
@@ -174,7 +174,7 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, 
         None => {
             let mut current_expr = expr.clone();
             loop {
-                let result = try_eval(current_expr.clone(), functions)?;
+                let result = try_eval(current_expr.clone(), functions, constants)?;
                 if ptr::eq(current_expr.as_ref(), result.as_ref()) {
                     current_expr.borrow_mut().set_evaluated(result.clone())?;
                     return Ok(result);
@@ -186,7 +186,7 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, 
     }
 }
 
-fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
+fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
     match expr.borrow().evaluated() {
         Some(x) => {
             return Ok(x.clone());
@@ -197,15 +197,28 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
                     return Ok(function.clone());
                 }
             } else {
-                let func = eval(expr.clone(), functions);
-        //        Expr x = expr.Arg
-        //        if (fun is Atom)
-        //            if (fun.Name == "neg") return Atom(-asNum(eval(x)))
-        //            if (fun.Name == "i") return x
-        //            if (fun.Name == "nil") return t
-        //            if (fun.Name == "isnil") return Ap(x, Ap(t, Ap(t, f)))
-        //            if (fun.Name == "car") return Ap(x, t)
-        //            if (fun.Name == "cdr") return Ap(x, f)
+                let func = eval(expr.clone(), functions, constants);
+                let x = expr.borrow().arg().unwrap().clone();
+                if let Some(name) = expr.borrow().name().as_ref() {
+                    match *name {
+                        "neg" => {
+                            return Ok(Rc::new(RefCell::new(Atom{
+                                name: (-as_num(eval(x, functions, constants)?)).to_string()
+                            })));
+                        },
+                        "i" => {
+                            return Ok(x);
+                        },
+//                    if (fun.Name == "nil") return t
+//                        "nil" {
+//                            return Ok(t);
+//                        }
+//                    if (fun.Name == "isnil") return Ap(x, Ap(t, Ap(t, f)))
+//                    if (fun.Name == "car") return Ap(x, t)
+//                    if (fun.Name == "cdr") return Ap(x, f)
+                        _ => (),
+                    }
+                }
         //        if (fun is Ap)
         //            Expr fun2 = eval(fun.Fun)
         //            Expr y = fun.Arg
@@ -243,28 +256,29 @@ fn request_click_from_user() -> Point {
 }
 
 fn main() {
-    let CONS: ExprRef = Rc::new(RefCell::new(Atom{name: "cons".to_owned()}));
-    let T: ExprRef = Rc::new(RefCell::new(Atom{name: "t".to_owned()}));
-    let F: ExprRef = Rc::new(RefCell::new(Atom{name: "f".to_owned()}));
-    let NIL: ExprRef = Rc::new(RefCell::new(Atom{name: "nil".to_owned()}));
 
     let functions = parse_functions("DUMMY VALUE");
+    let mut constants: HashMap<String, ExprRef> = HashMap::new();
+    constants.insert("cons".to_owned(), Rc::new(RefCell::new(Atom{name: "cons".to_owned()})));
+    constants.insert("t".to_owned(), Rc::new(RefCell::new(Atom{name: "t".to_owned()})));
+    constants.insert("f".to_owned(), Rc::new(RefCell::new(Atom{name: "f".to_owned()})));
+    constants.insert("nil".to_owned(), Rc::new(RefCell::new(Atom{name: "nil".to_owned()})));
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
-    let mut state: ExprRef = NIL;
+    let mut state: ExprRef = constants.get("nil").unwrap().clone();
     let mut point = Point{ x: 0, y: 0};
 
     loop {
         let click = Rc::new(RefCell::new(Ap{
             func: Rc::new(RefCell::new(Ap{
-                func: CONS.clone(),
+                func: constants.get("cons").unwrap().clone(),
                 arg: Rc::new(RefCell::new(Atom {name: point.x.to_string(), ..Default::default()})),
                 _evaluated: None,
             })),
             arg: Rc::new(RefCell::new(Atom{name: point.y.to_string(), ..Default::default()})),
             _evaluated: None,
         }));
-        let (newState, images) = interact(state.clone(), click.clone(), &functions);
+        let (newState, images) = interact(state.clone(), click.clone(), &functions, &constants);
         print_images(images);
         point = request_click_from_user();
         state = newState;
