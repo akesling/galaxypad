@@ -139,6 +139,20 @@ def maybe_vector(expr: Expr) -> Expr:
     return expr
 
 
+def check_expr_inner(expr: Expr) -> None:
+    assert isinstance(expr, (Value, Vector, Tree)), f"type(expr) {type(expr)}"
+    if isinstance(expr, Tree):
+        check_expr(expr.Left)
+        check_expr(expr.Right)
+    
+
+def check_expr(expr: Expr) -> None:
+    try:
+        check_expr_inner(expr)
+    except Exception as e:
+        raise ValueError(f"Bad {expr} \n {e}")
+
+
 def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
     """ Parse and return a complete expression, and leftover tokens """
     token, *tokens = tokens
@@ -146,6 +160,7 @@ def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
         left, tokens = parse_tokens(tokens)
         right, tokens = parse_tokens(tokens)
         expr = Tree(Left=left, Right=right)
+        check_expr(expr)
         return maybe_vector(expr), tokens
     return Value(token), tokens
 
@@ -166,6 +181,7 @@ functions: Dict[str, Expr] = parse_file("galaxy.txt")
 
 def evaluate(expr: Expr) -> Expr:
     """ Evaluate a node in the tree """
+    check_expr(expr)
     if expr.Evaluated is not None:
         return expr.Evaluated
     initialExpr: Expr = expr
@@ -179,6 +195,7 @@ def evaluate(expr: Expr) -> Expr:
 
 def tryEval(expr: Expr) -> Expr:
     """ Try to perform a computation or reduction on the tree """
+    check_expr(expr)
     if expr.Evaluated is not None:
         return expr.Evaluated
     if (
@@ -190,6 +207,10 @@ def tryEval(expr: Expr) -> Expr:
     if isinstance(expr, Tree):
         left: Expr = evaluate(expr.Left)
         x: Expr = expr.Right
+        check_expr(left)
+        check_expr(x)
+        print('left', type(left))
+        print('x', type(x))
         if isinstance(left, Value):
             if left.Name == "neg":
                 return Value(-asNum(evaluate(x)))
@@ -210,6 +231,10 @@ def tryEval(expr: Expr) -> Expr:
         if isinstance(left, Tree):
             left2: Expr = evaluate(left.Left)
             y: Expr = left.Right
+            check_expr(left2)
+            check_expr(y)
+            print('left2', type(left2))
+            print('y', type(y))
             if isinstance(left2, Value):
                 if left2.Name == "t":
                     return y
@@ -225,16 +250,14 @@ def tryEval(expr: Expr) -> Expr:
                 if left2.Name == "lt":
                     return t if asNum(evaluate(y)) < asNum(evaluate(x)) else f
                 if left2.Name == "eq":
-                    ex = evaluate(x)
-                    ey = evaluate(y)
-                    nx = asNum(ex)
-                    ny = asNum(ey)
-                    return t if nx == ny else f
+                    return t if asNum(evaluate(y)) == asNum(evaluate(x)) else f
                 if left2.Name == "cons":
                     return evalCons(y, x)
             if isinstance(left2, Tree):
                 left3: Expr = evaluate(left2.Left)
                 z: Expr = left2.Right
+                check_expr(left3)
+                check_expr(z)
                 if isinstance(left3, Value):
                     if left3.Name == "s":
                         return Tree(Tree(z, x), Tree(y, x))
