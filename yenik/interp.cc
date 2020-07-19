@@ -29,7 +29,7 @@ class NullBuffer : public std::streambuf {
 NullBuffer null_buffer;
 std::ostream null_stream(&null_buffer);
 
-constexpr int kLogLevel = 1;
+constexpr int kLogLevel = 0;
 
 std::ostream& Log(int level) {
   return (level <= kLogLevel) ? std::cout : null_stream;
@@ -722,15 +722,21 @@ class Engine {
 
 // Simple main test...
 int main(int argc, char** argv) {
-  if (argc != 2) {
+  if (argc != 2 && argc != 3) {
     std::cerr << "usage: interp <galaxy.txt path>" << std::endl;
-    std::cerr << "usage (repl): interp repl" << std::endl;
+    std::cerr << "usage (repl): interp repl <optional funcs.txt path>" << std::endl;
     return -1;
   }
 
   if (std::string(argv[1]) == "repl") {
-    Engine engine(1000, nullptr);
     std::cout << "Welcome to REPL mode!" << std::endl;
+
+    Engine engine(1000, nullptr);
+    if (argc == 3) {
+      std::cout << "Loading additional funcs from " << argv[2] << "..." << std::endl;
+      engine.LoadFuncs(argv[2]);
+    }
+
     while (true) {
       std::string line;
       std::cout << "> ";
