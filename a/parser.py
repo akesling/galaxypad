@@ -92,13 +92,6 @@ def parse(expression: str) -> Expr:
     return expr
 
 
-# def parse_vector(tokens: List[str]) -> Tuple[Expr, List[str]]:
-#     """ Special handling for vectors since they can get very deep """
-#     assert tokens[:3] == 'ap ap cons'.split(), repr(tokens)
-
-#     assert False, tokens
-
-
 def maybe_vector(expr: Expr) -> Expr:
     """ Try to compress a vector if possible """
     if isinstance(expr, Tree):
@@ -120,10 +113,6 @@ def maybe_vector(expr: Expr) -> Expr:
                 return expr  # Not a valid vector
             return Vector(lr_vector + right_vector)
     return expr
-
-    # left = tree.Left
-    # if not isinstance(left, Tree) or left.Left != cons:
-    #     return tree
 
 
 def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
@@ -148,7 +137,7 @@ def parse_file(filename: str) -> Dict[str, Expr]:
     return functions
 
 
-functions: Dict[str, Expr] = {}  # parse_file("galaxy.txt")
+functions: Dict[str, Expr] = parse_file("galaxy.txt")
 
 
 def evaluate(expr: Expr) -> Expr:
@@ -263,6 +252,10 @@ def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
 
 
 if __name__ == "__main__":
+    for k, v in functions.items():
+        if isinstance(v, Vector):
+            if not all(isinstance(i, int) for i in v.Elements):
+                print(k, v)
     # state: Expr = nil
     # vector: Vect = Vect(0, 0)
 
@@ -273,5 +266,4 @@ if __name__ == "__main__":
     #     PRINT_IMAGES(images)
     #     vector = REQUEST_CLICK_FROM_USER()
     #     state = newState
-    print(evaluate(parse("ap ap cons 0 nil")))
 
