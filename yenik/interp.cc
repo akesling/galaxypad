@@ -241,7 +241,9 @@ class Engine {
 		//SDL_RenderPresent(renderer);
   }
 
-  // Gets the Expr given a reference. Important abstraction to have 
+  // Gets the Expr given a reference. Important abstraction to have.
+  //
+  // IMPORTANT: the returned Expr& is invalidated by calls that allocate new (unrelated) Expr's. (e.g., Eval).
   const Expr& deref(ExprRef e) const {
     return exprs_[e];
   }
@@ -439,8 +441,8 @@ class Engine {
 
     if (IsAp(expr)) {
       Log() << "TryEval ref is Ap " << ref << std::endl;
-      const auto func_ref = Eval(expr.func);
       const auto x_ref = expr.arg;
+      const auto func_ref = Eval(expr.func);
 
       const auto& func = deref(func_ref);
       if (IsAtom(func)) {
