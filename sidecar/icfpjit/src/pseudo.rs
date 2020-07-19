@@ -10,14 +10,14 @@ use std::ptr;
 type ExprRef = Rc<RefCell<dyn Expr>>;
 trait Expr: Debug {
     fn name(&self) -> Option<&str>;
-    fn evaluated(&self) -> &Option<ExprRef>;
+    fn func(&self) -> Option<ExprRef>;
+    fn arg(&self) -> Option<ExprRef>;
+    fn evaluated(&self) -> Option<ExprRef>;
     fn set_evaluated(&mut self, ExprRef) -> Result<(), String>;
 }
 
 #[derive(Default, Debug)]
 struct Atom {
-    _evaluated: Option<ExprRef>,
-
     name: String,
 }
 
@@ -26,8 +26,16 @@ impl Expr for Atom {
         Some(&self.name)
     }
 
-    fn evaluated(&self) -> &Option<ExprRef> {
-        return &self._evaluated;
+    fn func(&self) -> Option<ExprRef> {
+        None
+    }
+
+    fn arg(&self) -> Option<ExprRef> {
+        None
+    }
+
+    fn evaluated(&self) -> Option<ExprRef> {
+        None
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -40,8 +48,16 @@ impl Expr for &Atom {
         Some(&self.name)
     }
 
-    fn evaluated(&self) -> &Option<ExprRef> {
-        return &self._evaluated;
+    fn func(&self) -> Option<ExprRef> {
+        None
+    }
+
+    fn arg(&self) -> Option<ExprRef> {
+        None
+    }
+
+    fn evaluated(&self) -> Option<ExprRef> {
+        None
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -49,12 +65,12 @@ impl Expr for &Atom {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct Ap {
     _evaluated: Option<ExprRef>,
 
-    func: Option<ExprRef>,
-    arg: Option<ExprRef>,
+    func: ExprRef,
+    arg: ExprRef,
 }
 
 impl Expr for Ap {
@@ -62,8 +78,16 @@ impl Expr for Ap {
         None
     }
 
-    fn evaluated(&self) -> &Option<ExprRef> {
-        return &self._evaluated;
+    fn func(&self) -> Option<ExprRef> {
+        Some(self.func.clone())
+    }
+
+    fn arg(&self) -> Option<ExprRef> {
+        Some(self.arg.clone())
+    }
+
+    fn evaluated(&self) -> Option<ExprRef> {
+        return self._evaluated.clone();
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -77,8 +101,16 @@ impl Expr for &Ap {
         None
     }
 
-    fn evaluated(&self) -> &Option<ExprRef> {
-        return &self._evaluated;
+    fn func(&self) -> Option<ExprRef> {
+        Some(self.func.clone())
+    }
+
+    fn arg(&self) -> Option<ExprRef> {
+        Some(self.arg.clone())
+    }
+
+    fn evaluated(&self) -> Option<ExprRef> {
+        return self._evaluated.clone();
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -101,13 +133,13 @@ fn parse_functions(script_string: &str) -> HashMap<String, ExprRef> {
 fn interact(state: ExprRef, event: ExprRef, functions: &HashMap<String, ExprRef>) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Rc::new(RefCell::new(Ap{
-        func: Some(Rc::new(RefCell::new(Ap{
-            func: Some(Rc::new(RefCell::new(Atom{name: "galaxy".to_owned(), ..Default::default()}))),
-            arg: Some(state.clone()),
-            ..Default::default()
-        }))),
-        arg: Some(event.clone()),
-        ..Default::default()
+        func: Rc::new(RefCell::new(Ap{
+            func: Rc::new(RefCell::new(Atom{name: "galaxy".to_owned(), ..Default::default()})),
+            arg: state.clone(),
+            _evaluated: None,
+        })),
+        arg: event.clone(),
+        _evaluated: None,
     }));
     let res: ExprRef = eval(expr, functions).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
@@ -164,10 +196,8 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
                 if let Some(function) = functions.get(name.to_owned()) {
                     return Ok(function.clone());
                 }
-            }
-            panic!("try_eval is not yet implemented");
-        //    if (expr is Ap)
-        //        Expr fun = eval(expr.Fun)
+            } else {
+                let func = eval(expr.clone(), functions);
         //        Expr x = expr.Arg
         //        if (fun is Atom)
         //            if (fun.Name == "neg") return Atom(-asNum(eval(x)))
@@ -197,8 +227,11 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
         //                    if (fun3.Name == "b") return Ap(z, Ap(y, x))
         //                    if (fun3.Name == "cons") return Ap(Ap(x, z), y)
         //    return expr
+            }
         }
     }
+
+    Ok(expr.clone())
 }
 
 fn print_images(points: ExprRef) {
@@ -210,10 +243,10 @@ fn request_click_from_user() -> Point {
 }
 
 fn main() {
-    let CONS: ExprRef = Rc::new(RefCell::new(Atom{name: "cons".to_owned(), _evaluated: None}));
-    let T: ExprRef = Rc::new(RefCell::new(Atom{name: "t".to_owned(), _evaluated: None}));
-    let F: ExprRef = Rc::new(RefCell::new(Atom{name: "f".to_owned(), _evaluated: None}));
-    let NIL: ExprRef = Rc::new(RefCell::new(Atom{name: "nil".to_owned(), _evaluated: None}));
+    let CONS: ExprRef = Rc::new(RefCell::new(Atom{name: "cons".to_owned()}));
+    let T: ExprRef = Rc::new(RefCell::new(Atom{name: "t".to_owned()}));
+    let F: ExprRef = Rc::new(RefCell::new(Atom{name: "f".to_owned()}));
+    let NIL: ExprRef = Rc::new(RefCell::new(Atom{name: "nil".to_owned()}));
 
     let functions = parse_functions("DUMMY VALUE");
 
@@ -223,13 +256,13 @@ fn main() {
 
     loop {
         let click = Rc::new(RefCell::new(Ap{
-            func: Some(Rc::new(RefCell::new(Ap{
-                func: Some(CONS.clone()),
-                arg: Some(Rc::new(RefCell::new(Atom {name: point.x.to_string(), ..Default::default()}))),
-                ..Default::default()
-            }))),
-            arg: Some(Rc::new(RefCell::new(Atom{name: point.y.to_string(), ..Default::default()}))),
-            ..Default::default()
+            func: Rc::new(RefCell::new(Ap{
+                func: CONS.clone(),
+                arg: Rc::new(RefCell::new(Atom {name: point.x.to_string(), ..Default::default()})),
+                _evaluated: None,
+            })),
+            arg: Rc::new(RefCell::new(Atom{name: point.y.to_string(), ..Default::default()})),
+            _evaluated: None,
         }));
         let (newState, images) = interact(state.clone(), click.clone(), &functions);
         print_images(images);
