@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::error::Error;
+use std::fmt::Debug;
 
 // See video course https://icfpcontest2020.github.io/#/post/2054
 
-trait Expr {
+trait Expr: Debug {
     fn evaluated(&self) -> &Option<Rc<dyn Expr>>;
+    fn set_evaluated(&mut self, Rc<dyn Expr>) -> Result<(), String>;
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Atom {
     _evaluated: Option<Rc<dyn Expr>>,
 
@@ -19,15 +21,23 @@ impl Expr for Atom {
     fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
         return &self._evaluated;
     }
+
+    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+        Err(format!("Attempted to set Atom to evaluated with value: {:?}", expr))
+    }
 }
 
 impl Expr for &Atom {
     fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
         return &self._evaluated;
     }
+
+    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+        Err(format!("Attempted to set Atom to evaluated with value: {:?}", expr))
+    }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Ap {
     _evaluated: Option<Rc<dyn Expr>>,
 
@@ -39,11 +49,22 @@ impl Expr for Ap {
     fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
         return &self._evaluated;
     }
+
+    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+        self._evaluated = Some(expr.clone());
+        Ok(())
+    }
 }
 
 impl Expr for &Ap {
     fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
         return &self._evaluated;
+    }
+
+    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+        let mut evaluated = &self._evaluated;
+        evaluated = &Some(expr.clone());
+        Ok(())
     }
 }
 
@@ -93,8 +114,30 @@ fn get_list_items_from_expr(expr: Rc<dyn Expr>) -> Result<Vec<Rc<dyn Expr>>, Str
     panic!("Eval is not yet implemented");
 }
 
-fn eval(expr: Rc<dyn Expr>) -> Option<Rc<dyn Expr>> {
+fn eval(expr: Rc<dyn Expr>) -> Result<Rc<dyn Expr>, String> {
     panic!("Eval is not yet implemented");
+
+    match expr.evaluated() {
+        Some(expr) => {
+            panic!("Eval is not yet implemented");
+        },
+        None => {
+            let mut current_expr = expr;
+            loop {
+                let result = try_eval(current_expr)?;
+                if &*current_expr as *const Expr == &*current_expr as *const Expr {
+                    current_expr.set_evaluated(result.clone())?;
+                    return Ok(result);
+                } else {
+                    current_expr = result.clone();
+                }
+            }
+        }
+    }
+}
+
+fn try_eval(expr: Rc<dyn Expr>) -> Result<Rc<dyn Expr>, String> {
+    panic!("try_eval is not yet implemented");
 }
 
 fn print_images(points: Rc<dyn Expr>) {
@@ -118,7 +161,7 @@ fn main() {
     let mut point = Point{ x: 0, y: 0};
 
     loop {
-        let mut click = Rc::new(Ap{
+        let click = Rc::new(Ap{
             func: Some(Rc::new(Ap{
                 func: Some(CONS.clone()),
                 arg: Some(Rc::new(Atom {name: point.x.to_string(), ..Default::default()})),
@@ -132,18 +175,6 @@ fn main() {
         point = request_click_from_user();
         state = newState;
     }
-
-// 
-// Expr eval(Expr expr)
-//     if (expr.Evaluated != null)
-//         return expr.Evaluated
-//     Expr initialExpr = expr
-//     while (true)
-//         Expr result = tryEval(expr)
-//         if (result == expr)
-//             initialExpr.Evaluated = result
-//             return result
-//         expr = result
 // 
 // Expr tryEval(Expr expr)
 //     if (expr.Evaluated != null)
