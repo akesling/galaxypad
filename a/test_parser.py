@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
-from parser import Tree, Value, Expr, parse, parse_file, Vect
+from parser import Tree, Value, Expr, parse, parse_file, vector, unvector, unparse
 
 
 # class TestClasses(unittest.TestCase):
@@ -34,15 +34,18 @@ class TestParser(unittest.TestCase):
         parse_file("galaxy.txt")
 
 
-# class TestVector(unittest.TestCase):
-#     def test_parse(self):
-#         for s, v in [
-#             ("ap ap cons 0 nil", [0]),
-#             ("ap ap cons 1 ap ap cons 0 nil", [1, 0]),
-#             ("ap ap cons ap ap cons 0 nil nil", [[0]]),
-#             ("ap ap cons 1 ap ap cons ap ap cons 0 nil nil", [1, [0]]),
-#         ]:
-#             self.assertEqual(parse(s), Vector(v))
+class TestVector(unittest.TestCase):
+    def test_parse(self):
+        for s, v in [
+            ("ap ap cons 0 1", [0, 1]),
+            ("ap ap cons 0 nil", [0, []]),
+            ("ap ap cons 1 ap ap cons 0 nil", [1, [0, []]]),
+            ("ap ap cons ap ap cons 0 nil nil", [[0, []], []]),
+            ("ap ap cons 1 ap ap cons ap ap cons 0 nil nil", [1, [[0, []], []]]),
+        ]:
+            self.assertEqual(parse(s), unvector(v))
+            self.assertEqual(v, vector(unvector(v)))
+            self.assertEqual(s, unparse(parse(s)))
 
 
 if __name__ == "__main__":

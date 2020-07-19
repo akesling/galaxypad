@@ -62,19 +62,51 @@ def asNum(n: Expr) -> int:
     raise ValueError(f"not a number {n}")
 
 
-nil: Expr = Value(Name="nil")
+nil: Expr = Value("nil")
 
 
-class Vect(NamedTuple):
-    """ X, Y coordinate """
-
-    X: int
-    Y: int
+cons: Expr = Value("cons")
+t: Expr = Value("t")
+f: Expr = Value("f")
 
 
-cons: Expr = Value(Name="cons")
-t: Expr = Value(Name="t")
-f: Expr = Value(Name="f")
+def vector(expr: Expr) -> List[Union[List, int]]:
+    """ Vector notation """
+    if isinstance(expr, Tree):
+        tok: List[Union[List, int]] = unparse(expr).split()  # type: ignore
+        again = True
+        while again and len(tok) >= 5:
+            again = False
+            for i in range(len(tok) - 4):
+                a, b, c, d, e = tok[i : i + 5]
+                if (
+                    (a, b, c) == ("ap", "ap", "cons")
+                    and d not in ("ap", "cons")
+                    and e not in ("ap", "cons")
+                ):
+                    e = e if isinstance(e, list) else [] if e == "nil" else int(e)
+                    d = d if isinstance(d, list) else [] if d == "nil" else int(d)
+                    tok = tok[:i] + [[d, e]] + tok[i + 5 :]
+                    again = True
+                    break
+        (result,) = tok  # Everything is always wrapped in an outer list
+        return result  # type: ignore
+    raise ValueError(f"Cannot vectorize {type(expr)} {expr}")
+
+
+def unvector(lst: Union[List, int]) -> Expr:
+    """ Undo a vector into a tree """
+    # Todo: make iterative
+    if lst == []:
+        return Value("nil")
+    if isinstance(lst, int):
+        return Value(str(lst))
+    if isinstance(lst, list):
+        assert len(lst) == 2, lst
+        x = unvector(lst[0])
+        y = unvector(lst[1])
+        return Tree(Tree(Value("cons"), x), y)
+    raise ValueError(f"Can't unvector type {type(lst)} {lst}")
 
 
 def unparse(expr: Expr) -> str:
@@ -92,7 +124,7 @@ def parse(orig: Union[str, List[str]]) -> Expr:
     expr: Optional[Expr] = None  # Contains the object to return at the end
     while tokens:
         token, *tokens = tokens
-        expr = Tree() if token == "ap" else Value(Name=token)
+        expr = Tree() if token == "ap" else Value(token)
         if stack:
             if stack[-1].Left is None:
                 stack[-1].Left = expr
@@ -120,105 +152,110 @@ def parse(orig: Union[str, List[str]]) -> Expr:
 def parse_file(filename: str) -> Dict[str, Expr]:
     """ Parse a file into a map of names to expressions """
     functions = {}
-    for line in open(filename).readlines():
-        name, _, *tokens = line.strip().split()
-        functions[name] = parse(tokens)
+    with open(filename) as f:
+        for line in f.readlines():
+            name, _, *tokens = line.strip().split()
+            functions[name] = parse(tokens)
     return functions
 
 
 functions: Dict[str, Expr] = parse_file("galaxy.txt")
 
 
-def evaluate(expr: Expr) -> Expr:
-    """ Evaluate a node in the tree """
-    if expr.Evaluated is not None:
-        return expr.Evaluated
-    initialExpr: Expr = expr
-    while True:
-        result: Expr = tryEval(expr)
-        if result == expr:
-            initialExpr.Evaluated = result
-            return result
-        expr = result
+def evaluate(orig: Expr) -> Expr:
+    """ Fully evaluate an expression and return it """
+    current, again = orig, True
+    while again:
+        current, again = tryEval(current)
+    orig.Evaluated = current
+    return current
 
 
-def tryEval(expr: Expr) -> Expr:
-    """ Try to perform a computation or reduction on the tree """
-    if expr.Evaluated is not None:
-        return expr.Evaluated
-    if (
-        isinstance(expr, Value)
-        and isinstance(expr.Name, str)
-        and expr.Name in functions
-    ):
-        return functions[expr.Name]
+def tryEval(expr: Expr) -> Tuple[Expr, bool]:
+    """ Try to perform a computation, return result and success """
+    assert isinstance(expr, (Value, Tree)), expr
+    if expr.Evaluated:
+        return expr.Evaluated, False
+    if isinstance(expr, Value) and expr.Name in functions:
+        return functions[expr.Name], True
     if isinstance(expr, Tree):
-        assert expr.Left is not None, expr
-        assert expr.Right is not None, expr
+        assert isinstance(expr.Left, (Value, Tree)), expr
+        assert isinstance(expr.Right, (Value, Tree)), expr
         left: Expr = evaluate(expr.Left)
         x: Expr = expr.Right
         if isinstance(left, Value):
             if left.Name == "neg":
-                return Value(Name=str(-asNum(evaluate(x))))
+                return Value(str(-asNum(evaluate(x)))), True
             if left.Name == "i":
-                return x
+                return x, True
             if left.Name == "nil":
-                return t
+                return t, True
             if left.Name == "isnil":
-                return Tree(x, Tree(t, Tree(t, f)))
+                return Tree(x, Tree(t, Tree(t, f))), True
             if left.Name == "car":
-                # if isinstance(x, Vector):
-                #     return x.car()
-                return Tree(x, t)
+                return Tree(x, t), True
             if left.Name == "cdr":
-                # if isinstance(x, Vector):
-                #     return x.cdr()
-                return Tree(x, f)
+                return Tree(x, f), True
         if isinstance(left, Tree):
-            assert left.Left is not None, left
-            assert left.Right is not None, left
+            assert isinstance(left.Left, (Value, Tree)), left
+            assert isinstance(left.Right, (Value, Tree)), left
             left2: Expr = evaluate(left.Left)
             y: Expr = left.Right
             if isinstance(left2, Value):
                 if left2.Name == "t":
-                    return y
+                    return y, True
                 if left2.Name == "f":
-                    return x
+                    return x, True
                 if left2.Name == "add":
-                    return Value(Name=str(asNum(evaluate(x)) + asNum(evaluate(y))))
+                    return (
+                        Value(str(asNum(evaluate(x)) + asNum(evaluate(y)))),
+                        True,
+                    )
                 if left2.Name == "mul":
-                    return Value(Name=str(asNum(evaluate(x)) * asNum(evaluate(y))))
+                    return (
+                        Value(str(asNum(evaluate(x)) * asNum(evaluate(y)))),
+                        True,
+                    )
                 if left2.Name == "div":
                     a, b = asNum(evaluate(y)), asNum(evaluate(x))
-                    return Value(Name=str(a // b if a * b > 0 else (a + (-a % b)) // b))
+                    return (
+                        Value(str(a // b if a * b > 0 else (a + (-a % b)) // b)),
+                        True,
+                    )
                 if left2.Name == "lt":
-                    return t if asNum(evaluate(y)) < asNum(evaluate(x)) else f
+                    return (
+                        (t, True)
+                        if asNum(evaluate(y)) < asNum(evaluate(x))
+                        else (f, True)
+                    )
                 if left2.Name == "eq":
-                    return t if asNum(evaluate(y)) == asNum(evaluate(x)) else f
+                    return (
+                        (t, True)
+                        if asNum(evaluate(y)) == asNum(evaluate(x))
+                        else (f, True)
+                    )
                 if left2.Name == "cons":
-                    return evalCons(y, x)
+                    return evalCons(y, x), True
             if isinstance(left2, Tree):
-                assert left2.Left is not None, left2
-                assert left2.Right is not None, left2
+                assert isinstance(left2.Left, (Value, Tree)), left2
+                assert isinstance(left2.Right, (Value, Tree)), left2
                 left3: Expr = evaluate(left2.Left)
                 z: Expr = left2.Right
                 if isinstance(left3, Value):
                     if left3.Name == "s":
-                        return Tree(Tree(z, x), Tree(y, x))
+                        return Tree(Tree(z, x), Tree(y, x)), True
                     if left3.Name == "c":
-                        return Tree(Tree(z, x), y)
+                        return Tree(Tree(z, x), y), True
                     if left3.Name == "b":
-                        return Tree(z, Tree(y, x))
+                        return Tree(z, Tree(y, x)), True
                     if left3.Name == "cons":
-                        # return maybe_vector(Tree(Tree(x, z), y))
-                        return Tree(Tree(x, z), y)
-    return expr
+                        return Tree(Tree(x, z), y), True
+    return expr, False
 
 
 def evalCons(a: Expr, b: Expr) -> Expr:
     """ Evaluate a pair """
     res: Expr = Tree(Tree(cons, evaluate(a)), evaluate(b))
-    # res = maybe_vector(res)
     res.Evaluated = res
     return res
 
@@ -228,7 +265,7 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     """ Interact with the game """
     expr: Expr = Tree(Tree(Value("galaxy"), state), event)
     res: Expr = evaluate(expr)
-    # Note: res will be modulatable here (consists of cons, nil and numbers only)
+    assert unparse(res) == unparse(unvector(vector(res))), f"Not vectorable {unparse(res)}"
     flag, newState, data = GET_LIST_ITEMS_FROM_EXPR(res)
     if asNum(flag) == 0:
         return (newState, data)
@@ -241,8 +278,9 @@ def PRINT_IMAGES(images: Expr) -> None:
     print("Printed images")
 
 
-def REQUEST_CLICK_FROM_USER() -> Vect:
-    return Vect(0, 0)
+def REQUEST_CLICK_FROM_USER() -> Expr:
+    x, y = 0, 0
+    return Tree(Tree(cons, Value(str(x))), Value(str(y)))
 
 
 def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
@@ -250,19 +288,21 @@ def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
 
 
 def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
-    assert False
+    flag, (newState, (data, v)) = vector(res)  # type: ignore
+    assert isinstance(flag, int), f"bad flag {flag}"
+    assert v == [], f"Failed to parse res correctly {res} {v}"
+    return Value(str(flag)), unvector(newState), unvector(data)
 
 
 if __name__ == "__main__":
     state: Expr = nil
-    vector: Vect = Vect(0, 0)
 
     # main loop
     for _ in range(1):  # while True:
-        click: Expr = Tree(Tree(cons, Value(Name=str(vector.X))), Value(Name=str(vector.Y)))
+        click: Expr = unvector([0, 0])
         newState, images = interact(state, click)
         PRINT_IMAGES(images)
-        vector = REQUEST_CLICK_FROM_USER()
+        click = REQUEST_CLICK_FROM_USER()
         state = newState
     # s = "ap ap cons 7 ap ap cons 123 nil"
     # for expr in parse(s).nlr():
@@ -275,3 +315,16 @@ if __name__ == "__main__":
     # # print(unparse(b))
     # for k in f1.keys():
     #     assert f1[k] == f2[k], k
+    # print(vector(parse("ap ap cons 7 ap ap cons 123 nil")))
+    # print(vector(parse("ap ap cons ap ap cons 0 nil nil")))
+    # print(vector(parse("ap ap cons ap ap cons ap ap cons 0 nil nil nil")))
+    # print(
+    #     vector(
+    #         parse(
+    #             "ap ap cons ap ap cons ap ap cons 0 nil nil ap ap cons ap ap cons 1 nil nil"
+    #         )
+    #     )
+    # )
+    # print(vector(parse("ap ap cons 0 ap ap cons 1 nil")))
+    # print(vector(parse("ap ap cons ap ap cons 0 nil ap ap cons 1 nil")))
+    print(vector(parse('ap ap cons 0 nil')))
