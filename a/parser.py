@@ -62,6 +62,9 @@ class Tree(Expr):
         self.Right = Right
 
 
+nil: Expr = Value("nil")
+
+
 class Vector(Expr):
     Elements: List[Union[List, int]]
 
@@ -69,6 +72,20 @@ class Vector(Expr):
         super().__init__(*args, **kwargs)
         assert isinstance(Elements, list), repr(Elements)
         self.Elements = Elements
+
+    def car(self) -> Expr:
+        head = self.Elements[0]
+        if isinstance(head, int):
+            return Value(head)
+        if isinstance(head, list) and len(head):
+            return Vector(head)
+        raise ValueError(f"bad head {head}")
+
+    def cdr(self) -> Expr:
+        tail = self.Elements[1:]
+        if len(tail):
+            return Vector(tail)
+        return nil
 
 
 class Vect(NamedTuple):
@@ -82,7 +99,6 @@ class Vect(NamedTuple):
 cons: Expr = Value("cons")
 t: Expr = Value("t")
 f: Expr = Value("f")
-nil: Expr = Value("nil")
 
 
 def parse(expression: str) -> Expr:
@@ -176,8 +192,12 @@ def tryEval(expr: Expr) -> Expr:
             if left.Name == "isnil":
                 return Tree(x, Tree(t, Tree(t, f)))
             if left.Name == "car":
+                if isinstance(x, Vector):
+                    return Vector.car()
                 return Tree(x, t)
             if left.Name == "cdr":
+                if isinstance(x, Vector):
+                    return Vector.cdr()
                 return Tree(x, f)
         if isinstance(left, Tree):
             left2: Expr = evaluate(left.Left)
@@ -211,13 +231,14 @@ def tryEval(expr: Expr) -> Expr:
                     if left3.Name == "b":
                         return Tree(z, Tree(y, x))
                     if left3.Name == "cons":
-                        return Tree(Tree(x, z), y)
+                        return maybe_vector(Tree(Tree(x, z), y))
     return expr
 
 
 def evalCons(a: Expr, b: Expr) -> Expr:
     """ Evaluate a pair """
     res: Expr = Tree(Tree(cons, evaluate(a)), evaluate(b))
+    res = maybe_vector(res)
     res.Evaluated = res
     return res
 
@@ -252,18 +273,14 @@ def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
 
 
 if __name__ == "__main__":
-    for k, v in functions.items():
-        if isinstance(v, Vector):
-            if not all(isinstance(i, int) for i in v.Elements):
-                print(k, v)
-    # state: Expr = nil
-    # vector: Vect = Vect(0, 0)
+    state: Expr = nil
+    vector: Vect = Vect(0, 0)
 
-    # # main loop
-    # for _ in range(10):  # while True:
-    #     click: Expr = Tree(Tree(cons, Value(vector.X)), Value(vector.Y))
-    #     newState, images = interact(state, click)
-    #     PRINT_IMAGES(images)
-    #     vector = REQUEST_CLICK_FROM_USER()
-    #     state = newState
+    # main loop
+    for _ in range(10):  # while True:
+        click: Expr = Tree(Tree(cons, Value(vector.X)), Value(vector.Y))
+        newState, images = interact(state, click)
+        PRINT_IMAGES(images)
+        vector = REQUEST_CLICK_FROM_USER()
+        state = newState
 
