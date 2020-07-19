@@ -77,8 +77,11 @@ def pd_draw(pd: PlaceDict) -> bool:
 
 def pd_multidraw(pd: PlaceDict) -> bool:
     if 0 in pd:
-        pd[1] = unvector(renderer.multidraw(vector(pd[0])))
-        return True
+        try:
+            pd[1] = unvector(renderer.multidraw(vector(pd[0])))
+            return True
+        except (ValueError, AssertionError):
+            return False
     return False
 
 

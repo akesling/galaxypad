@@ -6,39 +6,6 @@ from typing import NamedTuple, Union, Optional, Callable, Dict, List, Tuple
 
 from renderer import DrawState
 
-INT_REGEX = re.compile(r"(-?\d+)")
-VAR_REGEX = re.compile(r"x(\d+)")
-PROC_REGEX = re.compile(r":(\d+)")
-KNOWN_TOKENS = [
-    "add",
-    "inc",
-    "dec",
-    "i",
-    "t",
-    "f",
-    "mul",
-    "div",
-    "eq",
-    "lt",
-    "neg",
-    "s",
-    "c",
-    "b",
-    "pwr2",
-    "cons",
-    "car",
-    "cdr",
-    "nil",
-    "isnil",
-    "vec",
-    "if0",
-    "send",
-    "draw",
-    "multipledraw",
-    "checkerboard",
-    "modem",
-]
-
 
 class Value(NamedTuple):
     """ Leaf in the tree """
