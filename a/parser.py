@@ -225,7 +225,11 @@ def tryEval(expr: Expr) -> Expr:
                 if left2.Name == "lt":
                     return t if asNum(evaluate(y)) < asNum(evaluate(x)) else f
                 if left2.Name == "eq":
-                    return t if asNum(evaluate(x)) == asNum(evaluate(y)) else f
+                    ex = evaluate(x)
+                    ey = evaluate(y)
+                    nx = asNum(ex)
+                    ny = asNum(ey)
+                    return t if nx == ny else f
                 if left2.Name == "cons":
                     return evalCons(y, x)
             if isinstance(left2, Tree):
@@ -277,7 +281,7 @@ def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
 
 
 def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
-    return Value("0"), Expr(), Expr()
+    assert False
 
 
 if __name__ == "__main__":
@@ -285,7 +289,7 @@ if __name__ == "__main__":
     vector: Vect = Vect(0, 0)
 
     # main loop
-    for _ in range(10):  # while True:
+    for _ in range(1):  # while True:
         click: Expr = Tree(Tree(cons, Value(vector.X)), Value(vector.Y))
         newState, images = interact(state, click)
         PRINT_IMAGES(images)
