@@ -81,7 +81,8 @@ def pd_draw(pd: PlaceDict) -> bool:
 
 def pd_multidraw(pd: PlaceDict) -> bool:
     if 0 in pd:
-        pd[1] = unvector(renderer.multidraw(vector(pd[0])))
+        reduced = compute_fully(pd[0])
+        pd[1] = unvector(renderer.multidraw(vector(reduced)))
         return True
     return False
 
@@ -116,7 +117,7 @@ REWRITES = (
             "ap isnil ap ap cons x0 x1 = f",  # Is Not Empty List
             "vec = cons",  # Vector (Alias)
             "if0 = ap eq 0",  # If equal to zero
-            "ap ap f38 x2 x0 = ap ap ap if0 ap car x0 ap ap cons ap modem ap car ap cdr x0 ap ap cons ap multipledraw ap car ap cdr ap cdr x0 nil ap ap ap interact x2 ap modem ap car ap cdr x0 ap send ap car ap cdr ap cdr x0",
+            "ap ap f38 x2 x0 = ap ap ap if0 ap car x0 ap ap cons ap i ap car ap cdr x0 ap ap cons ap multipledraw ap car ap cdr ap cdr x0 nil ap ap ap interact x2 ap i ap car ap cdr x0 ap send ap car ap cdr ap cdr x0",
             "ap ap ap interact x2 x4 x3 = ap ap f38 x2 ap ap x2 x4 x3",
             "statelessdraw = ap ap c ap ap b b ap ap b ap b ap cons 0 ap ap c ap ap b b cons ap ap c cons nil ap ap c ap ap b cons ap ap c cons nil nil",
         ]

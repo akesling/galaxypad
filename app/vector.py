@@ -3,6 +3,8 @@
 from typing import Union, List
 from tree import Treeish, Value, Tree, pair
 
+from renderer import DrawState
+
 Vector = Union[List, int]
 
 
@@ -12,6 +14,8 @@ def vector(treeish: Treeish) -> Vector:
         if treeish == Value("nil"):
             return []
         if isinstance(treeish.value, int):
+            return treeish.value
+        if isinstance(treeish.value, DrawState):
             return treeish.value
         raise ValueError(f"Can't vector value {treeish}")
     if isinstance(treeish, Tree):
@@ -33,6 +37,8 @@ def vector(treeish: Treeish) -> Vector:
 def unvector(vec: Vector) -> Treeish:
     """ Helper to get a tree version of a vector """
     if isinstance(vec, int):
+        return Value(vec)
+    if isinstance(vec, DrawState):
         return Value(vec)
     if vec == []:
         return Value("nil")
