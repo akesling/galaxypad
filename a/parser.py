@@ -8,16 +8,13 @@ class Expr:
     Evaluated: Optional["Expr"]
 
     def __init__(self, Evaluated: Optional["Expr"] = None):
-        assert Evaluated is None or isinstance(Evaluated, self.__class__), repr(
-            Evaluated
-        )
+        assert Evaluated is None or isinstance(Evaluated, Expr), repr(Evaluated)
         self.Evaluated = Evaluated
-
 
     def __repr__(self):
         fields = ",".join(f"{k}={repr(v)}" for k, v in sorted(vars(self).items()))
         return f"{self.__class__.__name__}({fields})"
-    
+
     def __eq__(self, other):
         return type(self) == type(other) and vars(self) == vars(other)
 
@@ -29,7 +26,6 @@ class Atom(Expr):
         super().__init__(*args, **kwargs)
         assert isinstance(Name, str), repr(Name)
         self.Name = Name
-
 
 
 class Ap(Expr):
@@ -71,22 +67,6 @@ def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
 if __name__ == "__main__":
     print(Expr())
     print(Ap(Expr(), Expr()))
-    print(Atom("hello"))
+    print(Expr(Ap(Expr(), Expr(), Expr())))
+    print(Atom("hello", Atom('hi')))
     print(Ap(Fun=Expr(Evaluated=None), Arg=Expr(Evaluated=None), Evaluated=None))
-
-
-# @dataclass
-# class Expr:
-#     Evaluated: Optional['Expr'] = None
-
-# @dataclass
-# class Atom(Expr):
-#     Name: str = 'invalid'
-
-# @dataclass
-# class Ap:
-#     Fun: 'Expr'
-#     Arg: 'Expr'
-#     Evaluated: Optional['Expr'] = None
-
-# Expr = Union[Atom, Ap]

@@ -10,11 +10,17 @@ class TestClasses(unittest.TestCase):
             Expr(),
             Atom("0"),
             Atom("nil"),
-            Expr(Expr()),
-            Expr(Expr(Atom("1"))),
             Ap(Expr(), Atom("2")),
             Expr(Ap(Atom("3"), Expr())),
             Ap(Ap(Atom("4"), Atom("5")), Expr()),
+            # With Evalutated
+            Expr(Expr()),
+            Expr(Expr(Atom("1"))),
+            Atom("0", Expr()),
+            Atom("nil", Atom('nil')),
+            Ap(Expr(), Atom("2"), Atom('2')),
+            Expr(Ap(Atom("3"), Expr(), Expr())),
+            Ap(Ap(Atom("4"), Atom("5")), Expr(), Expr()),
         ]:
             self.assertEqual(eval(repr(e)), e)
 
