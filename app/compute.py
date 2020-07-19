@@ -62,6 +62,12 @@ def send(pd: PlaceDict) -> bool:
     return True
 
 
+def modem(pd: PlaceDict) -> bool:
+    if 0 in pd:
+        pd[1] = demodulate(modulate(pd[0]))
+    return False
+
+
 def pd_draw(pd: PlaceDict) -> bool:
     if 0 in pd:
         pd[1] = renderer.draw(vector(pd[0]))
@@ -136,6 +142,7 @@ REWRITES = (
     ]
     + [
         Rewrite.from_str("ap send x0 = x1", send),
+        Rewrite.from_str("ap modem x0 = x1", modem),
         Rewrite.from_str("ap draw x0 = x1", pd_draw),
         Rewrite.from_str("ap multipledraw x0 = x1", pd_multidraw),
     ]

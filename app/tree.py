@@ -36,6 +36,7 @@ KNOWN_TOKENS = [
     "draw",
     "multipledraw",
     "checkerboard",
+    "modem",
 ]
 
 

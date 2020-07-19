@@ -11,6 +11,7 @@ from vector import unvector
 INT_REGEX = re.compile(r"(-?\d+)")
 VAR_REGEX = re.compile(r"x(\d+)")
 PROC_REGEX = re.compile(r":(\d+)")
+# VECT_MATCH = re.compile(r"[^(]")
 # VECTOR_MATCH = re.compile(r"\s*(ap\s+ap\s+cons\s+\d+\s+)+nil\s*")
 # VECTOR_PARSE = re.compile(r"\s*ap\s+ap\s+cons\s+(\d+)\s+")
 KNOWN_TOKENS = [
@@ -40,6 +41,7 @@ KNOWN_TOKENS = [
     "checkerboard",
     "draw",
     "multipledraw",
+    "modem",
 ]
 
 
