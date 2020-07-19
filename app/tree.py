@@ -10,7 +10,7 @@ from renderer import DrawState
 class Value(NamedTuple):
     """ Leaf in the tree """
 
-    value: Union[int, str]
+    value: Union[int, str, DrawState]
 
 
 class Placeholder(NamedTuple):
