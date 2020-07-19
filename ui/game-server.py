@@ -5,21 +5,21 @@ from flask import Flask, send_from_directory, render_template
 from flask_socketio import SocketIO, join_room, emit
 # from flask_cors import CORS
 
-from game import Game
+from game_wrapper import ExampleGame
 
 # initialize Flask
 app = Flask(__name__, static_folder='/solution/ui/frontend/build')
 # CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
-ROOMS: Dict[str, Game] = {}  # dict to track active rooms
+ROOMS: Dict[str, ExampleGame] = {}  # dict to track active rooms
 
 # Websocket message types
 GAME_STATE = "GameState"
 
 # Add game backends here
 REGISTERED_BACKENDS = {
-    "Default": Game,
-    "Joe": Game,
+    "Default": ExampleGame,
+    ExampleGame.name(): ExampleGame,
 }
 
 @app.route('/', defaults={'path': ''})
