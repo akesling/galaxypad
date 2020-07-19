@@ -230,17 +230,42 @@ fn try_eval(
                             return Ok(Rc::new(RefCell::new(Atom {
                                 name: (-as_num(eval(x, functions, constants)?)).to_string(),
                             })));
-                        }
+                        },
                         "i" => {
                             return Ok(x);
-                        }
-                        //                    if (fun.Name == "nil") return t
-                        //                        "nil" {
-                        //                            return Ok(t);
-                        //                        }
-                        //                    if (fun.Name == "isnil") return Ap(x, Ap(t, Ap(t, f)))
-                        //                    if (fun.Name == "car") return Ap(x, t)
-                        //                    if (fun.Name == "cdr") return Ap(x, f)
+                        },
+                        "nil" => {
+                            return Ok(constants.get("t").unwrap().clone());
+                        },
+                        "isnil" => {
+                            return Ok(Rc::new(RefCell::new(Ap{
+                                func: x,
+                                arg: Rc::new(RefCell::new(Ap{
+                                    func: constants.get("t").unwrap().clone(),
+                                    arg: Rc::new(RefCell::new(Ap{
+                                        func: constants.get("t").unwrap().clone(),
+                                        arg: constants.get("f").unwrap().clone(),
+                                        _evaluated: None,
+                                    })),
+                                    _evaluated: None,
+                                })),
+                                _evaluated: None,
+                            })));
+                        },
+                        "car" => {
+                            return Ok(Rc::new(RefCell::new(Ap{
+                                func: x,
+                                arg: constants.get("t").unwrap().clone(),
+                                _evaluated: None,
+                            })));
+                        },
+                        "car" => {
+                            return Ok(Rc::new(RefCell::new(Ap{
+                                func: x,
+                                arg: constants.get("f").unwrap().clone(),
+                                _evaluated: None,
+                            })));
+                        },
                         _ => (),
                     }
                 }
