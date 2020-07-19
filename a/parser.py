@@ -237,7 +237,8 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
 
 # Stubs
 def PRINT_IMAGES(images: Expr) -> None:
-    pass
+    print(unparse(images))
+    print("Printed images")
 
 
 def REQUEST_CLICK_FROM_USER() -> Vect:
@@ -253,24 +254,24 @@ def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
 
 
 if __name__ == "__main__":
-    # state: Expr = nil
-    # vector: Vect = Vect(0, 0)
+    state: Expr = nil
+    vector: Vect = Vect(0, 0)
 
-    # # main loop
-    # for _ in range(1):  # while True:
-    #     click: Expr = Tree(Tree(cons, Value(Name=str(vector.X))), Value(Name=str(vector.Y)))
-    #     newState, images = interact(state, click)
-    #     PRINT_IMAGES(images)
-    #     vector = REQUEST_CLICK_FROM_USER()
-    #     state = newState
-    s = "ap ap cons 7 ap ap cons 123 nil"
-    for expr in parse(s).nlr():
-        print(unparse(expr))
-    assert parse(s) == parse(s)
-    # print(parse('ap ap cons ap ap cons 0 ap ap cons ap ap :1162 14 ap neg 64 ap ap cons :1043 ap ap cons :1059 ap ap cons ap neg 1 nil ap ap cons ap ap cons 1 ap ap cons ap ap :1162 ap neg 4 94 ap ap cons :1044 ap ap cons :1060 ap ap cons 2 nil ap ap cons ap ap cons 2 ap ap cons ap ap :1162 ap neg 78 ap neg 67 ap ap cons :1045 ap ap cons :1061 ap ap cons 1 nil ap ap cons ap ap cons 3 ap ap cons ap ap :1162 ap neg 38 ap neg 46 ap ap cons :1046 ap ap cons :1062 ap ap cons ap neg 1 nil ap ap cons ap ap cons 4 ap ap cons ap ap :1162 44 ap neg 34 ap ap cons :1047 ap ap cons :1063 ap ap cons ap neg 1 nil ap ap cons ap ap cons 5 ap ap cons ap ap :1162 60 ap neg 30 ap ap cons :1048 ap ap cons :1064 ap ap cons 3 nil ap ap cons ap ap cons 6 ap ap cons ap ap :1162 ap neg 81 11 ap ap cons :1049 ap ap cons :1065 ap ap cons 0 nil ap ap cons ap ap cons 7 ap ap cons ap ap :1162 ap neg 49 34 ap ap cons :1050 ap ap cons :1066 ap ap cons ap neg 1 nil ap ap cons ap ap cons 8 ap ap cons ap ap :1162 52 27 ap ap cons :1051 ap ap cons :1067 ap ap cons ap neg 1 nil ap ap cons ap ap cons 9 ap ap cons ap ap :1162 99 15 ap ap cons :1052 ap ap cons :1068 ap ap cons ap neg 1 nil ap ap cons ap ap cons 10 ap ap cons ap ap :1162 96 35 ap ap cons :1053 ap ap cons :1069 ap ap cons ap neg 1 nil nil'))
-    f1 = parse_file("galaxy.txt")
-    f2 = parse_file("galaxy.txt")
-    # b = f1[':1029']
-    # print(unparse(b))
-    for k in f1.keys():
-        assert f1[k] == f2[k], k
+    # main loop
+    for _ in range(1):  # while True:
+        click: Expr = Tree(Tree(cons, Value(Name=str(vector.X))), Value(Name=str(vector.Y)))
+        newState, images = interact(state, click)
+        PRINT_IMAGES(images)
+        vector = REQUEST_CLICK_FROM_USER()
+        state = newState
+    # s = "ap ap cons 7 ap ap cons 123 nil"
+    # for expr in parse(s).nlr():
+    #     print(unparse(expr))
+    # assert parse(s) == parse(s)
+    # # print(parse('ap ap cons ap ap cons 0 ap ap cons ap ap :1162 14 ap neg 64 ap ap cons :1043 ap ap cons :1059 ap ap cons ap neg 1 nil ap ap cons ap ap cons 1 ap ap cons ap ap :1162 ap neg 4 94 ap ap cons :1044 ap ap cons :1060 ap ap cons 2 nil ap ap cons ap ap cons 2 ap ap cons ap ap :1162 ap neg 78 ap neg 67 ap ap cons :1045 ap ap cons :1061 ap ap cons 1 nil ap ap cons ap ap cons 3 ap ap cons ap ap :1162 ap neg 38 ap neg 46 ap ap cons :1046 ap ap cons :1062 ap ap cons ap neg 1 nil ap ap cons ap ap cons 4 ap ap cons ap ap :1162 44 ap neg 34 ap ap cons :1047 ap ap cons :1063 ap ap cons ap neg 1 nil ap ap cons ap ap cons 5 ap ap cons ap ap :1162 60 ap neg 30 ap ap cons :1048 ap ap cons :1064 ap ap cons 3 nil ap ap cons ap ap cons 6 ap ap cons ap ap :1162 ap neg 81 11 ap ap cons :1049 ap ap cons :1065 ap ap cons 0 nil ap ap cons ap ap cons 7 ap ap cons ap ap :1162 ap neg 49 34 ap ap cons :1050 ap ap cons :1066 ap ap cons ap neg 1 nil ap ap cons ap ap cons 8 ap ap cons ap ap :1162 52 27 ap ap cons :1051 ap ap cons :1067 ap ap cons ap neg 1 nil ap ap cons ap ap cons 9 ap ap cons ap ap :1162 99 15 ap ap cons :1052 ap ap cons :1068 ap ap cons ap neg 1 nil ap ap cons ap ap cons 10 ap ap cons ap ap :1162 96 35 ap ap cons :1053 ap ap cons :1069 ap ap cons ap neg 1 nil nil'))
+    # f1 = parse_file("galaxy.txt")
+    # f2 = parse_file("galaxy.txt")
+    # # b = f1[':1029']
+    # # print(unparse(b))
+    # for k in f1.keys():
+    #     assert f1[k] == f2[k], k
