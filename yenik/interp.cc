@@ -342,6 +342,7 @@ class Engine {
   ExprRef Eval(ExprRef ref) {
     auto& expr = deref(ref);
     if (expr.evaluated != noexpr) {
+      std::cout << "Eval cached ref " << ref << std::endl;
       return expr.evaluated;
     }
 
@@ -361,15 +362,19 @@ class Engine {
   ExprRef TryEval(ExprRef ref) {
     const auto& expr = deref(ref);
     if (expr.evaluated != noexpr) {
+      std::cout << "TryEval cached ref " << ref << std::endl;
       return expr.evaluated;
     }
 
+    std::cout << "TryEval func test " << expr.name << std::endl;
     if (IsAtom(expr) && funcs_.count(expr.name) != 0) {
+      std::cout << "TryEval ref is func " << ref << std::endl;
       return funcs_[expr.name];
     }
 
     if (IsAp(expr)) {
-      const auto func_ref = expr.func;
+      std::cout << "TryEval ref is Ap " << ref << std::endl;
+      const auto func_ref = Eval(expr.func);
       const auto x_ref = expr.arg;
 
       const auto& func = deref(func_ref);
@@ -395,7 +400,8 @@ class Engine {
       }
       if (IsAp(func)) {
         const ExprRef y_ref = func.arg;
-        const ExprRef func2_ref = Eval(func_ref);
+        //const ExprRef func2_ref = Eval(func_ref);
+        const ExprRef func2_ref = Eval(func.func);
         const Expr& func2 = deref(func2_ref);
         if (IsAtom(func2)) {
           if (func2.name == "t") {
@@ -425,7 +431,7 @@ class Engine {
         }
         if (IsAp(func2)) {
           const ExprRef z_ref = func2.arg;
-          const ExprRef func3_ref = func2.func;
+          const ExprRef func3_ref = Eval(func2.func);
           const Expr& func3 = deref(func3_ref);
           if (IsAtom(func3)) {
             if (func3.name == "s") {
@@ -445,6 +451,7 @@ class Engine {
       }
     }
 
+    std::cout << "hmmm" << std::endl;
     return ref;
   }
 
