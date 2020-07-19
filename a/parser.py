@@ -201,11 +201,11 @@ def tryEval(expr: Expr) -> Expr:
                 return Tree(x, Tree(t, Tree(t, f)))
             if left.Name == "car":
                 if isinstance(x, Vector):
-                    return Vector.car()
+                    return x.car()
                 return Tree(x, t)
             if left.Name == "cdr":
                 if isinstance(x, Vector):
-                    return Vector.cdr()
+                    return x.cdr()
                 return Tree(x, f)
         if isinstance(left, Tree):
             left2: Expr = evaluate(left.Left)
