@@ -1,27 +1,17 @@
 #!/usr/bin/env python
 
 import unittest
-from parser import Ap, Atom, Expr, parse, parse_file, Vect
+from parser import Tree, Value, Expr, parse, parse_file, Vect, Vector
 
 
 class TestClasses(unittest.TestCase):
     def test_repr(self):
         for e in [
             Expr(),
-            Atom("0"),
-            Atom("nil"),
-            Ap(Expr(), Atom("2")),
-            Expr(Ap(Atom("3"), Expr())),
-            Ap(Ap(Atom("4"), Atom("5")), Expr()),
-            # With Evalutated
-            Expr(Expr()),
-            Expr(Expr(Atom("1"))),
-            Atom("0", Expr()),
-            Atom("nil", Atom('nil')),
-            Ap(Expr(), Atom("2"), Atom('2')),
-            Expr(Ap(Atom("3"), Expr(), Expr())),
-            Ap(Ap(Atom("4"), Atom("5")), Expr(), Expr()),
-            # Vect
+            Value("0"),
+            Value("nil"),
+            Tree(Expr(), Value("2")),
+            Tree(Tree(Value("4"), Value("5")), Expr()),
             Vect(0, 0),
             Vect(1, 2),
         ]:
@@ -31,15 +21,30 @@ class TestClasses(unittest.TestCase):
 class TestParser(unittest.TestCase):
     def test_parse(self):
         for s, e in [
-            ("1", Atom("1")),
-            ("nil", Atom("nil")),
-            ("ap inc 1", Ap(Atom("inc"), Atom("1"))),
-            ("ap ap add 1 2", Ap(Ap(Atom("add"), Atom("1")), Atom("2"))),
+            ("1", Value("1")),
+            ("nil", Value("nil")),
+            ("ap inc 1", Tree(Value("inc"), Value("1"))),
+            ("ap ap add 1 2", Tree(Tree(Value("add"), Value("1")), Value("2"))),
+            ("ap ap cons 0 nil", Vector([0])),
+            ("ap ap cons 1 ap ap cons 2 nil", Vector([1, 2])),
         ]:
             self.assertEqual(parse(s), e)
 
     def test_parse_galaxy(self):
         parse_file('galaxy.txt')
+
+
+class TestVector(unittest.TestCase):
+    def test_parse(self):
+        for s, v in [
+            ("ap ap cons 0 nil", [0]),
+            ("ap ap cons 1 ap ap cons 0 nil", [1, 0]),
+            ("ap ap cons ap ap cons 0 nil nil", [[0]]),
+            ("ap ap cons 1 ap ap cons ap ap cons 0 nil nil", [1, [0]]),
+        ]:
+            self.assertEqual(parse(s), Vector(v))
+
+
 
 
 if __name__ == "__main__":

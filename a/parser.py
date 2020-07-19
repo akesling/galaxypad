@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
+sys.setrecursionlimit(10000)
 INT_REGEX = re.compile(r"(-?\d+)")
 
 
@@ -17,7 +18,9 @@ class Expr:
         self.Evaluated = Evaluated
 
     def __repr__(self):
-        fields = ",".join(f"{k}={repr(v)}" for k, v in sorted(vars(self).items()))
+        fields = ",".join(
+            f"{k}={repr(v)}" for k, v in vars(self).items() if k is not "Evaluated"
+        )
         return f"{self.__class__.__name__}({fields})"
 
     def __eq__(self, other):
@@ -38,9 +41,10 @@ class Value(Expr):
         return isinstance(self.Name, int) or INT_REGEX.fullmatch(self.Name) is not None
 
 
-def is_int_value(expr: Expr) -> bool:
-    """ Helper to check if expr is an int value """
-    return isinstance(expr, Value) and expr.is_int()
+def asNum(n: Expr) -> int:
+    if isinstance(n, Value):
+        return int(n.Name)
+    raise ValueError(f"not a number {n}")
 
 
 class Tree(Expr):
@@ -51,13 +55,20 @@ class Tree(Expr):
 
     def __init__(self, Left: Expr, Right: Expr, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert isinstance(Left, Expr) and isinstance(Right, Expr), repr(Left) + repr(Right)
+        assert isinstance(Left, Expr) and isinstance(Right, Expr), repr(Left) + repr(
+            Right
+        )
         self.Left = Left
         self.Right = Right
 
 
 class Vector(Expr):
-    elements: List[Union[List, int]]
+    Elements: List[Union[List, int]]
+
+    def __init__(self, Elements: List[Union[List, int]], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assert isinstance(Elements, list), repr(Elements)
+        self.Elements = Elements
 
 
 class Vect(NamedTuple):
@@ -88,16 +99,31 @@ def parse(expression: str) -> Expr:
 #     assert False, tokens
 
 
-def vector_or_tree(expr: Expr) -> Expr:
-    """ Try to compress a tree """
-    if isinstance(expr, Value):
-        return expr
+def maybe_vector(expr: Expr) -> Expr:
+    """ Try to compress a vector if possible """
     if isinstance(expr, Tree):
-        left = tree.Left
+        left = expr.Left
+        if isinstance(left, Tree) and left.Left == cons:  # Possible vector
+            lr = maybe_vector(left.Right)
+            right = maybe_vector(expr.Right)
+            if right == nil:
+                right_vector: List[Union[List, int]] = []  # Vector end
+            elif isinstance(right, Vector):
+                right_vector = right.Elements  # Nested
+            else:
+                return expr  # Not a valid vector
+            if isinstance(lr, Value) and lr.is_int():
+                lr_vector: List[Union[List, int]] = [asNum(lr)]  # Base case
+            elif isinstance(lr, Vector):
+                lr_vector = [lr.Elements]  # Appending
+            else:
+                return expr  # Not a valid vector
+            return Vector(lr_vector + right_vector)
+    return expr
+
     # left = tree.Left
     # if not isinstance(left, Tree) or left.Left != cons:
     #     return tree
-    
 
 
 def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
@@ -106,11 +132,8 @@ def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
     if token == "ap":
         left, tokens = parse_tokens(tokens)
         right, tokens = parse_tokens(tokens)
-        # Special case Vectors
-        if isinstance(left, Tree) and left.Left == cons:
-            print('left')
-            assert False, left
-        return Tree(Left=left, Right=right), tokens
+        expr = Tree(Left=left, Right=right)
+        return maybe_vector(expr), tokens
     return Value(token), tokens
 
 
@@ -125,7 +148,7 @@ def parse_file(filename: str) -> Dict[str, Expr]:
     return functions
 
 
-functions: Dict[str, Expr] = parse_file("galaxy.txt")
+functions: Dict[str, Expr] = {}  # parse_file("galaxy.txt")
 
 
 def evaluate(expr: Expr) -> Expr:
@@ -145,7 +168,11 @@ def tryEval(expr: Expr) -> Expr:
     """ Try to perform a computation or reduction on the tree """
     if expr.Evaluated is not None:
         return expr.Evaluated
-    if isinstance(expr, Value) and isinstance(expr.Name, str) and expr.Name in functions:
+    if (
+        isinstance(expr, Value)
+        and isinstance(expr.Name, str)
+        and expr.Name in functions
+    ):
         return functions[expr.Name]
     if isinstance(expr, Tree):
         left: Expr = evaluate(expr.Left)
@@ -206,12 +233,6 @@ def evalCons(a: Expr, b: Expr) -> Expr:
     return res
 
 
-def asNum(n: Expr) -> int:
-    if isinstance(n, Value):
-        return int(n.Name)
-    raise ValueError(f"not a number {n}")
-
-
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
 def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     """ Interact with the game """
@@ -242,13 +263,15 @@ def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
 
 
 if __name__ == "__main__":
-    state: Expr = nil
-    vector: Vect = Vect(0, 0)
+    # state: Expr = nil
+    # vector: Vect = Vect(0, 0)
 
-    # main loop
-    for _ in range(10):  # while True:
-        click: Expr = Tree(Tree(cons, Value(vector.X)), Value(vector.Y))
-        newState, images = interact(state, click)
-        PRINT_IMAGES(images)
-        vector = REQUEST_CLICK_FROM_USER()
-        state = newState
+    # # main loop
+    # for _ in range(10):  # while True:
+    #     click: Expr = Tree(Tree(cons, Value(vector.X)), Value(vector.Y))
+    #     newState, images = interact(state, click)
+    #     PRINT_IMAGES(images)
+    #     vector = REQUEST_CLICK_FROM_USER()
+    #     state = newState
+    print(evaluate(parse("ap ap cons 0 nil")))
+
