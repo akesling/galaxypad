@@ -21,7 +21,7 @@ class TestClasses(unittest.TestCase):
             Ap(Expr(), Atom("2"), Atom('2')),
             Expr(Ap(Atom("3"), Expr(), Expr())),
             Ap(Ap(Atom("4"), Atom("5")), Expr(), Expr()),
-            # Vector
+            # Vect
             Vect(0, 0),
             Vect(1, 2),
         ]:

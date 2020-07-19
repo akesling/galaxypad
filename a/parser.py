@@ -1,9 +1,10 @@
 #!/usr/bin/env python
+import re
 import sys
 from dataclasses import dataclass
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple
 
-sys.setrecursionlimit(10000)
+INT_REGEX = re.compile(r"(-?\d+)")
 
 
 class Expr:
@@ -23,7 +24,7 @@ class Expr:
         return type(self) == type(other) and vars(self) == vars(other)
 
 
-class Atom(Expr):
+class Value(Expr):
     """ Atoms are the leaves of our tree """
 
     Name: Union[str, int]
@@ -33,18 +34,30 @@ class Atom(Expr):
         assert isinstance(Name, (str, int)), repr(Name)
         self.Name = Name
 
+    def is_int(self):
+        return isinstance(self.Name, int) or INT_REGEX.fullmatch(self.Name) is not None
 
-class Ap(Expr):
+
+def is_int_value(expr: Expr) -> bool:
+    """ Helper to check if expr is an int value """
+    return isinstance(expr, Value) and expr.is_int()
+
+
+class Tree(Expr):
     """ Applications (of a function) are the non-leaf nodes of our tree """
 
-    Fun: Expr
-    Arg: Expr
+    Left: Expr
+    Right: Expr
 
-    def __init__(self, Fun: Expr, Arg: Expr, *args, **kwargs):
+    def __init__(self, Left: Expr, Right: Expr, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert isinstance(Fun, Expr) and isinstance(Arg, Expr), repr(Fun) + repr(Arg)
-        self.Fun = Fun
-        self.Arg = Arg
+        assert isinstance(Left, Expr) and isinstance(Right, Expr), repr(Left) + repr(Right)
+        self.Left = Left
+        self.Right = Right
+
+
+class Vector(Expr):
+    elements: List[Union[List, int]]
 
 
 class Vect(NamedTuple):
@@ -54,6 +67,13 @@ class Vect(NamedTuple):
     Y: int
 
 
+# VECTOR_DETECTOR = re.compile(r"((ap\s+ap\s+cons|\d+|nil)\s+)+nil")
+cons: Expr = Value("cons")
+t: Expr = Value("t")
+f: Expr = Value("f")
+nil: Expr = Value("nil")
+
+
 def parse(expression: str) -> Expr:
     """ Parse a complete expression """
     expr, tokens = parse_tokens(expression.strip().split())
@@ -61,14 +81,37 @@ def parse(expression: str) -> Expr:
     return expr
 
 
+# def parse_vector(tokens: List[str]) -> Tuple[Expr, List[str]]:
+#     """ Special handling for vectors since they can get very deep """
+#     assert tokens[:3] == 'ap ap cons'.split(), repr(tokens)
+
+#     assert False, tokens
+
+
+def vector_or_tree(expr: Expr) -> Expr:
+    """ Try to compress a tree """
+    if isinstance(expr, Value):
+        return expr
+    if isinstance(expr, Tree):
+        left = tree.Left
+    # left = tree.Left
+    # if not isinstance(left, Tree) or left.Left != cons:
+    #     return tree
+    
+
+
 def parse_tokens(tokens: List[str]) -> Tuple[Expr, List[str]]:
     """ Parse and return a complete expression, and leftover tokens """
     token, *tokens = tokens
     if token == "ap":
-        fun, tokens = parse_tokens(tokens)
-        arg, tokens = parse_tokens(tokens)
-        return Ap(Fun=fun, Arg=arg), tokens
-    return Atom(token), tokens
+        left, tokens = parse_tokens(tokens)
+        right, tokens = parse_tokens(tokens)
+        # Special case Vectors
+        if isinstance(left, Tree) and left.Left == cons:
+            print('left')
+            assert False, left
+        return Tree(Left=left, Right=right), tokens
+    return Value(token), tokens
 
 
 def parse_file(filename: str) -> Dict[str, Expr]:
@@ -81,11 +124,6 @@ def parse_file(filename: str) -> Dict[str, Expr]:
         functions[name] = expr
     return functions
 
-
-cons: Expr = Atom("cons")
-t: Expr = Atom("t")
-f: Expr = Atom("f")
-nil: Expr = Atom("nil")
 
 functions: Dict[str, Expr] = parse_file("galaxy.txt")
 
@@ -107,69 +145,69 @@ def tryEval(expr: Expr) -> Expr:
     """ Try to perform a computation or reduction on the tree """
     if expr.Evaluated is not None:
         return expr.Evaluated
-    if isinstance(expr, Atom) and isinstance(expr.Name, str) and expr.Name in functions:
+    if isinstance(expr, Value) and isinstance(expr.Name, str) and expr.Name in functions:
         return functions[expr.Name]
-    if isinstance(expr, Ap):
-        fun: Expr = evaluate(expr.Fun)
-        x: Expr = expr.Arg
-        if isinstance(fun, Atom):
-            if fun.Name == "neg":
-                return Atom(-asNum(evaluate(x)))
-            if fun.Name == "i":
+    if isinstance(expr, Tree):
+        left: Expr = evaluate(expr.Left)
+        x: Expr = expr.Right
+        if isinstance(left, Value):
+            if left.Name == "neg":
+                return Value(-asNum(evaluate(x)))
+            if left.Name == "i":
                 return x
-            if fun.Name == "nil":
+            if left.Name == "nil":
                 return t
-            if fun.Name == "isnil":
-                return Ap(x, Ap(t, Ap(t, f)))
-            if fun.Name == "car":
-                return Ap(x, t)
-            if fun.Name == "cdr":
-                return Ap(x, f)
-        if isinstance(fun, Ap):
-            fun2: Expr = evaluate(fun.Fun)
-            y: Expr = fun.Arg
-            if isinstance(fun2, Atom):
-                if fun2.Name == "t":
+            if left.Name == "isnil":
+                return Tree(x, Tree(t, Tree(t, f)))
+            if left.Name == "car":
+                return Tree(x, t)
+            if left.Name == "cdr":
+                return Tree(x, f)
+        if isinstance(left, Tree):
+            left2: Expr = evaluate(left.Left)
+            y: Expr = left.Right
+            if isinstance(left2, Value):
+                if left2.Name == "t":
                     return y
-                if fun2.Name == "f":
+                if left2.Name == "f":
                     return x
-                if fun2.Name == "add":
-                    return Atom(asNum(evaluate(x)) + asNum(evaluate(y)))
-                if fun2.Name == "mul":
-                    return Atom(asNum(evaluate(x)) * asNum(evaluate(y)))
-                if fun2.Name == "div":
+                if left2.Name == "add":
+                    return Value(asNum(evaluate(x)) + asNum(evaluate(y)))
+                if left2.Name == "mul":
+                    return Value(asNum(evaluate(x)) * asNum(evaluate(y)))
+                if left2.Name == "div":
                     a, b = asNum(evaluate(y)), asNum(evaluate(x))
-                    return Atom(a // b if a * b > 0 else (a + (-a % b)) // b)
-                if fun2.Name == "lt":
+                    return Value(a // b if a * b > 0 else (a + (-a % b)) // b)
+                if left2.Name == "lt":
                     return t if asNum(evaluate(y)) < asNum(evaluate(x)) else f
-                if fun2.Name == "eq":
+                if left2.Name == "eq":
                     return t if asNum(evaluate(x)) == asNum(evaluate(y)) else f
-                if fun2.Name == "cons":
+                if left2.Name == "cons":
                     return evalCons(y, x)
-            if isinstance(fun2, Ap):
-                fun3: Expr = evaluate(fun2.Fun)
-                z: Expr = fun2.Arg
-                if isinstance(fun3, Atom):
-                    if fun3.Name == "s":
-                        return Ap(Ap(z, x), Ap(y, x))
-                    if fun3.Name == "c":
-                        return Ap(Ap(z, x), y)
-                    if fun3.Name == "b":
-                        return Ap(z, Ap(y, x))
-                    if fun3.Name == "cons":
-                        return Ap(Ap(x, z), y)
+            if isinstance(left2, Tree):
+                left3: Expr = evaluate(left2.Left)
+                z: Expr = left2.Right
+                if isinstance(left3, Value):
+                    if left3.Name == "s":
+                        return Tree(Tree(z, x), Tree(y, x))
+                    if left3.Name == "c":
+                        return Tree(Tree(z, x), y)
+                    if left3.Name == "b":
+                        return Tree(z, Tree(y, x))
+                    if left3.Name == "cons":
+                        return Tree(Tree(x, z), y)
     return expr
 
 
 def evalCons(a: Expr, b: Expr) -> Expr:
     """ Evaluate a pair """
-    res: Expr = Ap(Ap(cons, evaluate(a)), evaluate(b))
+    res: Expr = Tree(Tree(cons, evaluate(a)), evaluate(b))
     res.Evaluated = res
     return res
 
 
 def asNum(n: Expr) -> int:
-    if isinstance(n, Atom):
+    if isinstance(n, Value):
         return int(n.Name)
     raise ValueError(f"not a number {n}")
 
@@ -177,7 +215,7 @@ def asNum(n: Expr) -> int:
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
 def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     """ Interact with the game """
-    expr: Expr = Ap(Ap(Atom("galaxy"), state), event)
+    expr: Expr = Tree(Tree(Value("galaxy"), state), event)
     res: Expr = evaluate(expr)
     # Note: res will be modulatable here (consists of cons, nil and numbers only)
     flag, newState, data = GET_LIST_ITEMS_FROM_EXPR(res)
@@ -199,18 +237,17 @@ def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
     return data
 
 
-def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Atom, Expr, Expr]:
-    return Atom("0"), Expr(), Expr()
+def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
+    return Value("0"), Expr(), Expr()
 
 
 if __name__ == "__main__":
     state: Expr = nil
     vector: Vect = Vect(0, 0)
 
-
     # main loop
     for _ in range(10):  # while True:
-        click: Expr = Ap(Ap(cons, Atom(vector.X)), Atom(vector.Y))
+        click: Expr = Tree(Tree(cons, Value(vector.X)), Value(vector.Y))
         newState, images = interact(state, click)
         PRINT_IMAGES(images)
         vector = REQUEST_CLICK_FROM_USER()
