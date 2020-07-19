@@ -80,8 +80,10 @@ def tryEval(expr: Treeish) -> Treeish:
     # Handle the non tree types
     if expr is None:
         return None
-    if isinstance(expr, (Value, Procedure)):
+    if isinstance(expr, Value):
         return expr
+    if isinstance(expr, Procedure):
+        return Procedure
     if not isinstance(expr, Tree):
         raise ValueError(f"tryEval {expr} type {type(expr)}")
     # Handle tree types
