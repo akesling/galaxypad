@@ -8,6 +8,7 @@ authors = ["Alex Kesling <alex@kesling.co>"]
 python = "^3.7"
 requests = "^2.24.0"
 sidecar = {path = "sidecar/artifacts/wheels/sidecar-0.2.0-cp37-cp37m-macosx_10_7_x86_64.whl", platform = "darwin"}
+numpy = "^1.19.0"
 
 [tool.poetry.dev-dependencies]
 
