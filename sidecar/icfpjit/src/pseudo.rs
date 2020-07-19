@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::error::Error;
 
 // See video course https://icfpcontest2020.github.io/#/post/2054
 
@@ -47,7 +48,7 @@ impl Expr for &Ap {
 }
 
 #[derive(Default)]
-struct Vector {
+struct Point {
     x: u64,
     y: u64,
 }
@@ -57,14 +58,50 @@ fn parse_functions(script_string: &str) -> HashMap<String, Rc<dyn Expr>> {
 }
 
 fn interact(state: Rc<dyn Expr>, event: Rc<dyn Expr>) -> (Rc<dyn Expr>, Rc<dyn Expr>) {
-    panic!("Interact is not yet implemented");
+    // See https://message-from-space.readthedocs.io/en/latest/message38.html
+    let expr: Rc<dyn Expr> = Rc::new(Ap{
+        func: Some(Rc::new(Ap{
+            func: Some(Rc::new(Atom{name: "galaxy".to_owned(), ..Default::default()})),
+            arg: Some(state.clone()),
+            ..Default::default()
+        })),
+        arg: Some(event.clone()),
+        ..Default::default()
+    });
+    let res: Rc<dyn Expr> = eval(expr).unwrap();
+    // Note: res will be modulatable here (consists of cons, nil and numbers only)
+    let items = get_list_items_from_expr(res).unwrap();
+    if items.len() < 3 {
+        panic!("List was of unexpected length {}, expected 3 items", items.len());
+    }
+    let (flag, newState, data) = (items[0].clone(), items[1].clone(), items[2].clone());
+    if (as_num(flag) == 0) {
+        return (newState, data)
+    }
+    return interact(newState, send_to_alien_proxy(data))
+}
+
+fn send_to_alien_proxy(expr: Rc<dyn Expr>) -> Rc<dyn Expr> {
+    panic!("send_to_alien_proxy is not yet implemented");
+}
+
+fn as_num(expr: Rc<dyn Expr>) -> i64 {
+    panic!("as_num is not yet implemented");
+}
+
+fn get_list_items_from_expr(expr: Rc<dyn Expr>) -> Result<Vec<Rc<dyn Expr>>, String> {
+    panic!("Eval is not yet implemented");
+}
+
+fn eval(expr: Rc<dyn Expr>) -> Option<Rc<dyn Expr>> {
+    panic!("Eval is not yet implemented");
 }
 
 fn print_images(points: Rc<dyn Expr>) {
     panic!("print_images is not yet implemented");
 }
 
-fn request_click_from_user() -> Vector {
+fn request_click_from_user() -> Point {
     panic!("request_click_from_user is not yet implemented");
 }
 
@@ -78,33 +115,24 @@ fn main() {
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
     let mut state: Rc<dyn Expr> = NIL;
-    let mut vector = Vector{ x: 0, y: 0};
+    let mut point = Point{ x: 0, y: 0};
 
     loop {
         let mut click = Rc::new(Ap{
             func: Some(Rc::new(Ap{
                 func: Some(CONS.clone()),
-                arg: Some(Rc::new(Atom {name: vector.x.to_string(), ..Default::default()})),
+                arg: Some(Rc::new(Atom {name: point.x.to_string(), ..Default::default()})),
                 ..Default::default()
             })),
-            arg: Some(Rc::new(Atom{name: vector.y.to_string(), ..Default::default()})),
+            arg: Some(Rc::new(Atom{name: point.y.to_string(), ..Default::default()})),
             ..Default::default()
         });
         let (newState, images) = interact(state.clone(), click);
         print_images(images);
-        vector = request_click_from_user();
+        point = request_click_from_user();
         state = newState;
     }
 
-// // See https://message-from-space.readthedocs.io/en/latest/message38.html
-// (Expr, Expr) interact(Expr state, Expr event)
-//     Expr expr = Ap(Ap(Atom("galaxy"), state), event)
-//     Expr res = eval(expr)
-//     // Note: res will be modulatable here (consists of cons, nil and numbers only)
-//     var [flag, newState, data] = GET_LIST_ITEMS_FROM_EXPR(res)
-//     if (asNum(flag) == 0)
-//         return (newState, data)
-//     return interact(newState, SEND_TO_ALIEN_PROXY(data))
 // 
 // Expr eval(Expr expr)
 //     if (expr.Evaluated != null)
