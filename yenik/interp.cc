@@ -18,7 +18,9 @@
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 800
 
-const int kPixScale = 8;
+const int kPixScale = 4;
+const int kYOffset = WINDOW_HEIGHT/kPixScale/2 + 50;
+const int kXOffset = WINDOW_WIDTH/kPixScale/2;
 
 // We can enable and disable debug traces using a null stream.
 class NullBuffer : public std::streambuf {
@@ -31,13 +33,16 @@ std::ostream null_stream(&null_buffer);
 
 constexpr int kLogLevel = 0;
 
-std::ostream& Log(int level) {
+std::ostream& LogStream(int level) {
   return (level <= kLogLevel) ? std::cout : null_stream;
 }
 
-std::ostream& Log() {
-  return Log(3);
+std::ostream& LogStream() {
+  return LogStream(3);
 }
+
+#define GOTTA_GO_FAST 1
+#define Log(__x) if (GOTTA_GO_FAST == 0) LogStream(__x)
 
 // Routines to trim leading and trailing spaces taken from SO, they should
 // really have these in the std lib...
@@ -157,12 +162,20 @@ inline bool IsAp(const Expr& e) {
 // This helper converts an Atom to an Int. If it's not an Atom that can be
 // represented as an int it DESTROYS EVERYTHING.
 inline long AsNum(const Expr& e) {
-  if (!IsInteger(e.name)) {
-    panic("tried to nummify " + e.name);
+  if (IsInteger(e.name)) {
+    char* p;
+    return strtol(e.name.c_str(), &p, 10);
   }
 
- char* p;
- return strtol(e.name.c_str(), &p, 10);
+  if (e.name == "t") {
+    return 1;
+  }
+  if (e.name == "f") {
+    return 0;
+  }
+
+  panic("cannot nummify " + e.name);
+  return 0;
 }
 
 // This Vec is used to hold mouse clicks in the pseudocode, we might not need
@@ -579,7 +592,7 @@ class Engine {
   }
 
   void RenderPix(Vec v) {
-    Vec offset = {v.x + WINDOW_WIDTH/kPixScale/2, v.y + WINDOW_HEIGHT/kPixScale/2};
+    Vec offset = {v.x + kXOffset, v.y + kYOffset};
     for (int i = 0; i < kPixScale; ++i) {
       for (int j = 0; j < kPixScale; ++j) {
         SDL_RenderDrawPoint(renderer_, offset.x*kPixScale + i, offset.y*kPixScale + j);
@@ -643,8 +656,8 @@ class Engine {
         case SDL_MOUSEBUTTONDOWN:
           if (e.button.button == SDL_BUTTON_LEFT) {
             std::cout << "CLEEK " << e.button.x << " " << e.button.y << std::endl;
-            v->x = e.button.x/kPixScale - WINDOW_WIDTH/kPixScale/2;
-            v->y = e.button.y/kPixScale - WINDOW_HEIGHT/kPixScale/2;
+            v->x = e.button.x/kPixScale - kXOffset;
+            v->y = e.button.y/kPixScale - kYOffset;
             return false;
           }
           break;
