@@ -12,6 +12,21 @@
 #include <cctype>
 #include <locale>
 
+// We can enable and disable debug traces using a null stream.
+class NullBuffer : public std::streambuf {
+ public:
+  int overflow(int c) { return c; }
+};
+
+NullBuffer null_buffer;
+std::ostream null_stream(&null_buffer);
+
+constexpr bool LogEnabled = false;
+
+std::ostream& Log() {
+  return LogEnabled ? std::cout : null_stream;
+}
+
 // Routines to trim leading and trailing spaces taken from SO, they should
 // really have these in the std lib...
 //
@@ -336,13 +351,14 @@ class Engine {
       std::cout << func.first << " = " << ExprToString(func.second) << std::endl;
     }
     std::cout << "galaxy" << " = " << ExprToString(funcs_[std::string("galaxy")]) << std::endl;
+    std::cout << ":1338" << " = " << ExprToString(funcs_[std::string(":1338")]) << std::endl;
   }
 
   // Eval loop from pseudocode
   ExprRef Eval(ExprRef ref) {
     auto& expr = deref(ref);
     if (expr.evaluated != noexpr) {
-      std::cout << "Eval cached ref " << ref << std::endl;
+      Log() << "Eval cached ref " << ref << std::endl;
       return expr.evaluated;
     }
 
@@ -362,18 +378,18 @@ class Engine {
   ExprRef TryEval(ExprRef ref) {
     const auto& expr = deref(ref);
     if (expr.evaluated != noexpr) {
-      std::cout << "TryEval cached ref " << ref << std::endl;
+      Log() << "TryEval cached ref " << ref << std::endl;
       return expr.evaluated;
     }
 
-    std::cout << "TryEval func test " << expr.name << std::endl;
+    Log() << "TryEval func test " << expr.name << std::endl;
     if (IsAtom(expr) && funcs_.count(expr.name) != 0) {
-      std::cout << "TryEval ref is func " << ref << std::endl;
+      Log() << "TryEval ref is func " << ref << std::endl;
       return funcs_[expr.name];
     }
 
     if (IsAp(expr)) {
-      std::cout << "TryEval ref is Ap " << ref << std::endl;
+      Log() << "TryEval ref is Ap " << ref << std::endl;
       const auto func_ref = Eval(expr.func);
       const auto x_ref = expr.arg;
 
@@ -417,10 +433,10 @@ class Engine {
             return Atom(AsNum(Eval(x_ref)) * AsNum(Eval(y_ref)));
           }
           if (func2.name == "div") {
-            return Atom(AsNum(Eval(x_ref)) / AsNum(Eval(y_ref)));
+            return Atom(AsNum(Eval(y_ref)) / AsNum(Eval(x_ref)));
           }
           if (func2.name == "lt") {
-            return AsNum(Eval(x_ref)) < AsNum(Eval(y_ref)) ? t_ : f_;
+            return AsNum(Eval(y_ref)) < AsNum(Eval(x_ref)) ? t_ : f_;
           }
           if (func2.name == "eq") {
             return AsNum(Eval(x_ref)) == AsNum(Eval(y_ref)) ? t_ : f_;
@@ -441,7 +457,7 @@ class Engine {
               return Ap(Ap(z_ref, x_ref), y_ref);
             }
             if (func3.name == "b") {
-              return Ap(Ap(x_ref, z_ref), y_ref);
+              return Ap(z_ref, Ap(y_ref, x_ref));
             }
             if (func3.name == "cons") {
               return Ap(Ap(x_ref, z_ref), y_ref);
@@ -451,7 +467,7 @@ class Engine {
       }
     }
 
-    std::cout << "hmmm" << std::endl;
+    Log() << "hmmm" << std::endl;
     return ref;
   }
 
@@ -516,6 +532,8 @@ class Engine {
     return res;
   }
 
+  size_t num_exprs() const { return exprs_.size(); }
+
  private:
   ExprRef cons_;
   ExprRef t_;
@@ -544,6 +562,7 @@ int main(int argc, char** argv) {
 
   // TEST AYY LMAO
   auto res = engine.TestOneStep();
-  std::cout << "RESULT:" << std::endl << engine.ExprToString(res) << std::endl;
+  std::cout << "RESULT: " << std::endl << engine.ExprToString(res) << std::endl;
+  std::cout << "NUM EXPRS: " << std::endl << engine.num_exprs() << std::endl;
   return 0;
 }
