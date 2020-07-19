@@ -1,67 +1,70 @@
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::Debug;
+use std::ptr;
 
 // See video course https://icfpcontest2020.github.io/#/post/2054
 
+type ExprRef = Rc<RefCell<dyn Expr>>;
 trait Expr: Debug {
-    fn evaluated(&self) -> &Option<Rc<dyn Expr>>;
-    fn set_evaluated(&mut self, Rc<dyn Expr>) -> Result<(), String>;
+    fn evaluated(&self) -> &Option<ExprRef>;
+    fn set_evaluated(&mut self, ExprRef) -> Result<(), String>;
 }
 
 #[derive(Default, Debug)]
 struct Atom {
-    _evaluated: Option<Rc<dyn Expr>>,
+    _evaluated: Option<ExprRef>,
 
     name: String,
 }
 
 impl Expr for Atom {
-    fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
+    fn evaluated(&self) -> &Option<ExprRef> {
         return &self._evaluated;
     }
 
-    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         Err(format!("Attempted to set Atom to evaluated with value: {:?}", expr))
     }
 }
 
 impl Expr for &Atom {
-    fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
+    fn evaluated(&self) -> &Option<ExprRef> {
         return &self._evaluated;
     }
 
-    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         Err(format!("Attempted to set Atom to evaluated with value: {:?}", expr))
     }
 }
 
 #[derive(Default, Debug)]
 struct Ap {
-    _evaluated: Option<Rc<dyn Expr>>,
+    _evaluated: Option<ExprRef>,
 
-    func: Option<Rc<dyn Expr>>,
-    arg: Option<Rc<dyn Expr>>,
+    func: Option<ExprRef>,
+    arg: Option<ExprRef>,
 }
 
 impl Expr for Ap {
-    fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
+    fn evaluated(&self) -> &Option<ExprRef> {
         return &self._evaluated;
     }
 
-    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         self._evaluated = Some(expr.clone());
         Ok(())
     }
 }
 
 impl Expr for &Ap {
-    fn evaluated(&self) -> &Option<Rc<dyn Expr>> {
+    fn evaluated(&self) -> &Option<ExprRef> {
         return &self._evaluated;
     }
 
-    fn set_evaluated(&mut self, expr: Rc<dyn Expr>) -> Result<(), String> {
+    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         let mut evaluated = &self._evaluated;
         evaluated = &Some(expr.clone());
         Ok(())
@@ -74,22 +77,22 @@ struct Point {
     y: u64,
 }
 
-fn parse_functions(script_string: &str) -> HashMap<String, Rc<dyn Expr>> {
+fn parse_functions(script_string: &str) -> HashMap<String, ExprRef> {
     panic!("Parse functions is not yet implemented");
 }
 
-fn interact(state: Rc<dyn Expr>, event: Rc<dyn Expr>) -> (Rc<dyn Expr>, Rc<dyn Expr>) {
+fn interact(state: ExprRef, event: ExprRef) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: Rc<dyn Expr> = Rc::new(Ap{
-        func: Some(Rc::new(Ap{
-            func: Some(Rc::new(Atom{name: "galaxy".to_owned(), ..Default::default()})),
+    let expr: ExprRef = Rc::new(RefCell::new(Ap{
+        func: Some(Rc::new(RefCell::new(Ap{
+            func: Some(Rc::new(RefCell::new(Atom{name: "galaxy".to_owned(), ..Default::default()}))),
             arg: Some(state.clone()),
             ..Default::default()
-        })),
+        }))),
         arg: Some(event.clone()),
         ..Default::default()
-    });
-    let res: Rc<dyn Expr> = eval(expr).unwrap();
+    }));
+    let res: ExprRef = eval(expr).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
@@ -102,31 +105,29 @@ fn interact(state: Rc<dyn Expr>, event: Rc<dyn Expr>) -> (Rc<dyn Expr>, Rc<dyn E
     return interact(newState, send_to_alien_proxy(data))
 }
 
-fn send_to_alien_proxy(expr: Rc<dyn Expr>) -> Rc<dyn Expr> {
+fn send_to_alien_proxy(expr: ExprRef) -> ExprRef {
     panic!("send_to_alien_proxy is not yet implemented");
 }
 
-fn as_num(expr: Rc<dyn Expr>) -> i64 {
+fn as_num(expr: ExprRef) -> i64 {
     panic!("as_num is not yet implemented");
 }
 
-fn get_list_items_from_expr(expr: Rc<dyn Expr>) -> Result<Vec<Rc<dyn Expr>>, String> {
+fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     panic!("Eval is not yet implemented");
 }
 
-fn eval(expr: Rc<dyn Expr>) -> Result<Rc<dyn Expr>, String> {
-    panic!("Eval is not yet implemented");
-
-    match expr.evaluated() {
+fn eval(expr: ExprRef) -> Result<ExprRef, String> {
+    match expr.borrow().evaluated() {
         Some(expr) => {
             panic!("Eval is not yet implemented");
         },
         None => {
-            let mut current_expr = expr;
+            let mut current_expr = expr.clone();
             loop {
-                let result = try_eval(current_expr)?;
-                if &*current_expr as *const Expr == &*current_expr as *const Expr {
-                    current_expr.set_evaluated(result.clone())?;
+                let result = try_eval(current_expr.clone())?;
+                if ptr::eq(current_expr.as_ref(), result.as_ref()) {
+                    current_expr.borrow_mut().set_evaluated(result.clone())?;
                     return Ok(result);
                 } else {
                     current_expr = result.clone();
@@ -136,11 +137,11 @@ fn eval(expr: Rc<dyn Expr>) -> Result<Rc<dyn Expr>, String> {
     }
 }
 
-fn try_eval(expr: Rc<dyn Expr>) -> Result<Rc<dyn Expr>, String> {
+fn try_eval(expr: ExprRef) -> Result<ExprRef, String> {
     panic!("try_eval is not yet implemented");
 }
 
-fn print_images(points: Rc<dyn Expr>) {
+fn print_images(points: ExprRef) {
     panic!("print_images is not yet implemented");
 }
 
@@ -149,28 +150,28 @@ fn request_click_from_user() -> Point {
 }
 
 fn main() {
-    let CONS: Rc<dyn Expr> = Rc::new(Atom{name: "cons".to_owned(), _evaluated: None});
-    let T: Rc<dyn Expr> = Rc::new(Atom{name: "t".to_owned(), _evaluated: None});
-    let F: Rc<dyn Expr> = Rc::new(Atom{name: "f".to_owned(), _evaluated: None});
-    let NIL: Rc<dyn Expr> = Rc::new(Atom{name: "nil".to_owned(), _evaluated: None});
+    let CONS: ExprRef = Rc::new(RefCell::new(Atom{name: "cons".to_owned(), _evaluated: None}));
+    let T: ExprRef = Rc::new(RefCell::new(Atom{name: "t".to_owned(), _evaluated: None}));
+    let F: ExprRef = Rc::new(RefCell::new(Atom{name: "f".to_owned(), _evaluated: None}));
+    let NIL: ExprRef = Rc::new(RefCell::new(Atom{name: "nil".to_owned(), _evaluated: None}));
 
     let functions = parse_functions("DUMMY VALUE");
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
-    let mut state: Rc<dyn Expr> = NIL;
+    let mut state: ExprRef = NIL;
     let mut point = Point{ x: 0, y: 0};
 
     loop {
-        let click = Rc::new(Ap{
-            func: Some(Rc::new(Ap{
+        let click = Rc::new(RefCell::new(Ap{
+            func: Some(Rc::new(RefCell::new(Ap{
                 func: Some(CONS.clone()),
-                arg: Some(Rc::new(Atom {name: point.x.to_string(), ..Default::default()})),
+                arg: Some(Rc::new(RefCell::new(Atom {name: point.x.to_string(), ..Default::default()}))),
                 ..Default::default()
-            })),
-            arg: Some(Rc::new(Atom{name: point.y.to_string(), ..Default::default()})),
+            }))),
+            arg: Some(Rc::new(RefCell::new(Atom{name: point.y.to_string(), ..Default::default()}))),
             ..Default::default()
-        });
-        let (newState, images) = interact(state.clone(), click);
+        }));
+        let (newState, images) = interact(state.clone(), click.clone());
         print_images(images);
         point = request_click_from_user();
         state = newState;
