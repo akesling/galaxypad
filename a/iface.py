@@ -1,23 +1,22 @@
 #!/usr/bin/python2
 from math import sin, cos
 from sdl2 import SDL_QUIT, SDL_MOUSEMOTION, SDL_MOUSEWHEEL, SDL_MOUSEBUTTONDOWN
-import sdl2.ext as sdl2ext
-from sys import stdout
+import sdl2.ext
 import time
 
-BLACK = sdl2ext.Color(0, 0, 0)
-WHITE = sdl2ext.Color(255, 255, 255)
+BLACK = sdl2.ext.Color(0, 0, 0)
+WHITE = sdl2.ext.Color(255, 255, 255)
 
-sdl2ext.init()
+sdl2.ext.init()
 CanvasWidth = 800
 CanvasHeight = 600
-win = sdl2ext.Window("PySDL2 test", size=(CanvasWidth, CanvasHeight))
+win = sdl2.ext.Window("PySDL2 test", size=(CanvasWidth, CanvasHeight))
 win.show()
 winsurf = win.get_surface()
 
 def point(x, y):
-    #sdl2ext.fill(winsurf, BLACK)
-    pixelview = sdl2ext.PixelView(winsurf)
+    #sdl2.ext.fill(winsurf, BLACK)
+    pixelview = sdl2.ext.PixelView(winsurf)
     #pixelview[event.motion.y][event.motion.x] = WHITE
     
     pixelview[y][x] = WHITE
@@ -28,8 +27,8 @@ def point(x, y):
 #     """draw a line 
     
 #     http://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm"""
-#     #sdl2ext.fill(winsurf, BLACK)
-#     pixelview = sdl2ext.PixelView(winsurf)
+#     #sdl2.ext.fill(winsurf, BLACK)
+#     pixelview = sdl2.ext.PixelView(winsurf)
 #     #pixelview[event.motion.y][event.motion.x] = WHITE
     
 #     # dont draw put of screen
@@ -73,7 +72,7 @@ def point(x, y):
 #     outside this function doesn't touch it
     
 #     http://www.cores2.com/3D_Tutorial/"""
-#     sdl2ext.fill(winsurf, BLACK) #fill screen with black
+#     sdl2.ext.fill(winsurf, BLACK) #fill screen with black
     
 #     # draw a 2D box
 #     #box={"x0":100,"y0":100, "x1":200, "y1":200}
@@ -173,32 +172,14 @@ lastm=(0,0) #last mouse position
 # print("use scroll wheel to change how far camera is")
 while running:
     t = time.time()
-    events = sdl2ext.get_events()
+    events = sdl2.ext.get_events()
     for event in events:
         if event.type == SDL_QUIT:
             running = False
             break
-        if event.type == SDL_MOUSEMOTION:
-            if event.motion.state == 1:# 1st mouse button is down
-                # paint a line
-                #line(lastm[0], lastm[1], event.motion.x, event.motion.y)
-                
-                # change camera pos
-                # mouse_sens = 50.0 # mouse sensitivity
-                # CameraPos["x"] = (event.motion.x - CanvasHeight / 2)/ mouse_sens
-                # CameraPos["y"] = (event.motion.y - CanvasWidth / 2)/ mouse_sens
-                lastm=event.motion.x, event.motion.y
-                print('motion', event.motion.x, event.motion.y)
-            else: #no buttons pressed
-                lastm=event.motion.x, event.motion.y
-        elif event.type == SDL_MOUSEBUTTONDOWN:
+        if event.type == SDL_MOUSEBUTTONDOWN:
             print('buttondown', event.button.x, event.button.y)
-        # elif event.type == SDL_MOUSEWHEEL:
-        #     # change how far camera is 
-        #     CameraPos["z"] += event.motion.x 
-    stdout.flush()
-    # draw_box(CameraPos=CameraPos)
     point(0, 0)
     win.refresh()
-sdl2ext.quit()
+sdl2.ext.quit()
 print() # make a empty line
