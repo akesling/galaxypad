@@ -72,11 +72,13 @@ struct Atom {
     _evaluated: Option<WeakExprRef>,
 }
 
-fn atom(name: String) -> Rc<RefCell<dyn Expr>> {
-    Rc::new(RefCell::new(Atom {
-        name,
-        _evaluated: None,
-    }))
+impl Atom {
+    fn new<T: std::string::ToString>(name: T) -> ExprRef {
+        Rc::new(RefCell::new(Atom {
+            name: name.to_string(),
+            _evaluated: None,
+        }))
+    }
 }
 
 impl Expr for Atom {
@@ -233,15 +235,15 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
     }
 
     if ATOMS.contains(candidate_token) {
-        return Ok((atom(candidate_token.to_owned()), tokens[1..].to_vec()));
+        return Ok((Atom::new(candidate_token), tokens[1..].to_vec()));
     }
 
     if let Ok(i) = candidate_token.parse::<i64>() {
-        return Ok((atom(i.to_string()), tokens[1..].to_vec()));
+        return Ok((Atom::new(i), tokens[1..].to_vec()));
     }
 
     if candidate_token.starts_with(':') {
-        return Ok((atom(candidate_token.to_owned()), tokens[1..].to_vec()));
+        return Ok((Atom::new(candidate_token), tokens[1..].to_vec()));
     }
 
     Err(format!(
@@ -310,7 +312,7 @@ fn interact(
     constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = ap(ap(atom("galaxy".to_owned()), state.clone()), event.clone());
+    let expr: ExprRef = ap(ap(Atom::new("galaxy"), state.clone()), event.clone());
     println!("Eval'ing");
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
@@ -483,7 +485,7 @@ fn try_eval(
             //             if (fun.Name == "cdr") return Ap(x, f)
             match *name {
                 "neg" => {
-                    return Ok(atom((-as_num(eval(x, functions, constants)?)?).to_string()));
+                    return Ok(Atom::new(-as_num(eval(x, functions, constants)?)?));
                 }
                 "i" => {
                     return Ok(x);
@@ -523,26 +525,23 @@ fn try_eval(
                     }
                     //                 if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
                     "add" => {
-                        return Ok(atom(
-                            (as_num(eval(x, functions, constants)?)?
-                                + as_num(eval(y, functions, constants)?)?)
-                            .to_string(),
+                        return Ok(Atom::new(
+                            as_num(eval(x, functions, constants)?)?
+                                + as_num(eval(y, functions, constants)?)?,
                         ));
                     }
                     //                 if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
                     "mul" => {
-                        return Ok(atom(
-                            (as_num(eval(x, functions, constants)?)?
-                                * as_num(eval(y, functions, constants)?)?)
-                            .to_string(),
+                        return Ok(Atom::new(
+                            as_num(eval(x, functions, constants)?)?
+                                * as_num(eval(y, functions, constants)?)?,
                         ));
                     }
                     //                 if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
                     "div" => {
-                        return Ok(atom(
-                            (as_num(eval(y, functions, constants)?)?
-                                / as_num(eval(x, functions, constants)?)?)
-                            .to_string(),
+                        return Ok(Atom::new(
+                            as_num(eval(y, functions, constants)?)?
+                                / as_num(eval(x, functions, constants)?)?,
                         ));
                     }
                     //                 if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
@@ -639,10 +638,10 @@ fn main() {
     let functions: HashMap<String, ExprRef> = load_function_definitions("galaxy.txt").unwrap();
     println!("Setting up constants");
     let constants = Constants {
-        cons: atom("cons".to_owned()),
-        t: atom("t".to_owned()),
-        f: atom("f".to_owned()),
-        nil: atom("nil".to_owned()),
+        cons: Atom::new("cons"),
+        t: Atom::new("t"),
+        f: Atom::new("f"),
+        nil: Atom::new("nil"),
     };
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
@@ -652,8 +651,8 @@ fn main() {
     println!("Starting loop");
     loop {
         let click = ap(
-            ap(constants.cons.clone(), atom(point.x.to_string())),
-            atom(point.y.to_string()),
+            ap(constants.cons.clone(), Atom::new(point.x)),
+            Atom::new(point.y),
         );
         println!("Starting 'interact' protocol");
         let (new_state, images) = interact(state.clone(), click.clone(), &functions, &constants);
@@ -689,10 +688,10 @@ mod tests {
     #[test]
     fn pseudo_addition() {
         let constants: Constants = Constants {
-            cons: atom("cons".to_owned()),
-            t: atom("t".to_owned()),
-            f: atom("f".to_owned()),
-            nil: atom("nil".to_owned()),
+            cons: Atom::new("cons"),
+            t: Atom::new("t"),
+            f: Atom::new("f"),
+            nil: Atom::new("nil"),
         };
 
         let result = eval(
@@ -702,17 +701,17 @@ mod tests {
         )
         .unwrap();
 
-        let expected = atom("5".to_owned());
+        let expected = Atom::new("5");
         assert_equal(result.clone(), expected.clone());
     }
 
     #[test]
     fn pseudo_division() {
         let constants: Constants = Constants {
-            cons: atom("cons".to_owned()),
-            t: atom("t".to_owned()),
-            f: atom("f".to_owned()),
-            nil: atom("nil".to_owned()),
+            cons: Atom::new("cons"),
+            t: Atom::new("t"),
+            f: Atom::new("f"),
+            nil: Atom::new("nil"),
         };
 
         let result = eval(
@@ -722,7 +721,7 @@ mod tests {
         )
         .unwrap();
 
-        let expected = atom("-2".to_owned());
+        let expected = Atom::new("-2");
         assert_equal(result.clone(), expected.clone());
     }
 }
