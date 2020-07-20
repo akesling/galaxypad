@@ -13,10 +13,11 @@ trait Expr: Debug {
     fn func(&self) -> Option<ExprRef>;
     fn arg(&self) -> Option<ExprRef>;
     fn evaluated(&self) -> Option<ExprRef>;
+    // NOTE(akesling): Beware memory leaks through circular dependencies on evaluated results!
     fn set_evaluated(&mut self, ExprRef) -> Result<(), String>;
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 struct Atom {
     name: String,
 }
@@ -75,7 +76,7 @@ impl Expr for &Atom {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Ap {
     _evaluated: Option<ExprRef>,
 
@@ -198,6 +199,7 @@ fn eval(
             loop {
                 let result = try_eval(current_expr.clone(), functions, constants)?;
                 if ptr::eq(current_expr.as_ref(), result.as_ref()) {
+                    // XXX: Circular reference -- memory leak
                     current_expr.borrow_mut().set_evaluated(result.clone())?;
                     return Ok(result);
                 } else {
@@ -309,7 +311,7 @@ fn try_eval(
                                 });
                             }
                             "cons" => {
-                                return Ok(eval_cons(y, x)?);
+                                return Ok(eval_cons(y, x, functions, constants)?);
                             }
                             _ => (),
                         }
@@ -319,30 +321,10 @@ fn try_eval(
                         let z = func3.borrow().arg().unwrap();
                         if let Some(name) = func3.clone().borrow().name().as_ref() {
                             match *name {
-                                "s" => {
-                                    return Ok(Ap(
-                                        Ap(z, x.clone()),
-                                        Ap(y, x),
-                                    ))
-                                }
-                                "c" => {
-                                    return Ok(Ap(
-                                        Ap(z, x),
-                                        y,
-                                    ))
-                                }
-                                "b" => {
-                                    return Ok(Ap(
-                                        z,
-                                        Ap(y, x),
-                                    ))
-                                }
-                                "cons" => {
-                                    return Ok(Ap(
-                                        Ap(x, z),
-                                        y,
-                                    ))
-                                }
+                                "s" => return Ok(Ap(Ap(z, x.clone()), Ap(y, x))),
+                                "c" => return Ok(Ap(Ap(z, x), y)),
+                                "b" => return Ok(Ap(z, Ap(y, x))),
+                                "cons" => return Ok(Ap(Ap(x, z), y)),
                                 _ => (),
                             }
                         }
@@ -355,8 +337,22 @@ fn try_eval(
     Ok(expr.clone())
 }
 
-fn eval_cons(head: ExprRef, tail: ExprRef) -> Result<ExprRef, String> {
-    panic!("eval_cons is not yet implemented");
+fn eval_cons(
+    head: ExprRef,
+    tail: ExprRef,
+    functions: &HashMap<String, ExprRef>,
+    constants: &HashMap<String, ExprRef>,
+) -> Result<ExprRef, String> {
+    let res = Ap(
+        Ap(
+            constants.get("cons").unwrap().clone(),
+            eval(head, functions, constants)?,
+        ),
+        eval(tail, functions, constants)?,
+    );
+    // XXX: Circular reference -- memory leak
+    res.borrow_mut().set_evaluated(res.clone());
+    return Ok(res);
 }
 
 fn print_images(points: ExprRef) {
@@ -422,10 +418,6 @@ fn main() {
     }
     //
     //
-    // Expr evalCons(Expr a, Expr b)
-    //     Expr res = Ap(Ap(cons, eval(a)), eval(b))
-    //     res.Evaluated = res
-    //     return res
     //
     // number asNum(Expr n)
     //     if (n is Atom)
