@@ -443,7 +443,6 @@ class Engine {
       Log() << "TryEval ref is Ap " << ref << std::endl;
       const auto x_ref = expr.arg;
       const auto func_ref = Eval(expr.func);
-
       const auto& func = deref(func_ref);
       if (IsAtom(func)) {
         if (func.name == "neg") {
@@ -668,16 +667,33 @@ class Engine {
     }
 	}
 
+  struct RGB {
+    int r;
+    int g;
+    int b;
+  };
+
   void PRINT_IMAGES(ExprRef imgs) {
     auto img_list = FlattenList(imgs);
 
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
     SDL_RenderClear(renderer_);
 
+    const RGB colors[8] = {
+      {64, 64, 64},
+      {128, 64, 64},
+      {64, 128, 64},
+      {64, 64, 128},
+      {255, 64, 64},
+      {64, 255, 64},
+      {64, 64, 255},
+      {255, 255, 255},
+    };
+
     for (int i = 0; i < img_list.size(); ++i) {
       const int idx = img_list.size() - 1 - i;
       auto vlist = FlattenVecList(img_list[idx]);
-      SDL_SetRenderDrawColor(renderer_, 50*(i+1), 50*(i+1), 50*(i+1), 255);
+      SDL_SetRenderDrawColor(renderer_, colors[i].r, colors[i].g, colors[i].b , 255);
       RenderVecList(vlist);
     }
 		SDL_RenderPresent(renderer_);
@@ -687,17 +703,48 @@ class Engine {
     ExprRef state = nil_;
 		Vec click_vec = {0, 0};
 
+    // Automatic bootup clicks crosses for us. We send 8 (0,0), but there are
+    // only 7 because click_vec starts as (0,0)
+    const int starter_clicks = 16 - 1;
+    Vec starter_vecs[starter_clicks] = {
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {8, 4},
+      {2, -8},
+      {3, 6},
+      {0, -14},
+      {-4, 10},
+      {9, -3},
+      {-4, 10},
+      {1, 4},
+    };
+
+    int loops = 0;
 		while(true) {
 			ExprRef click = Ap(Ap(cons_, Atom(click_vec.x)), Atom(click_vec.y));
       auto ires = InteractGalaxy(state, click);
       PRINT_IMAGES(ires.pics);
 
-      const bool should_quit = PollForClick(&click_vec);
-      if (should_quit) {
-        return;
+      if (loops < starter_clicks) {
+        click_vec = starter_vecs[loops];
+      } else {
+        const bool should_quit = PollForClick(&click_vec);
+        if (should_quit) {
+          return;
+        }
       }
 
       state = ires.data;
+
+      //if (loops % 10 == 0) {
+      //  MarkAndSweep({ires.data, ires.pics});
+      //}
+      loops++;
 		}
   }
 
