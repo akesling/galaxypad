@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn pseudo_cons_application() {
         let result = eval(str_to_expr("ap ap ap cons x0 x1 x2").unwrap(), &hashmap! {}).unwrap();
-        let expected = Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1")) ;
+        let expected = Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1"));
         assert_equal(result, expected);
     }
 
@@ -690,7 +690,11 @@ mod tests {
         let expected_true = Atom::new(T);
         assert_equal(result_true, expected_true);
 
-        let result_false = eval(str_to_expr("ap isnil ap ap cons x0 x1").unwrap(), &hashmap! {}).unwrap();
+        let result_false = eval(
+            str_to_expr("ap isnil ap ap cons x0 x1").unwrap(),
+            &hashmap! {},
+        )
+        .unwrap();
         let expected_false = Atom::new(F);
         assert_equal(result_false, expected_false);
     }
