@@ -391,6 +391,13 @@ fn eval(
         return Ok(x);
     }
 
+//    Expr initialExpr = expr
+//    while (true)
+//        Expr result = tryEval(expr)
+//        if (result == expr)
+//            initialExpr.Evaluated = result
+//            return result
+//        expr = result
     let mut current_expr = expr.clone();
     loop {
         let result = try_eval(current_expr.clone(), functions, constants, stack_depth+1)?;
@@ -581,7 +588,7 @@ fn main() {
             ap(constants.cons.clone(), atom(point.x.to_string())),
             atom(point.y.to_string()),
         );
-        println!("Staring 'interact' protocol");
+        println!("Starting 'interact' protocol");
         let (new_state, images) = interact(state.clone(), click.clone(), &functions, &constants);
         print_images(images);
         point = request_click_from_user();
