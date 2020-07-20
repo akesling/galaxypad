@@ -93,7 +93,7 @@ impl<T> Expr for &T where T: Expr {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug)]
 struct Atom {
     _evaluated: Option<WeakExprRef>,
 
@@ -134,7 +134,7 @@ impl Expr for Atom {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Ap {
     _evaluated: Option<WeakExprRef>,
 
