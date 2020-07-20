@@ -1,13 +1,17 @@
 #!/usr/bin/env python
+import re
+import os
 import sys
+import math
 from dataclasses import dataclass
 from itertools import zip_longest
 from random import randint
 from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
+import requests
 import sdl2.ext
 
-from images import print_image_stack
+# from images import print_image_stack
 
 sys.setrecursionlimit(10000)
 
@@ -114,6 +118,68 @@ def unvector(lst: Union[List, int]) -> Expr:
         y = unvector(lst[1])
         return Tree(Tree(Value("cons"), x), y)
     raise ValueError(f"Can't unvector type {type(lst)} {lst}")
+
+
+def demodulate(modulation: str) -> Expr:
+    """ Demodulate a complete modulation, Error if leftover """
+    treeish, remainder = demodulate_partial(modulation)
+    assert remainder == "", f"failed to fully parse {modulation} -> {remainder}"
+    return treeish
+
+
+def demodulate_partial(modulation: str) -> Tuple[Expr, str]:
+    """
+    Parse the first complete item out of a modulation,
+    and return the item and the remainder of the modulation
+    """
+    assert re.fullmatch(r"[01]*", modulation), f"bad modulation {modulation}"
+    # Numbers:
+    int_match = re.match(r"(01|10)(1*)0([01]*)", modulation)
+    if int_match is not None:
+        # Integer prefix, follow with ones and a zero
+        # The length of the first group is the rest of the length // 4
+        sign, length_specifier, remainder = int_match.groups()
+        length = len(length_specifier) * 4
+        binary, unparsed = remainder[:length], remainder[length:]
+        value = sum(int(n) * 2 ** i for i, n in enumerate(binary[::-1]))
+        return Value(str({"01": 1, "10": -1}[sign] * value)), unparsed
+    # Empty list
+    if modulation.startswith("00"):
+        # Hardcode this for now
+        return Value("nil"), modulation[2:]
+    # List
+    if modulation.startswith("11"):
+        # I'm pretty sure this is how this works
+        remainder = modulation[2:]
+        head, remainder = demodulate_partial(remainder)
+        tail, remainder = demodulate_partial(remainder)
+        return Tree(Tree(Value("cons"), head), tail), remainder
+    raise ValueError(f"Unmatched modulation {modulation}")
+
+
+def modulate(expr: Expr) -> str:
+    """ modulate a value into a modulation """
+    if expr == Value("nil"):
+        return "00"
+    if isinstance(expr, Value):
+        value = asNum(expr)
+        if value == 0:
+            return "010"
+        sign_mod = "01" if value >= 0 else "10"
+        length = len(bin(abs(value))) - 2  # Use the python bin() function
+        length_units = math.ceil(length / 4)
+        prefix = sign_mod + "1" * length_units + "0"
+        binary = "0" * (length_units * 4 - length) + bin(abs(value))[2:]
+        return prefix + binary
+    if isinstance(expr, Tree):
+        left_tree = expr.Left
+        if isinstance(left_tree, Tree) and left_tree.Left == Value("cons"):
+            assert left_tree.Right is not None, f"Missing left.right {expr}"
+            assert expr.Right is not None, f"Missing right {expr}"
+            left_bits = modulate(left_tree.Right)
+            right_bits = modulate(expr.Right)
+            return "11" + left_bits + right_bits
+    raise ValueError(f"Can't modulate type {type(expr)} {expr}")
 
 
 def unparse(expr: Expr) -> str:
@@ -266,6 +332,19 @@ def evalCons(a: Expr, b: Expr) -> Expr:
     return res
 
 
+def SEND_TO_ALIEN_PROXY(expr: Expr) -> Expr:
+    server_url = "https://icfpc2020-api.testkontur.ru/aliens/send"
+    api_key = os.environ["ICFP_API_KEY"]
+    modulation = modulate(expr)
+    res = requests.post(server_url, params=dict(apiKey=api_key), data=modulation)
+    if res.status_code != 200:
+        print('Unexpected server response from URL "%s":' % server_url)
+        print("HTTP code:", res.status_code)
+        print("Response body:", res.text)
+        raise ValueError("Server response:", res.text)
+    return demodulate(res.text)
+
+
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
 def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     """ Interact with the game """
@@ -277,23 +356,24 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     assert v == [], f"Failed to parse res correctly {unparse(res)} {v}"
     if flag == 0:
         return (unvector(newState), unvector(data))
-    # return interact(unvector(newState), SEND_TO_ALIEN_PROXY(data))
-    raise NotImplementedError("SEND_TO_ALIEN_PROXY not implemented")
+    return interact(unvector(newState), SEND_TO_ALIEN_PROXY(unvector(data)))
 
 
 def print_images(images: Expr, pixelview, SIZE, BIG) -> None:
-    imstack = []
+    assert isinstance(images, Tree), "bad images"
     imvec = vector(images)  # convert to lists
+    imstack = []
     while imvec != []:
         image, imvec = imvec  # type: ignore
-        color = sdl2.ext.Color(randint(128, 255), randint(128, 255), randint(128, 255))
+        imstack.append(image)
+    for image in imstack[::-1]:
+        color = sdl2.ext.Color(randint(32, 255), randint(32, 255), randint(32, 255))
         while image != []:
             pixel, image = image  # type: ignore
             offset = [(p + SIZE // 2) * BIG for p in pixel]
             for x in range(max(offset[0], 0), min(offset[0] + BIG, SIZE * BIG)):
                 for y in range(max(offset[1], 0), min(offset[1] + BIG, SIZE * BIG)):
                     pixelview[y][x] = color
-            # pixelview[pixel[1] + SIZE // 2][pixel[0] + SIZE // 2] = color
 
 
 if __name__ == "__main__":
@@ -309,12 +389,10 @@ if __name__ == "__main__":
         [1, 4],
     ]:
         state, images = interact(state, unvector(click))
-    print_image_stack(vector(images))
-    exit()
 
     sdl2.ext.init()
-    SIZE = 512
-    BIG = 1
+    SIZE = 320  # Size of the display in game pixels
+    BIG = 3  # How much "bigger" each pixel should be, scales up
 
     win = sdl2.ext.Window("Galaxy", size=(SIZE * BIG, SIZE * BIG))
     win.show()
@@ -332,15 +410,11 @@ if __name__ == "__main__":
                 running = False
                 break
             if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
-                # print("click", event.button.x, event.button.y)
                 pixel = [event.button.x, event.button.y]
                 point = [(i // BIG) - SIZE // 2 for i in pixel]
-                # print(point)
-                click = unvector(point)
-                state, images = interact(state, click)
+                print("click", point)
+                state, images = interact(state, unvector(point))
                 sdl2.ext.fill(winsurf, sdl2.ext.Color(0, 0, 0))
-                # print("state", vector(state))
-                # print("images", vector(images))
                 print_images(images, pixelview, SIZE, BIG)
         win.refresh()
     sdl2.ext.quit()
