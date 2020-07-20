@@ -25,6 +25,12 @@ pub struct JIT {
     module: Module<SimpleJITBackend>,
 }
 
+impl Default for JIT {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JIT {
     /// Create a new `JIT` instance.
     pub fn new() -> Self {
@@ -45,8 +51,7 @@ impl JIT {
             parser::function(&input).map_err(|e| e.to_string())?;
 
         // Then, translate the AST nodes into Cranelift IR.
-        self.translate(params, the_return, stmts)
-            .map_err(|e| e.to_string())?;
+        self.translate(params, the_return, stmts)?;
 
         // Next, declare the function to simplejit. Functions must be declared
         // before they can be called, or defined.
