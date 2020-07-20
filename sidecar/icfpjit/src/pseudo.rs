@@ -278,10 +278,8 @@ fn interact(
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap::new(Ap::new(Atom::new("galaxy"), state), event);
-    println!("Eval'ing");
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
-    println!("Converting results to a list");
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
         panic!(
@@ -655,10 +653,7 @@ fn request_click_from_user() -> Point {
 }
 
 fn main() {
-    println!("Start main");
-    println!("Parsing functions");
     let functions: HashMap<String, ExprRef> = load_function_definitions("galaxy.txt").unwrap();
-    println!("Setting up constants");
     let constants = Constants {
         cons: Atom::new("cons"),
         t: Atom::new("t"),
@@ -670,13 +665,11 @@ fn main() {
     let mut state: ExprRef = constants.nil.clone();
     let mut point = Point { x: 0, y: 0 };
 
-    println!("Starting loop");
     loop {
         let click = Ap::new(
             Ap::new(constants.cons.clone(), Atom::new(point.x)),
             Atom::new(point.y),
         );
-        println!("Starting 'interact' protocol");
         let (new_state, images) = interact(state, click, &functions, &constants);
         print_images(images);
         point = request_click_from_user();
