@@ -3,41 +3,52 @@ import re
 import os
 import sys
 import math
-from dataclasses import dataclass
+
+# from dataclasses import dataclass
 from itertools import zip_longest
 from random import randint
-from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union, Any
 
 import requests
 import sdl2.ext
 
-# from images import print_image_stack
-
 sys.setrecursionlimit(10000)
 
 
-@dataclass
 class Value:
     """ Atoms are the leaves of our tree """
 
     Name: Optional[str] = None
     Evaluated: Optional["Expr"] = None
 
+    def __init__(self, Name=None):
+        self.Name = Name
+        self.Evaluated = None
+
     def nlr(self) -> Iterable["Expr"]:
         yield self
+
+    def __eq__(self, other):
+        if type(self) == type(other):
+            return self.Name == other.Name
+        return False
 
     def unparse(self) -> str:
         assert self.Name is not None, self
         return self.Name
 
 
-@dataclass
 class Tree:
     """ Applications (of a function) are the non-leaf nodes of our tree """
 
     Left: Optional["Expr"] = None
     Right: Optional["Expr"] = None
     Evaluated: Optional["Expr"] = None
+
+    def __init__(self, Left=None, Right=None):
+        self.Left = Left
+        self.Right = Right
+        self.Evaluated = None
 
     def nlr(self) -> Iterable["Expr"]:
         """ Generator for all of the Tree nodes in preorder (NLR) """
@@ -46,9 +57,9 @@ class Tree:
             expr: "Expr" = stack.pop()
             yield expr
             if isinstance(expr, Tree):
-                assert isinstance(expr.Right, (Value, Tree)), self
+                assert isinstance(expr.Right, (Value, Tree)), f"{expr.Right}"
                 stack.append(expr.Right)
-                assert isinstance(expr.Left, (Value, Tree)), self
+                assert isinstance(expr.Left, (Value, Tree)), f"{expr.Left}"
                 stack.append(expr.Left)
 
     def __eq__(self, other) -> bool:
@@ -81,10 +92,14 @@ t: Expr = Value("t")
 f: Expr = Value("f")
 
 
-def vector(expr: Expr) -> List[Union[List, int]]:
+def vector(expr: Expr) -> Any:
     """ Vector notation """
+    if isinstance(expr, Value):
+        if expr.Name == "nil":
+            return []
+        return asNum(expr)
     if isinstance(expr, Tree):
-        tok: List[Union[List, int]] = unparse(expr).split()  # type: ignore
+        tok: List[Union[List, Tuple, int]] = unparse(expr).split()  # type: ignore
         again = True
         while again and len(tok) >= 5:
             again = False
@@ -95,28 +110,37 @@ def vector(expr: Expr) -> List[Union[List, int]]:
                     and d not in ("ap", "cons")
                     and e not in ("ap", "cons")
                 ):
-                    e = e if isinstance(e, list) else [] if e == "nil" else int(e)
-                    d = d if isinstance(d, list) else [] if d == "nil" else int(d)
-                    tok = tok[:i] + [[d, e]] + tok[i + 5 :]
-                    again = True
-                    break
+                    if isinstance(d, str):
+                        d = [] if d == "nil" else int(d)
+                    if isinstance(e, str):
+                        e = [] if e == "nil" else int(e)
+                    if d != [] and isinstance(e, list):
+                        tok = tok[:i] + [[d,] + e] + tok[i + 5 :]
+                        again = True
+                        break
+                    else:
+                        tok = tok[:i] + [(d, e)] + tok[i + 5 :]
+                        again = True
+                        break
         (result,) = tok  # Everything is always wrapped in an outer list
         return result  # type: ignore
     raise ValueError(f"Cannot vectorize {type(expr)} {expr}")
 
 
-def unvector(lst: Union[List, int]) -> Expr:
+def unvector(lst: Any) -> Expr:
     """ Undo a vector into a tree """
-    # Todo: make iterative
-    if lst == []:
+    if lst == [] or lst == ():
         return Value("nil")
     if isinstance(lst, int):
         return Value(str(lst))
-    if isinstance(lst, list):
+    if isinstance(lst, tuple):  # Bare pair
         assert len(lst) == 2, lst
-        x = unvector(lst[0])
-        y = unvector(lst[1])
-        return Tree(Tree(Value("cons"), x), y)
+        x, y = lst
+        return Tree(Tree(Value("cons"), unvector(x)), unvector(y))
+    if isinstance(lst, list):  # Recursive list
+        assert len(lst) > 0, lst
+        x, *rem = lst
+        return Tree(Tree(Value("cons"), unvector(x)), unvector(rem))
     raise ValueError(f"Can't unvector type {type(lst)} {lst}")
 
 
@@ -332,44 +356,61 @@ def evalCons(a: Expr, b: Expr) -> Expr:
     return res
 
 
-def SEND_TO_ALIEN_PROXY(expr: Expr) -> Expr:
+def SEND_TO_ALIEN_PROXY(data: Any) -> Any:
+    data = vector(data) if isinstance(data, (Value, Tree)) else data
     server_url = "https://icfpc2020-api.testkontur.ru/aliens/send"
     api_key = os.environ["ICFP_API_KEY"]
-    modulation = modulate(expr)
+    print("Sending vector:", data)
+    modulation = modulate(unvector(data))
     res = requests.post(server_url, params=dict(apiKey=api_key), data=modulation)
     if res.status_code != 200:
         print('Unexpected server response from URL "%s":' % server_url)
         print("HTTP code:", res.status_code)
         print("Response body:", res.text)
         raise ValueError("Server response:", res.text)
-    return demodulate(res.text)
+    result = vector(demodulate(res.text))
+    print("Received vector:", result)
+    return result
 
 
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
-def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
+def interact(state: Any, event: Any) -> Tuple[Any, Any]:
     """ Interact with the game """
+    state = state if isinstance(state, (Value, Tree)) else unvector(state)
+    event = event if isinstance(event, (Value, Tree)) else unvector(event)
     expr: Expr = Tree(Tree(Value("galaxy"), state), event)
     res: Expr = evaluate(expr)
-    assert unparse(res) == unparse(unvector(vector(res))), f"Modem check {unparse(res)}"
-    flag, (newState, (data, v)) = vector(res)  # type: ignore
+    assert unparse(res) == unparse(demodulate(modulate(res))), f"modem {unparse(res)}"
+    flag, state, data = vector(res)
+    assert vector(unvector(state)) == state
+    assert vector(unvector(data)) == data
     assert isinstance(flag, int), f"bad flag {flag}"
-    assert v == [], f"Failed to parse res correctly {unparse(res)} {v}"
+    assert isinstance(state, (list, tuple)), f"bad state {state}"
+    assert isinstance(data, (list, tuple)), f"bad data {data}"
     if flag == 0:
-        return (unvector(newState), unvector(data))
-    return interact(unvector(newState), SEND_TO_ALIEN_PROXY(unvector(data)))
+        return state, data
+    return interact(state, SEND_TO_ALIEN_PROXY(data))
 
 
-def print_images(images: Expr, pixelview, SIZE, BIG) -> None:
-    assert isinstance(images, Tree), "bad images"
-    imvec = vector(images)  # convert to lists
-    imstack = []
-    while imvec != []:
-        image, imvec = imvec  # type: ignore
-        imstack.append(image)
-    for image in imstack[::-1]:
+def print_images(images: Any, pixelview, SIZE, BIG) -> None:
+    # TODO: ugly hack because of the fact our vector format has multiple reps
+    if isinstance(images, tuple):
+        imvec = images
+        images = []
+        while imvec:
+            if isinstance(imvec, tuple):
+                image, imvec = imvec
+                images.append(image)
+            elif isinstance(imvec, list):
+                images.append(imvec.pop())
+            else:
+                raise ValueError(f"bad imvec {imvec}")
+    # print('images', images)
+    for image in images[::-1]:
+        # print('image', image)
         color = sdl2.ext.Color(randint(32, 255), randint(32, 255), randint(32, 255))
-        while image != []:
-            pixel, image = image  # type: ignore
+        for pixel in image:
+            # print('pixel', pixel)
             offset = [(p + SIZE // 2) * BIG for p in pixel]
             for x in range(max(offset[0], 0), min(offset[0] + BIG, SIZE * BIG)):
                 for y in range(max(offset[1], 0), min(offset[1] + BIG, SIZE * BIG)):
@@ -378,17 +419,18 @@ def print_images(images: Expr, pixelview, SIZE, BIG) -> None:
 
 if __name__ == "__main__":
     state: Expr = Value("nil")
-    for click in [[0, 0]] * 8 + [
-        [8, 4],
-        [2, -8],
-        [3, 6],
-        [0, -14],
-        [-4, 10],
-        [9, -3],
-        [-4, 10],
-        [1, 4],
+    for click in [(0, 0)] * 8 + [
+        (8, 4),
+        (2, -8),
+        (3, 6),
+        (0, -14),
+        (-4, 10),
+        (9, -3),
+        (-4, 10),
+        (1, 4),
+        # (0, 1),  # Uncomment to skip galaxy screen
     ]:
-        state, images = interact(state, unvector(click))
+        state, images = interact(state, click)
 
     sdl2.ext.init()
     SIZE = 320  # Size of the display in game pixels
@@ -411,9 +453,9 @@ if __name__ == "__main__":
                 break
             if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
                 pixel = [event.button.x, event.button.y]
-                point = [(i // BIG) - SIZE // 2 for i in pixel]
+                point = tuple([(i // BIG) - SIZE // 2 for i in pixel])
                 print("click", point)
-                state, images = interact(state, unvector(point))
+                state, images = interact(state, point)
                 sdl2.ext.fill(winsurf, sdl2.ext.Color(0, 0, 0))
                 print_images(images, pixelview, SIZE, BIG)
         win.refresh()

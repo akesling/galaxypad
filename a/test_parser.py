@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import unittest
-from parser import (
+from galaxy import (
     Tree,
     Value,
     Expr,
@@ -52,11 +52,20 @@ class TestParser(unittest.TestCase):
 class TestVector(unittest.TestCase):
     def test_parse(self):
         for s, v in [
-            ("ap ap cons 0 1", [0, 1]),
-            ("ap ap cons 0 nil", [0, []]),
-            ("ap ap cons 1 ap ap cons 0 nil", [1, [0, []]]),
-            ("ap ap cons ap ap cons 0 nil nil", [[0, []], []]),
-            ("ap ap cons 1 ap ap cons ap ap cons 0 nil nil", [1, [[0, []], []]]),
+            ("0", 0),
+            ("1", 1),
+            ("nil", []),
+            ("ap ap cons 0 nil", [0]),
+            ("ap ap cons 0 1", (0, 1)),
+            ("ap ap cons 0 ap ap cons 1 nil", [0, 1]),
+            ("ap ap cons 0 ap ap cons 1 ap ap cons 2 nil", [0, 1, 2]),
+            ("ap ap cons ap ap cons 0 nil nil", [[0]]),
+            ("ap ap cons nil nil", ([], [])),
+            (
+                "ap ap cons ap ap cons 0 1 ap ap cons ap ap cons 2 3 nil",
+                [(0, 1), (2, 3)],
+            ),
+            ("ap ap cons 1 ap ap cons ap ap cons 0 nil nil", [1, [0]]),
         ]:
             self.assertEqual(parse(s), unvector(v))
             self.assertEqual(v, vector(unvector(v)))
@@ -93,16 +102,16 @@ class TestModulate(unittest.TestCase):
 
     def test_tree_examples(self):
         self.check_tree_example(Value("nil"), "00")
-        self.check_tree_example(unvector([[], []]), "110000")
-        self.check_tree_example(unvector([0, []]), "1101000")
-        self.check_tree_example(unvector([1, 2]), "110110000101100010")
-        self.check_tree_example(unvector([1, [2, []]]), "1101100001110110001000")
+        self.check_tree_example(unvector(([], [])), "110000")
+        self.check_tree_example(unvector([0]), "1101000")
+        self.check_tree_example(unvector((1, 2)), "110110000101100010")
+        self.check_tree_example(unvector((1, (2, []))), "1101100001110110001000")
 
-    # def test_vec_examples(self):
-    #     self.check_tree_example(unvector([1, 2]), "1101100001110110001000")
-    #     self.check_tree_example(
-    #         unvector([1, [2, 3], 4]), "1101100001111101100010110110001100110110010000"
-    #     )
+    def test_vec_examples(self):
+        self.check_tree_example(unvector([1, 2]), "1101100001110110001000")
+        self.check_tree_example(
+            unvector([1, [2, 3], 4]), "1101100001111101100010110110001100110110010000"
+        )
 
 
 if __name__ == "__main__":
