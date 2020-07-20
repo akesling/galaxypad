@@ -90,7 +90,7 @@ impl Expr for Atom {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => weak.upgrade(),
+            Some(weak) => Some(weak.upgrade().unwrap()),
             None => None,
         }
     }
@@ -116,7 +116,7 @@ impl Expr for &Atom {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => weak.upgrade(),
+            Some(weak) => Some(weak.upgrade().unwrap()),
             None => None,
         }
     }
@@ -158,7 +158,7 @@ impl Expr for Ap {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => weak.upgrade(),
+            Some(weak) => Some(weak.upgrade().unwrap()),
             None => None,
         }
     }
@@ -184,7 +184,7 @@ impl Expr for &Ap {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => weak.upgrade(),
+            Some(weak) => Some(weak.upgrade().unwrap()),
             None => None,
         }
     }
@@ -391,7 +391,8 @@ fn eval(
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
     }
-    let mut current_expr = expr;
+
+    let mut current_expr = expr.clone();
     loop {
         let result = try_eval(current_expr.clone(), functions, constants, stack_depth+1)?;
         println!("Result achieved through try_eval, attempted to see if its the same or not.");
@@ -399,10 +400,15 @@ fn eval(
             current_expr = result.clone();
             continue;
         }
-        println!("Looks like they're the same.");
+        println!("Looks like they're the same");
+
+        if let Some(x) = current_expr.borrow().evaluated() {
+            return Ok(x);
+        }
 
         // XXX: Circular reference -- memory leak
         current_expr.borrow_mut().set_evaluated(result.clone())?;
+        println!("Evaluated is now set");
         return Ok(result);
     }
 }
