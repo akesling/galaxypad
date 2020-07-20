@@ -246,7 +246,7 @@ fn eval(
 ) -> Result<ExprRef, String> {
     match expr.borrow().evaluated() {
         Some(expr) => {
-            panic!("Eval is not yet implemented");
+            return Ok(expr);
         }
         None => {
             let mut current_expr = expr.clone();
