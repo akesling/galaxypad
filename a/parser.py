@@ -282,9 +282,9 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
 
 
 def print_images(images: Expr, pixelview, SIZE) -> None:
-    print("images", images)
     sdl2.ext.fill(winsurf, BLACK)
     imvec = vector(images)  # convert to lists
+    print("imvec", imvec)
     while imvec != []:
         image, imvec = imvec  # type: ignore
         print("image", image)
