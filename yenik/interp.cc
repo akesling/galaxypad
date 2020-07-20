@@ -633,9 +633,9 @@ class Engine {
     const ExprRef new_state = flat[1];
     const ExprRef data = flat[2];
 
-    std::cout << "GALAXY BRAIN : " << ExprToString(flag) << " | "
-              << ExprToString(new_state) << " | "
-              << ExprToString(data) << std::endl;
+    //std::cout << "GALAXY BRAIN : " << ExprToString(flag) << " | "
+    //          << ExprToString(new_state) << " | "
+    //          << ExprToString(data) << std::endl;
     if (AsNum(flag) == 0) {
       InteractResult result;
       result.data = new_state;
