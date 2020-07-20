@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 import sys
-from itertools import zip_longest
 from dataclasses import dataclass
-from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Iterable
-
-# from PIL import Image
-# from imgcat import imgcat
+from itertools import zip_longest
+from random import randint
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 import sdl2.ext
-from random import randint
 
 
 @dataclass
@@ -144,7 +141,6 @@ def parse(orig: Union[str, List[str]]) -> Expr:
                 )
             while stack and stack[-1].Left is not None and stack[-1].Right is not None:
                 expr = stack.pop()
-                # expr = maybe_vector(expr)
         if isinstance(expr, Tree) and (expr.Left is None or expr.Right is None):
             stack.append(expr)
         if not len(stack):
@@ -281,28 +277,38 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     raise NotImplementedError("SEND_TO_ALIEN_PROXY not implemented")
 
 
-def print_images(images: Expr, pixelview, SIZE) -> None:
-    sdl2.ext.fill(winsurf, BLACK)
+def print_images(images: Expr, pixelview, SIZE, BIG) -> None:
     imvec = vector(images)  # convert to lists
     while imvec != []:
         image, imvec = imvec  # type: ignore
         color = sdl2.ext.Color(randint(128, 255), randint(128, 255), randint(128, 255))
         while image != []:
             pixel, image = image  # type: ignore
-            pixelview[pixel[1] + SIZE // 2][pixel[0] + SIZE // 2] = color
-
+            offset = [(p + SIZE // 2) * BIG for p in pixel]
+            for x in range(offset[0], offset[0] + BIG):
+                for y in range(offset[1], offset[1] + BIG):
+                    pixelview[y][x] = color
+            # pixelview[pixel[1] + SIZE // 2][pixel[0] + SIZE // 2] = color
 
 
 if __name__ == "__main__":
     state: Expr = Value("nil")
-    click: Expr = unvector([0, 0])
-    state, images = interact(state, click)
+    for click in [[0, 0]] * 8 + [
+        [8, 4],
+        [2, -8],
+        [3, 6],
+        [0, -14],
+        [-4, 10],
+    ]:
+        state, images = interact(state, unvector(click))
 
     BLACK = sdl2.ext.Color(0, 0, 0)
 
     sdl2.ext.init()
-    SIZE = 512
-    win = sdl2.ext.Window("Galaxy", size=(SIZE, SIZE))
+    SIZE = 256
+    BIG = 1
+
+    win = sdl2.ext.Window("Galaxy", size=(SIZE * BIG, SIZE * BIG))
     win.show()
     winsurf = win.get_surface()
     running = True
@@ -310,7 +316,7 @@ if __name__ == "__main__":
 
     # Initial image
     sdl2.ext.fill(winsurf, BLACK)
-    print_images(images, pixelview, SIZE)
+    print_images(images, pixelview, SIZE, BIG)
     while running:
         events = sdl2.ext.get_events()
         for event in events:
@@ -318,9 +324,15 @@ if __name__ == "__main__":
                 running = False
                 break
             if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
-                print('click', event.button.x, event.button.y)
-                click = unvector([event.button.x - SIZE // 2, event.button.y - SIZE // 2])
+                print("click", event.button.x, event.button.y)
+                pixel = [event.button.x, event.button.y]
+                point = [(i // BIG) - SIZE // 2 for i in pixel]
+                print(point)
+                click = unvector(point)
                 state, images = interact(state, click)
-                print_images(images, pixelview, SIZE)
+                sdl2.ext.fill(winsurf, BLACK)
+                print("state", vector(state))
+                print("images", vector(images))
+                print_images(images, pixelview, SIZE, BIG)
         win.refresh()
     sdl2.ext.quit()
