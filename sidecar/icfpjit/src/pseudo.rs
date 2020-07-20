@@ -314,7 +314,7 @@ fn interact(
     constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = Ap::new(Ap::new(Atom::new("galaxy"), state.clone()), event.clone());
+    let expr: ExprRef = Ap::new(Ap::new(Atom::new("galaxy"), state), event);
     println!("Eval'ing");
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
@@ -374,8 +374,7 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         let second = points_expr
             .borrow()
             .func()
-            .ok_or_else(|| "func expected on points_expr of flatten_point")?
-            .clone();
+            .ok_or_else(|| "func expected on points_expr of flatten_point")?;
         if let Some(name) = second.borrow().name().as_ref() {
             panic!("Second item in list was non-nil atom({}) not Ap", name);
         }
@@ -383,8 +382,7 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         let cons = second
             .borrow()
             .func()
-            .ok_or_else(|| "func expected on second of flatten_point")?
-            .clone();
+            .ok_or_else(|| "func expected on second of flatten_point")?;
         if let Some(name) = cons.borrow().name().as_ref() {
             if name != &"cons" {
                 panic!("Cons-place item in list was atom({}) not cons", name);
@@ -423,8 +421,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         let second = expr
             .borrow()
             .func()
-            .ok_or_else(|| "func expected on func of get_list_items_from_expr")?
-            .clone();
+            .ok_or_else(|| "func expected on func of get_list_items_from_expr")?;
         if let Some(name) = second.borrow().name().as_ref() {
             return Err(format!(
                 "Second item in list was non-nil atom({}) not Ap",
@@ -435,8 +432,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         let cons = second
             .borrow()
             .func()
-            .ok_or_else(|| "func expected on second of get_list_items_from_expr")?
-            .clone();
+            .ok_or_else(|| "func expected on second of get_list_items_from_expr")?;
         if let Some(name) = cons.borrow().name().as_ref() {
             if name != &"cons" {
                 return Err(format!(
@@ -482,11 +478,11 @@ fn eval(
     }
 
     let initial_expr = expr.clone();
-    let mut current_expr = expr.clone();
+    let mut current_expr = expr;
     loop {
         let result = try_eval(current_expr.clone(), functions, constants)?;
         if !ptr::eq(current_expr.as_ref(), result.as_ref()) {
-            current_expr = result.clone();
+            current_expr = result;
             continue;
         }
 
@@ -501,7 +497,7 @@ fn try_eval(
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
-        return Ok(x.clone());
+        return Ok(x);
     }
 
     if let Some(name) = expr.borrow().name().as_ref() {
@@ -512,16 +508,14 @@ fn try_eval(
         let func = eval(
             expr.borrow()
                 .func()
-                .ok_or_else(|| "func expected on expr of try_eval")?
-                .clone(),
+                .ok_or_else(|| "func expected on expr of try_eval")?,
             functions,
             constants,
         )?;
         let x = expr
             .borrow()
             .arg()
-            .ok_or_else(|| "arg expected on expr of try_eval")?
-            .clone();
+            .ok_or_else(|| "arg expected on expr of try_eval")?;
         if let Some(name) = func.clone().borrow().name().as_ref() {
             //             if (fun.Name == "neg") return Atom(-asNum(eval(x)))
             //             if (fun.Name == "i") return x
@@ -560,17 +554,14 @@ fn try_eval(
             let func2 = eval(
                 func.borrow()
                     .func()
-                    .ok_or_else(|| "func expected on func of try_eval")?
-                    .clone(),
+                    .ok_or_else(|| "func expected on func of try_eval")?,
                 functions,
                 constants,
-            )?
-            .clone();
+            )?;
             let y = func
                 .borrow()
                 .arg()
-                .ok_or_else(|| "arg expected on func of try_eval")?
-                .clone();
+                .ok_or_else(|| "arg expected on func of try_eval")?;
             if let Some(name) = func2.clone().borrow().name().as_ref() {
                 match *name {
                     //                 if (fun2.Name == "t") return y
@@ -636,8 +627,7 @@ fn try_eval(
                         .ok_or_else(|| "func expected on func2 of try_eval")?,
                     functions,
                     constants,
-                )?
-                .clone();
+                )?;
                 let z = func2
                     .borrow()
                     .arg()
@@ -659,7 +649,7 @@ fn try_eval(
         }
     }
 
-    Ok(expr.clone())
+    Ok(expr)
 }
 
 fn eval_cons(
@@ -682,7 +672,7 @@ fn vectorize_points_expr(points_expr: ExprRef) -> Result<Vec<(i64, i64)>, String
 
     let flattened: Vec<ExprRef> = get_list_items_from_expr(points_expr)?;
     for expr in flattened.into_iter() {
-        result.push(flatten_point(expr.clone())?);
+        result.push(flatten_point(expr)?);
     }
 
     Ok(result)
@@ -724,7 +714,7 @@ fn main() {
             Atom::new(point.y),
         );
         println!("Starting 'interact' protocol");
-        let (new_state, images) = interact(state.clone(), click.clone(), &functions, &constants);
+        let (new_state, images) = interact(state, click, &functions, &constants);
         print_images(images);
         point = request_click_from_user();
         state = new_state;
@@ -771,7 +761,7 @@ mod tests {
         .unwrap();
 
         let expected = Atom::new("5");
-        assert_equal(result.clone(), expected.clone());
+        assert_equal(result, expected);
     }
 
     #[test]
@@ -791,6 +781,6 @@ mod tests {
         .unwrap();
 
         let expected = Atom::new("-2");
-        assert_equal(result.clone(), expected.clone());
+        assert_equal(result, expected);
     }
 }
