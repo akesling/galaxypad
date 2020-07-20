@@ -361,32 +361,51 @@ fn parse_number(name: &str) -> Result<i64, String> {
     Err(format!("Failed to parse {} as a number", name))
 }
 
-fn flatten_point(points_expr: ExprRef) -> (i64, i64) {
+fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
     if let Some(name) = points_expr.borrow().name().as_ref() {
         if name == &"nil" {
             println!("Nil list provided to flatten_point");
 
-            (0, 0)
+            Ok((0, 0))
         } else {
             panic!("First item in list was non-nil atom({}) not Ap", name);
         }
     } else {
-        let second = points_expr.borrow().func().unwrap().clone();
+        let second = points_expr
+            .borrow()
+            .func()
+            .ok_or_else(|| "func expected on points_expr of flatten_point")?
+            .clone();
         if let Some(name) = second.borrow().name().as_ref() {
             panic!("Second item in list was non-nil atom({}) not Ap", name);
         }
 
-        let cons = second.borrow().func().unwrap().clone();
+        let cons = second
+            .borrow()
+            .func()
+            .ok_or_else(|| "func expected on second of flatten_point")?
+            .clone();
         if let Some(name) = cons.borrow().name().as_ref() {
             if name != &"cons" {
                 panic!("Cons-place item in list was atom({}) not cons", name);
             }
         }
 
-        (
-            as_num(points_expr.borrow().arg().unwrap()).unwrap(),
-            as_num(second.clone().borrow().arg().unwrap()).unwrap(),
-        )
+        Ok((
+            as_num(
+                points_expr
+                    .borrow()
+                    .arg()
+                    .ok_or_else(|| "arg expected on points_expr of flatten_point")?,
+            )?,
+            as_num(
+                second
+                    .clone()
+                    .borrow()
+                    .arg()
+                    .ok_or_else(|| "arg expected on second of flatten_point")?,
+            )?,
+        ))
     }
 }
 
@@ -401,7 +420,11 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             ))
         }
     } else {
-        let second = expr.borrow().func().unwrap().clone();
+        let second = expr
+            .borrow()
+            .func()
+            .ok_or_else(|| "func expected on func of get_list_items_from_expr")?
+            .clone();
         if let Some(name) = second.borrow().name().as_ref() {
             return Err(format!(
                 "Second item in list was non-nil atom({}) not Ap",
@@ -409,7 +432,11 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             ));
         }
 
-        let cons = second.borrow().func().unwrap().clone();
+        let cons = second
+            .borrow()
+            .func()
+            .ok_or_else(|| "func expected on second of get_list_items_from_expr")?
+            .clone();
         if let Some(name) = cons.borrow().name().as_ref() {
             if name != &"cons" {
                 return Err(format!(
@@ -419,9 +446,15 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             }
         }
 
-        let mut flattened = vec![second.borrow().arg().unwrap()];
+        let mut flattened = vec![second
+            .borrow()
+            .arg()
+            .ok_or_else(|| "arg expected on second of get_list_items_from_expr")?];
 
-        let next = expr.borrow().arg().unwrap();
+        let next = expr
+            .borrow()
+            .arg()
+            .ok_or_else(|| "arg expected on expr of get_list_items_from_expr")?;
         if let Some(name) = next.clone().borrow().name().as_ref() {
             if name == &"nil" {
                 Ok(flattened)
@@ -476,8 +509,19 @@ fn try_eval(
             return Ok(function.clone());
         }
     } else {
-        let func = eval(expr.borrow().func().unwrap().clone(), functions, constants)?;
-        let x = expr.borrow().arg().unwrap().clone();
+        let func = eval(
+            expr.borrow()
+                .func()
+                .ok_or_else(|| "func expected on expr of try_eval")?
+                .clone(),
+            functions,
+            constants,
+        )?;
+        let x = expr
+            .borrow()
+            .arg()
+            .ok_or_else(|| "arg expected on expr of try_eval")?
+            .clone();
         if let Some(name) = func.clone().borrow().name().as_ref() {
             //             if (fun.Name == "neg") return Atom(-asNum(eval(x)))
             //             if (fun.Name == "i") return x
@@ -513,8 +557,20 @@ fn try_eval(
                 _ => (),
             }
         } else {
-            let func2 = eval(func.borrow().func().unwrap().clone(), functions, constants)?.clone();
-            let y = func.borrow().arg().unwrap().clone();
+            let func2 = eval(
+                func.borrow()
+                    .func()
+                    .ok_or_else(|| "func expected on func of try_eval")?
+                    .clone(),
+                functions,
+                constants,
+            )?
+            .clone();
+            let y = func
+                .borrow()
+                .arg()
+                .ok_or_else(|| "arg expected on func of try_eval")?
+                .clone();
             if let Some(name) = func2.clone().borrow().name().as_ref() {
                 match *name {
                     //                 if (fun2.Name == "t") return y
@@ -573,8 +629,19 @@ fn try_eval(
                     _ => (),
                 }
             } else {
-                let func3 = eval(func2.borrow().func().unwrap(), functions, constants)?.clone();
-                let z = func2.borrow().arg().unwrap();
+                let func3 = eval(
+                    func2
+                        .borrow()
+                        .func()
+                        .ok_or_else(|| "func expected on func2 of try_eval")?,
+                    functions,
+                    constants,
+                )?
+                .clone();
+                let z = func2
+                    .borrow()
+                    .arg()
+                    .ok_or_else(|| "arg expected on func2 of try_eval")?;
                 if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
                         //                     if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
@@ -610,15 +677,15 @@ fn eval_cons(
     Ok(res)
 }
 
-fn vectorize_points_expr(points_expr: ExprRef) -> Vec<(i64, i64)> {
+fn vectorize_points_expr(points_expr: ExprRef) -> Result<Vec<(i64, i64)>, String> {
     let mut result = vec![];
 
-    let flattened: Vec<ExprRef> = get_list_items_from_expr(points_expr).unwrap();
+    let flattened: Vec<ExprRef> = get_list_items_from_expr(points_expr)?;
     for expr in flattened.into_iter() {
-        result.push(flatten_point(expr.clone()));
+        result.push(flatten_point(expr.clone())?);
     }
 
-    result
+    Ok(result)
 }
 
 fn print_images(images: ExprRef) {
