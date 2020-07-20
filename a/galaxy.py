@@ -7,7 +7,7 @@ import math
 # from dataclasses import dataclass
 from itertools import zip_longest
 from random import randint
-from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union, Any
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union, Any, Sequence
 
 import requests
 import sdl2.ext
@@ -91,9 +91,11 @@ class Tree:
 
 Expr = Union[Tree, Value]
 # mypy doesn't support recursive types: https://github.com/python/mypy/issues/731
-# Vector = Union[List['Vector'], Tuple['Vector'], int, None]
-VectorElem = Union[List, Tuple, int, None]
-Vector = Union[List[VectorElem], Tuple[VectorElem], int, None]
+# Vector = Union[Tuple['Vector'], int, None]
+# Hack the type system
+VectorUnit = Union[Tuple[Any, Any], Tuple[()], int]
+VectorElem = Union[Tuple[VectorUnit, VectorUnit], Tuple[()], int]
+Vector = Union[Tuple[VectorElem, VectorElem], Tuple[()], int]
 Modulation = str
 
 
@@ -109,40 +111,26 @@ def vector(expr: Expr) -> Vector:
     """ Vector notation """
     if isinstance(expr, Value):
         if str(expr) == "nil":
-            return None
+            return ()
         return int(expr)
     if isinstance(expr, Tree):
-        tok: List[Union[List, Tuple, int]] = unparse(expr).split()  # type: ignore
+        string = unparse(expr)
+        tok: Sequence[Union[Vector, str]] = string.split()
         again = True
         while again and len(tok) >= 5:
             again = False
             for i in range(len(tok) - 4):
                 a, b, c, d, e = tok[i : i + 5]
-                if (
-                    (a, b, c) == ("ap", "ap", "cons")
-                    and d not in ("ap", "cons")
-                    and e not in ("ap", "cons")
-                ):
-                    if isinstance(d, str):
-                        d = None if d == "nil" else int(d)
-                    if isinstance(e, str):
-                        e = None if e == "nil" else int(e)
-                    if d is None:
-                        tok = tok[:i] + [(d, e)] + tok[i + 5 :]
-                        again = True
-                        break
-                    elif e is None:
-                        tok = tok[:i] + [[d]] + tok[i + 5 :]
-                        again = True
-                        break
-                    elif isinstance(e, list) and type(d) == type(e[0]):
-                        tok = tok[:i] + [[d] + e] + tok[i + 5 :]
-                        again = True
-                        break
-                    else:
-                        tok = tok[:i] + [(d, e)] + tok[i + 5 :]
-                        again = True
-                        break
+                match = ("ap", "ap", "cons")
+                if (a, b, c) != match or d in match or e in match:
+                    continue
+                x: Vector = () if d == "nil" else d if isinstance(d, tuple) else int(d)
+                y: Vector = () if e == "nil" else e if isinstance(e, tuple) else int(e)
+                head: List[Union[Vector, str]] = list(tok[:i])
+                tail: List[Union[Vector, str]] = list(tok[i + 5:])
+                tok = head + [(x, y)] + tail
+                again = True
+                break
         (result,) = tok  # Everything is always wrapped in an outer list
         return result  # type: ignore
     raise ValueError(f"Cannot vectorize {type(expr)} {expr}")
