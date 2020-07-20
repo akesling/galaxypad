@@ -7,6 +7,13 @@ use std::rc::Rc;
 
 // See video course https://icfpcontest2020.github.io/#/post/2054
 
+struct Constants {
+    cons: ExprRef,
+    t: ExprRef,
+    f: ExprRef,
+    nil: ExprRef,
+}
+
 type ExprRef = Rc<RefCell<dyn Expr>>;
 trait Expr: Debug {
     fn name(&self) -> Option<&str>;
@@ -153,7 +160,7 @@ fn interact(
     state: ExprRef,
     event: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &HashMap<String, ExprRef>,
+    constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap(Ap(Atom("galaxy".to_owned()), state.clone()), event.clone());
@@ -195,7 +202,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
 fn eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &HashMap<String, ExprRef>,
+    constants: &Constants,
 ) -> Result<ExprRef, String> {
     match expr.borrow().evaluated() {
         Some(expr) => {
@@ -220,7 +227,7 @@ fn eval(
 fn try_eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &HashMap<String, ExprRef>,
+    constants: &Constants,
 ) -> Result<ExprRef, String> {
     match expr.borrow().evaluated() {
         Some(x) => {
@@ -245,25 +252,25 @@ fn try_eval(
                             return Ok(x);
                         }
                         "nil" => {
-                            return Ok(constants.get("t").unwrap().clone());
+                            return Ok(constants.t.clone());
                         }
                         "isnil" => {
                             return Ok(Ap(
                                 x,
                                 Ap(
-                                    constants.get("t").unwrap().clone(),
+                                    constants.t.clone(),
                                     Ap(
-                                        constants.get("t").unwrap().clone(),
-                                        constants.get("f").unwrap().clone(),
+                                        constants.t.clone(),
+                                        constants.f.clone(),
                                     ),
                                 ),
                             ));
                         }
                         "car" => {
-                            return Ok(Ap(x, constants.get("t").unwrap().clone()));
+                            return Ok(Ap(x, constants.t.clone()));
                         }
                         "car" => {
-                            return Ok(Ap(x, constants.get("f").unwrap().clone()));
+                            return Ok(Ap(x, constants.f.clone()));
                         }
                         _ => (),
                     }
@@ -303,18 +310,18 @@ fn try_eval(
                                 let are_equal = as_num(eval(x, functions, constants)?)?
                                     == as_num(eval(y, functions, constants)?)?;
                                 return Ok(if are_equal {
-                                    constants.get("t").unwrap().clone()
+                                    constants.t.clone()
                                 } else {
-                                    constants.get("f").unwrap().clone()
+                                    constants.f.clone()
                                 });
                             }
                             "lt" => {
                                 let is_less_than = as_num(eval(x, functions, constants)?)?
                                     < as_num(eval(y, functions, constants)?)?;
                                 return Ok(if is_less_than {
-                                    constants.get("t").unwrap().clone()
+                                    constants.t.clone()
                                 } else {
-                                    constants.get("f").unwrap().clone()
+                                    constants.f.clone()
                                 });
                             }
                             "cons" => {
@@ -348,11 +355,11 @@ fn eval_cons(
     head: ExprRef,
     tail: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &HashMap<String, ExprRef>,
+    constants: &Constants,
 ) -> Result<ExprRef, String> {
     let res = Ap(
         Ap(
-            constants.get("cons").unwrap().clone(),
+            constants.cons.clone(),
             eval(head, functions, constants)?,
         ),
         eval(tail, functions, constants)?,
@@ -372,20 +379,21 @@ fn request_click_from_user() -> Point {
 
 fn main() {
     let functions = parse_functions("DUMMY VALUE");
-    let mut constants: HashMap<String, ExprRef> = HashMap::new();
-    constants.insert("cons".to_owned(), Atom("cons".to_owned()));
-    constants.insert("t".to_owned(), Atom("t".to_owned()));
-    constants.insert("f".to_owned(), Atom("f".to_owned()));
-    constants.insert("nil".to_owned(), Atom("nil".to_owned()));
+    let constants = Constants {
+        cons: Atom("cons".to_owned()),
+        t: Atom("t".to_owned()),
+        f: Atom("f".to_owned()),
+        nil: Atom("nil".to_owned()),
+    };
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
-    let mut state: ExprRef = constants.get("nil").unwrap().clone();
+    let mut state: ExprRef = constants.nil.clone();
     let mut point = Point { x: 0, y: 0 };
 
     loop {
         let click = Ap(
             Ap(
-                constants.get("cons").unwrap().clone(),
+                constants.cons.clone(),
                 Atom(point.x.to_string()),
             ),
             Atom(point.y.to_string()),
