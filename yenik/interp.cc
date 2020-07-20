@@ -687,17 +687,48 @@ class Engine {
     ExprRef state = nil_;
 		Vec click_vec = {0, 0};
 
+    // Automatic bootup clicks crosses for us. We send 8 (0,0), but there are
+    // only 7 because click_vec starts as (0,0)
+    const int starter_clicks = 16 - 1;
+    Vec starter_vecs[starter_clicks] = {
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {0, 0},
+      {8, 4},
+      {2, -8},
+      {3, 6},
+      {0, -14},
+      {-4, 10},
+      {9, -3},
+      {-4, 10},
+      {1, 4},
+    };
+
+    int loops = 0;
 		while(true) {
 			ExprRef click = Ap(Ap(cons_, Atom(click_vec.x)), Atom(click_vec.y));
       auto ires = InteractGalaxy(state, click);
       PRINT_IMAGES(ires.pics);
 
-      const bool should_quit = PollForClick(&click_vec);
-      if (should_quit) {
-        return;
+      if (loops < starter_clicks) {
+        click_vec = starter_vecs[loops];
+      } else {
+        const bool should_quit = PollForClick(&click_vec);
+        if (should_quit) {
+          return;
+        }
       }
 
       state = ires.data;
+
+      //if (loops % 10 == 0) {
+      //  MarkAndSweep({ires.data, ires.pics});
+      //}
+      loops++;
 		}
   }
 
