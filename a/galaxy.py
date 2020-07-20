@@ -115,7 +115,7 @@ def vector(expr: Expr) -> Vector:
         return int(expr)
     if isinstance(expr, Tree):
         string = unparse(expr)
-        tok: Sequence[Union[Vector, str]] = string.split()
+        tok: List[Union[Vector, str]] = string.split()  # type: ignore
         again = True
         while again and len(tok) >= 5:
             again = False
@@ -126,8 +126,8 @@ def vector(expr: Expr) -> Vector:
                     continue
                 x: Vector = () if d == "nil" else d if isinstance(d, tuple) else int(d)
                 y: Vector = () if e == "nil" else e if isinstance(e, tuple) else int(e)
-                head: List[Union[Vector, str]] = list(tok[:i])
-                tail: List[Union[Vector, str]] = list(tok[i + 5:])
+                head: List[Union[Vector, str]] = tok[:i]
+                tail: List[Union[Vector, str]] = tok[i + 5:]
                 tok = head + [(x, y)] + tail
                 again = True
                 break
