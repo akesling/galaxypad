@@ -184,8 +184,7 @@ impl Expr for Ap {
     }
 
     fn equals(&self, other: ExprRef) -> bool {
-        let other_tmp = other.borrow();
-        match (other_tmp.func(), other_tmp.arg()) {
+        match (other.borrow().func(), other.borrow().arg()) {
             (Some(func), Some(arg)) => {
                 self.func.borrow().equals(func) && self.arg.borrow().equals(arg)
             }
