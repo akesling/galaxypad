@@ -290,7 +290,7 @@ fn interact(
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = ap(ap(atom("galaxy".to_owned()), state.clone()), event.clone());
     println!("Eval'ing");
-    let res: ExprRef = eval(expr, functions, constants, 0).unwrap();
+    let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     println!("Converting results to a list");
     let items = get_list_items_from_expr(res).unwrap();
@@ -386,17 +386,16 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
 fn eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &Constants,
-    stack_depth: u64,
+    constants: &Constants
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
     }
 
-    let mut initial_expr = expr.clone();
+    let initial_expr = expr.clone();
     let mut current_expr = expr.clone();
     loop {
-        let result = try_eval(current_expr.clone(), functions, constants, stack_depth + 1)?;
+        let result = try_eval(current_expr.clone(), functions, constants)?;
         if !ptr::eq(current_expr.as_ref(), result.as_ref()) {
             current_expr = result.clone();
             continue;
@@ -411,7 +410,6 @@ fn try_eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
-    stack_depth: u64,
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x.clone());
@@ -426,7 +424,6 @@ fn try_eval(
             expr.borrow().func().unwrap().clone(),
             functions,
             constants,
-            stack_depth + 1,
         )?;
         let x = expr.borrow().arg().unwrap().clone();
         if let Some(name) = func.clone().borrow().name().as_ref() {
@@ -439,7 +436,7 @@ fn try_eval(
             match *name {
                 "neg" => {
                     return Ok(atom(
-                        (-as_num(eval(x, functions, constants, stack_depth + 1)?)?).to_string(),
+                        (-as_num(eval(x, functions, constants)?)?).to_string(),
                     ));
                 }
                 "i" => {
@@ -470,7 +467,6 @@ fn try_eval(
                 func.borrow().func().unwrap().clone(),
                 functions,
                 constants,
-                stack_depth + 1,
             )?
             .clone();
             let y = func.borrow().arg().unwrap().clone();
@@ -487,31 +483,31 @@ fn try_eval(
 //                 if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
                     "add" => {
                         return Ok(atom(
-                            (as_num(eval(x, functions, constants, stack_depth + 1)?)?
-                                + as_num(eval(y, functions, constants, stack_depth + 1)?)?)
+                            (as_num(eval(x, functions, constants)?)?
+                                + as_num(eval(y, functions, constants)?)?)
                             .to_string(),
                         ));
                     }
 //                 if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
                     "mul" => {
                         return Ok(atom(
-                            (as_num(eval(x, functions, constants, stack_depth + 1)?)?
-                                * as_num(eval(y, functions, constants, stack_depth + 1)?)?)
+                            (as_num(eval(x, functions, constants)?)?
+                                * as_num(eval(y, functions, constants)?)?)
                             .to_string(),
                         ));
                     }
 //                 if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
                     "div" => {
                         return Ok(atom(
-                            (as_num(eval(y, functions, constants, stack_depth + 1)?)?
-                                / as_num(eval(x, functions, constants, stack_depth + 1)?)?)
+                            (as_num(eval(y, functions, constants)?)?
+                                / as_num(eval(x, functions, constants)?)?)
                             .to_string(),
                         ));
                     }
 //                 if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
                     "eq" => {
-                        let are_equal = as_num(eval(x, functions, constants, stack_depth + 1)?)?
-                            == as_num(eval(y, functions, constants, stack_depth + 1)?)?;
+                        let are_equal = as_num(eval(x, functions, constants)?)?
+                            == as_num(eval(y, functions, constants)?)?;
                         return Ok(if are_equal {
                             constants.t.clone()
                         } else {
@@ -520,8 +516,8 @@ fn try_eval(
                     }
 //                 if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
                     "lt" => {
-                        let is_less_than = as_num(eval(y, functions, constants, stack_depth + 1)?)?
-                            < as_num(eval(x, functions, constants, stack_depth + 1)?)?;
+                        let is_less_than = as_num(eval(y, functions, constants)?)?
+                            < as_num(eval(x, functions, constants)?)?;
                         return Ok(if is_less_than {
                             constants.t.clone()
                         } else {
@@ -530,7 +526,7 @@ fn try_eval(
                     }
 //                 if (fun2.Name == "cons") return evalCons(y, x)
                     "cons" => {
-                        return Ok(eval_cons(y, x, functions, constants, stack_depth + 1)?);
+                        return Ok(eval_cons(y, x, functions, constants)?);
                     }
                     _ => (),
                 }
@@ -538,8 +534,7 @@ fn try_eval(
                 let func3 = eval(
                     func2.borrow().func().unwrap(),
                     functions,
-                    constants,
-                    stack_depth + 1,
+                    constants
                 )?
                 .clone();
                 let z = func2.borrow().arg().unwrap();
@@ -570,22 +565,57 @@ fn eval_cons(
     head: ExprRef,
     tail: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &Constants,
-    stack_depth: u64,
+    constants: &Constants
 ) -> Result<ExprRef, String> {
     let res = ap(
         ap(
             constants.cons.clone(),
-            eval(head, functions, constants, stack_depth + 1)?,
+            eval(head, functions, constants)?,
         ),
-        eval(tail, functions, constants, stack_depth + 1)?,
+        eval(tail, functions, constants)?,
     );
     res.borrow_mut().set_evaluated(res.clone())?;
     return Ok(res);
 }
 
-fn print_images(_points: ExprRef) {
-    panic!("print_images is not yet implemented");
+//  Vec FlattenVec(ExprRef ref) {
+//    const Expr& first = deref(ref);
+//    if (!IsAp(first)) {
+//      panic("failed parsing vec, doesnt start with Ap");
+//    }
+//
+//    const auto& second = deref(first.func);
+//    if (!IsAp(second)) {
+//      panic("failed parsing vec, second not an Ap");
+//    }
+//
+//    const auto& cons = deref(second.func);
+//    if (cons.name != "cons") {
+//      panic("failed parsing vec, no cons");
+//    }
+//
+//    Vec v;
+//    v.x = AsNum(second.arg);
+//    v.y = AsNum(first.arg);
+//    return v;
+//  }
+fn flatten_vec(points_expr: ExprRef) -> Vec<i64>{
+    return vec![];
+}
+
+fn vectorize_points_expr(points_expr: ExprRef) -> Vec<i64> {
+    let result = vec![];
+
+    let flattened = get_list_items_from_expr(points_expr);
+//    for expr in flattened {
+//      result.extend(flatten_vec(expr.clone()));
+//    }
+
+    return result;
+}
+
+fn print_images(points: ExprRef) {
+    panic!("print_images is not yet implemented, tried to print {:?}", vectorize_points_expr(points));
 }
 
 fn request_click_from_user() -> Point {
