@@ -277,47 +277,26 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     assert v == [], f"Failed to parse res correctly {unparse(res)} {v}"
     if flag == 0:
         return (unvector(newState), unvector(data))
-    assert False
-    return interact(unvector(newState), SEND_TO_ALIEN_PROXY(data))
+    # return interact(unvector(newState), SEND_TO_ALIEN_PROXY(data))
+    raise NotImplementedError("SEND_TO_ALIEN_PROXY not implemented")
 
 
 def print_images(images: Expr, pixelview, SIZE) -> None:
     sdl2.ext.fill(winsurf, BLACK)
     imvec = vector(images)  # convert to lists
-    print("imvec", imvec)
     while imvec != []:
         image, imvec = imvec  # type: ignore
-        print("image", image)
-        # im = Image.new("RGB", (SIZE * 2, SIZE * 2))
         color = sdl2.ext.Color(randint(128, 255), randint(128, 255), randint(128, 255))
         while image != []:
             pixel, image = image  # type: ignore
-            pixelview[pixel[0] + SIZE // 2][pixel[1] + SIZE // 2] = color
-    print("Printed images")
+            pixelview[pixel[1] + SIZE // 2][pixel[0] + SIZE // 2] = color
 
-
-def REQUEST_CLICK_FROM_USER() -> Expr:
-    x, y = 0, 0
-    return Tree(Tree(cons, Value(str(x))), Value(str(y)))
-
-
-def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
-    assert False
 
 
 if __name__ == "__main__":
-    # Initial state
     state: Expr = Value("nil")
     click: Expr = unvector([0, 0])
     state, images = interact(state, click)
-    # # main loop
-    # while True:
-    #     click: Expr = unvector([0, 0])
-    #     newState, images = interact(state, click)
-    #     PRINT_IMAGES(images)
-    #     click = REQUEST_CLICK_FROM_USER()
-    #     state = newState
-
 
     BLACK = sdl2.ext.Color(0, 0, 0)
 
