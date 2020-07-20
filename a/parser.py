@@ -4,6 +4,9 @@ from itertools import zip_longest
 from dataclasses import dataclass
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Iterable
 
+from PIL import Image
+from imgcat import imgcat
+
 
 @dataclass
 class Value:
@@ -265,16 +268,31 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     """ Interact with the game """
     expr: Expr = Tree(Tree(Value("galaxy"), state), event)
     res: Expr = evaluate(expr)
-    assert unparse(res) == unparse(unvector(vector(res))), f"Not vectorable {unparse(res)}"
-    flag, newState, data = GET_LIST_ITEMS_FROM_EXPR(res)
-    if asNum(flag) == 0:
-        return (newState, data)
-    return interact(newState, SEND_TO_ALIEN_PROXY(data))
+    assert unparse(res) == unparse(unvector(vector(res))), f"Modem check {unparse(res)}"
+    flag, (newState, (data, v)) = vector(res)  # type: ignore
+    assert isinstance(flag, int), f"bad flag {flag}"
+    assert v == [], f"Failed to parse res correctly {unparse(res)} {v}"
+    if flag == 0:
+        return (unvector(newState), unvector(data))
+    assert False
+    return interact(unvector(newState), SEND_TO_ALIEN_PROXY(data))
 
 
 # Stubs
 def PRINT_IMAGES(images: Expr) -> None:
-    print(unparse(images))
+    # SIZE = 256
+    SIZE=32
+    imvec = vector(images)  # convert to lists
+    while imvec != []:
+        image, imvec = imvec  # type: ignore
+        print("image", image)
+        im = Image.new("RGB", (SIZE * 2, SIZE * 2))
+        color = 0xFFFFFF & hash(id(image))  # Maybe random?
+        while image != []:
+            pixel, image = image  # type: ignore
+            offset = [pixel[0] + SIZE, pixel[1] + SIZE]
+            im.putpixel(offset, color)
+        imgcat(im, height=40)
     print("Printed images")
 
 
@@ -284,21 +302,14 @@ def REQUEST_CLICK_FROM_USER() -> Expr:
 
 
 def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
-    return data
-
-
-def GET_LIST_ITEMS_FROM_EXPR(res: Expr) -> Tuple[Value, Expr, Expr]:
-    flag, (newState, (data, v)) = vector(res)  # type: ignore
-    assert isinstance(flag, int), f"bad flag {flag}"
-    assert v == [], f"Failed to parse res correctly {res} {v}"
-    return Value(str(flag)), unvector(newState), unvector(data)
+    assert False
 
 
 if __name__ == "__main__":
     state: Expr = nil
 
     # main loop
-    for _ in range(1):  # while True:
+    for _ in range(2):  # while True:
         click: Expr = unvector([0, 0])
         newState, images = interact(state, click)
         PRINT_IMAGES(images)
@@ -327,4 +338,5 @@ if __name__ == "__main__":
     # )
     # print(vector(parse("ap ap cons 0 ap ap cons 1 nil")))
     # print(vector(parse("ap ap cons ap ap cons 0 nil ap ap cons 1 nil")))
-    print(vector(parse('ap ap cons 0 nil')))
+    print(vector(parse("ap ap cons 0 nil")))
+
