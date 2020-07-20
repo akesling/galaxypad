@@ -21,7 +21,7 @@ class Value:
     Name: str
     Evaluated: Optional["Expr"] = None
 
-    def __init__(self, Name: str):
+    def __init__(self, Name: Union[str, int]):
         self.Name = str(Name)
         self.Evaluated = None
 
@@ -42,6 +42,11 @@ class Value:
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({repr(self.Name)})"
+
+    def __str__(self) -> str:
+        # TODO: deduplicate with unparse
+        assert self.Name is not None, self
+        return self.Name
 
 
 class Tree:
@@ -87,7 +92,7 @@ class Tree:
 Expr = Union[Tree, Value]
 # mypy doesn't support recursive types: https://github.com/python/mypy/issues/731
 # Vector = Union[List['Vector'], Tuple['Vector'], int, None]
-VectorElem = Union[List, Tuple, int, None]  # Hack for now
+VectorElem = Union[List, Tuple, int, None]
 Vector = Union[List[VectorElem], Tuple[VectorElem], int, None]
 Modulation = str
 
@@ -103,8 +108,8 @@ f: Expr = Value("f")
 def vector(expr: Expr) -> Vector:
     """ Vector notation """
     if isinstance(expr, Value):
-        if expr.Name == "nil":
-            return []
+        if str(expr) == "nil":
+            return None
         return int(expr)
     if isinstance(expr, Tree):
         tok: List[Union[List, Tuple, int]] = unparse(expr).split()  # type: ignore
@@ -119,11 +124,19 @@ def vector(expr: Expr) -> Vector:
                     and e not in ("ap", "cons")
                 ):
                     if isinstance(d, str):
-                        d = [] if d == "nil" else int(d)
+                        d = None if d == "nil" else int(d)
                     if isinstance(e, str):
-                        e = [] if e == "nil" else int(e)
-                    if d != [] and isinstance(e, list):
-                        tok = tok[:i] + [[d,] + e] + tok[i + 5 :]
+                        e = None if e == "nil" else int(e)
+                    if d is None:
+                        tok = tok[:i] + [(d, e)] + tok[i + 5 :]
+                        again = True
+                        break
+                    elif e is None:
+                        tok = tok[:i] + [[d]] + tok[i + 5 :]
+                        again = True
+                        break
+                    elif isinstance(e, list) and type(d) == type(e[0]):
+                        tok = tok[:i] + [[d] + e] + tok[i + 5 :]
                         again = True
                         break
                     else:
@@ -135,31 +148,29 @@ def vector(expr: Expr) -> Vector:
     raise ValueError(f"Cannot vectorize {type(expr)} {expr}")
 
 
-def unvector(lst: Any) -> Expr:
+def unvector(vec: Vector) -> Expr:
     """ Undo a vector into a tree """
-    if lst == [] or lst == ():
+    if vec is None or vec == []:  # Unpacking a recursive list gives us None
         return Value("nil")
-    if isinstance(lst, int):
-        return Value(str(lst))
-    if isinstance(lst, tuple):  # Bare pair
-        assert len(lst) == 2, lst
-        x, y = lst
-        return Tree(Tree(Value("cons"), unvector(x)), unvector(y))
-    if isinstance(lst, list):  # Recursive list
-        assert len(lst) > 0, lst
-        x, *rem = lst
-        return Tree(Tree(Value("cons"), unvector(x)), unvector(rem))
-    raise ValueError(f"Can't unvector type {type(lst)} {lst}")
+    if isinstance(vec, int):
+        return Value(str(vec))
+    if isinstance(vec, tuple):  # Bare pair
+        assert len(vec) == 2, vec
+        return Tree(Tree(Value("cons"), unvector(vec[0])), unvector(vec[1]))  # type: ignore
+    if isinstance(vec, list):  # Recursive list
+        assert len(vec) > 0, vec
+        return Tree(Tree(Value("cons"), unvector(vec[0])), unvector(vec[1:]))  # type: ignore
+    raise ValueError(f"Can't unvector type {type(vec)} {vec}")
 
 
-def demodulate(modulation: str) -> Expr:
+def demodulate(modulation: Modulation) -> Expr:
     """ Demodulate a complete modulation, Error if leftover """
     treeish, remainder = demodulate_partial(modulation)
     assert remainder == "", f"failed to fully parse {modulation} -> {remainder}"
     return treeish
 
 
-def demodulate_partial(modulation: str) -> Tuple[Expr, str]:
+def demodulate_partial(modulation: Modulation) -> Tuple[Expr, Modulation]:
     """
     Parse the first complete item out of a modulation,
     and return the item and the remainder of the modulation
@@ -189,7 +200,7 @@ def demodulate_partial(modulation: str) -> Tuple[Expr, str]:
     raise ValueError(f"Unmatched modulation {modulation}")
 
 
-def modulate(expr: Expr) -> str:
+def modulate(expr: Expr) -> Modulation:
     """ modulate a value into a modulation """
     if expr == Value("nil"):
         return "00"
@@ -280,25 +291,25 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
     assert isinstance(expr, (Value, Tree)), expr
     if expr.Evaluated:
         return expr.Evaluated, False
-    if isinstance(expr, Value) and expr.Name in functions:
-        return functions[expr.Name], True
+    if isinstance(expr, Value) and str(expr) in functions:
+        return functions[str(expr)], True
     if isinstance(expr, Tree):
         assert isinstance(expr.Left, (Value, Tree)), expr
         assert isinstance(expr.Right, (Value, Tree)), expr
         left: Expr = evaluate(expr.Left)
         x: Expr = expr.Right
         if isinstance(left, Value):
-            if left.Name == "neg":
-                return Value(str(-int(evaluate(x)))), True
-            if left.Name == "i":
+            if str(left) == "neg":
+                return Value(-int(evaluate(x))), True  # type: ignore
+            if str(left) == "i":
                 return x, True
-            if left.Name == "nil":
+            if str(left) == "nil":
                 return t, True
-            if left.Name == "isnil":
+            if str(left) == "isnil":
                 return Tree(x, Tree(t, Tree(t, f))), True
-            if left.Name == "car":
+            if str(left) == "car":
                 return Tree(x, t), True
-            if left.Name == "cdr":
+            if str(left) == "cdr":
                 return Tree(x, f), True
         if isinstance(left, Tree):
             assert isinstance(left.Left, (Value, Tree)), left
@@ -306,39 +317,26 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
             left2: Expr = evaluate(left.Left)
             y: Expr = left.Right
             if isinstance(left2, Value):
-                if left2.Name == "t":
+                if str(left2) == "t":
                     return y, True
-                if left2.Name == "f":
+                if str(left2) == "f":
                     return x, True
-                if left2.Name == "add":
+                if str(left2) == "add":
+                    return Value(int(evaluate(x)) + int(evaluate(y))), True  # type: ignore
+                if str(left2) == "mul":
+                    return Value(int(evaluate(x)) * int(evaluate(y))), True  # type: ignore
+                if str(left2) == "div":
+                    a, b = int(evaluate(y)), int(evaluate(x))  # type: ignore
+                    return Value(a // b if a * b > 0 else (a + (-a % b)) // b), True
+                if str(left2) == "lt":
                     return (
-                        Value(str(int(evaluate(x)) + int(evaluate(y)))),
-                        True,
+                        (t, True) if int(evaluate(y)) < int(evaluate(x)) else (f, True)
                     )
-                if left2.Name == "mul":
+                if str(left2) == "eq":
                     return (
-                        Value(str(int(evaluate(x)) * int(evaluate(y)))),
-                        True,
+                        (t, True) if int(evaluate(y)) == int(evaluate(x)) else (f, True)
                     )
-                if left2.Name == "div":
-                    a, b = int(evaluate(y)), int(evaluate(x))
-                    return (
-                        Value(str(a // b if a * b > 0 else (a + (-a % b)) // b)),
-                        True,
-                    )
-                if left2.Name == "lt":
-                    return (
-                        (t, True)
-                        if int(evaluate(y)) < int(evaluate(x))
-                        else (f, True)
-                    )
-                if left2.Name == "eq":
-                    return (
-                        (t, True)
-                        if int(evaluate(y)) == int(evaluate(x))
-                        else (f, True)
-                    )
-                if left2.Name == "cons":
+                if str(left2) == "cons":
                     return evalCons(y, x), True
             if isinstance(left2, Tree):
                 assert isinstance(left2.Left, (Value, Tree)), left2
@@ -346,13 +344,13 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
                 left3: Expr = evaluate(left2.Left)
                 z: Expr = left2.Right
                 if isinstance(left3, Value):
-                    if left3.Name == "s":
+                    if str(left3) == "s":
                         return Tree(Tree(z, x), Tree(y, x)), True
-                    if left3.Name == "c":
+                    if str(left3) == "c":
                         return Tree(Tree(z, x), y), True
-                    if left3.Name == "b":
+                    if str(left3) == "b":
                         return Tree(z, Tree(y, x)), True
-                    if left3.Name == "cons":
+                    if str(left3) == "cons":
                         return Tree(Tree(x, z), y), True
     return expr, False
 
@@ -383,12 +381,16 @@ def SEND_TO_ALIEN_PROXY(data: Vector) -> Vector:
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
 def interact(state: Vector, event: Vector) -> Tuple[Vector, Vector]:
     """ Interact with the game """
-    state = state if isinstance(state, (Value, Tree)) else unvector(state)
-    event = event if isinstance(event, (Value, Tree)) else unvector(event)
-    expr: Expr = Tree(Tree(Value("galaxy"), state), event)
+    expr: Expr = Tree(Tree(Value("galaxy"), unvector(state)), unvector(event))
     res: Expr = evaluate(expr)
     assert unparse(res) == unparse(demodulate(modulate(res))), f"modem {unparse(res)}"
-    flag, state, data = vector(res)
+    print("got res", unparse(res))
+    print("got vec", vector(res))
+    flag, (state, (data, term)) = vector(res)
+    print("flag", flag)
+    print("state", state)
+    print("data", data)
+    print("term", term)
     assert vector(unvector(state)) == state
     assert vector(unvector(data)) == data
     assert isinstance(flag, int), f"bad flag {flag}"
@@ -425,19 +427,22 @@ def print_images(images: Any, pixelview, SIZE, BIG) -> None:
 
 
 if __name__ == "__main__":
-    state: Expr = Value("nil")
+    state: Vector = None
+    click: Vector
     for click in [(0, 0)] * 8 + [
         (8, 4),
-        (2, -8),
-        (3, 6),
-        (0, -14),
-        (-4, 10),
-        (9, -3),
-        (-4, 10),
-        (1, 4),
+        # (2, -8),
+        # (3, 6),
+        # (0, -14),
+        # (-4, 10),
+        # (9, -3),
+        # (-4, 10),
+        # (1, 4),
         # (0, 1),  # Uncomment to skip galaxy screen
     ]:
         state, images = interact(state, click)
+    print(images)
+    exit(1)
 
     sdl2.ext.init()
     SIZE = 320  # Size of the display in game pixels
