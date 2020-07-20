@@ -656,6 +656,13 @@ mod tests {
         Ok(expr)
     }
 
+    fn build_test_functions(text: &str) -> Result<HashMap<String, ExprRef>, String> {
+        text.split('\n')
+            .filter(|s| !s.is_empty())
+            .map(|line| load_function(line))
+            .collect()
+    }
+
     fn assert_equal(result: ExprRef, expectation: ExprRef) {
         assert!(
             result.borrow().equals(expectation.clone()),
@@ -696,6 +703,23 @@ mod tests {
         )
         .unwrap();
         let expected_false = Atom::new(F);
+        assert_equal(result_false, expected_false);
+    }
+
+    #[test]
+    fn pseudo_simple_recursion() {
+        let functions = build_test_functions(
+            ":2000 = ap ap c t :2000
+            :1000 = ap f :1000",
+        )
+        .unwrap();
+
+        let result_true = eval(str_to_expr("ap :2000 x0").unwrap(), &functions).unwrap();
+        let expected_true = Atom::new("x0");
+        assert_equal(result_true, expected_true);
+
+        let result_false = eval(str_to_expr("ap :1000 x0").unwrap(), &functions).unwrap();
+        let expected_false = Atom::new("x0");
         assert_equal(result_false, expected_false);
     }
 }
