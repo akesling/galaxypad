@@ -1,7 +1,13 @@
+#[macro_use]
+extern crate maplit;
+#[macro_use]
+extern crate lazy_static;
+
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::Debug;
+use std::fs;
 use std::ptr;
 use std::rc::Rc;
 
@@ -12,6 +18,41 @@ struct Constants {
     t: ExprRef,
     f: ExprRef,
     nil: ExprRef,
+}
+
+lazy_static! {
+    static ref ATOMS: HashSet<String> = hashset!{
+        "add".to_owned(),
+        //"inc",
+        //"dec",
+        "i".to_owned(),
+        "t".to_owned(),
+        "f".to_owned(),
+        "mul".to_owned(),
+        "div".to_owned(),
+        "eq".to_owned(),
+        "lt".to_owned(),
+        "neg".to_owned(),
+        "s".to_owned(),
+        "c".to_owned(),
+        "b".to_owned(),
+        //"pwr2",
+        "cons".to_owned(),
+        "car".to_owned(),
+        "cdr".to_owned(),
+        "nil".to_owned(),
+        "isnil".to_owned(),
+        //"vec",
+        //"if0",
+        //"send",
+        //"checkerboard",
+        //"draw",
+        //"multipledraw",
+        //"modem",
+        //"f38",
+        //"statelessdraw",
+        //"interact",
+    };
 }
 
 type ExprRef = Rc<RefCell<dyn Expr>>;
@@ -152,6 +193,74 @@ struct Point {
     y: u64,
 }
 
+// Takes a vector of tokens and recursively consumes the tail of the token vector
+fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
+    let candidate_token = tokens[0];
+    if candidate_token == "ap" {
+        let (left, left_remainder) = deserialize(tokens[1..].to_vec())?;
+        let (right, right_remainder) = deserialize(left_remainder)?;
+        let ap_expr = Ap(left, right);
+        return Ok((ap_expr, right_remainder));
+    }
+
+    if ATOMS.contains(candidate_token) {
+        return Ok((Atom(candidate_token.to_owned()), tokens[1..].to_vec()));
+    }
+
+    if let Ok(i) = candidate_token.parse::<i64>() {
+        return Ok((Atom(i.to_string()), tokens[1..].to_vec()));
+    }
+
+    if candidate_token.starts_with(':') {
+        return Ok((Atom(candidate_token.to_owned()), tokens[1..].to_vec()));
+    }
+
+    return Err(format!("Could not deserialize: {}", candidate_token));
+}
+
+// Loads a function definition, which must be of the form:
+// <name> = <body expr>
+fn load_function(line: &str) -> Result<(String, ExprRef), String> {
+    let left_and_right: Vec<&str> = line.split('=').collect();
+    assert!(
+        left_and_right.len() == 2,
+        "Function line could not be split in two"
+    );
+
+    let left_tokens: Vec<&str> = left_and_right[0].split(' ').collect();
+    assert!(
+        left_tokens.len() == 1,
+        "Function name was longer than expected"
+    );
+    let function_name = left_tokens[0].to_owned();
+
+    let right_tokens: Vec<&str> = left_and_right[1].split(' ').collect();
+    assert!(right_tokens.len() > 0, "Function body was of length zero");
+    let (function_body, remainder) = deserialize(right_tokens)?;
+    assert!(
+        remainder.len() == 0,
+        format!(
+            "Function body did not cleanly parse, tokens remained: {:?}",
+            remainder
+        )
+    );
+
+    Ok((function_name, function_body))
+}
+
+// Opens the given filename and attempts to load each line as a function
+// definition (pretty much just for galaxy.txt)
+fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>, String> {
+    return fs::read_to_string(file_path)
+        .expect(&format!(
+            "Something went wrong reading the functions file {}",
+            file_path
+        ))
+        .split('\n')
+        .map(|line| load_function(line))
+        .collect();
+}
+
 fn parse_functions(script_string: &str) -> HashMap<String, ExprRef> {
     panic!("Parse functions is not yet implemented");
 }
@@ -204,7 +313,7 @@ fn parse_number(name: &str) -> Result<i64, String> {
         return Ok(0);
     }
 
-    return Err(format!("Failed to parse {} as a number", name))
+    return Err(format!("Failed to parse {} as a number", name));
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
@@ -212,18 +321,27 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         if name == &"nil" {
             return Ok(vec![expr.clone()]);
         } else {
-            return Err(format!("First item in list was non-nil Atom({}) not Ap", name))
+            return Err(format!(
+                "First item in list was non-nil Atom({}) not Ap",
+                name
+            ));
         }
     } else {
         let second = expr.borrow().func().unwrap().clone();
         if let Some(name) = second.borrow().name().as_ref() {
-            return Err(format!("Second item in list was non-nil Atom({}) not Ap", name))
+            return Err(format!(
+                "Second item in list was non-nil Atom({}) not Ap",
+                name
+            ));
         }
 
         let cons = expr.borrow().func().unwrap().clone();
         if let Some(name) = second.borrow().name().as_ref() {
             if name != &"cons" {
-                return Err(format!("Cons-place item in list was Atom({}) not cons", name))
+                return Err(format!(
+                    "Cons-place item in list was Atom({}) not cons",
+                    name
+                ));
             }
         }
 
