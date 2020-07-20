@@ -63,6 +63,7 @@ trait Expr: Debug {
     fn evaluated(&self) -> Option<ExprRef>;
     // NOTE(akesling): Beware memory leaks through circular dependencies on evaluated results!
     fn set_evaluated(&mut self, ExprRef) -> Result<(), String>;
+    fn equals(&self, other: ExprRef) -> bool;
 }
 
 #[derive(Default, Debug, Clone)]
@@ -102,30 +103,38 @@ impl Expr for Atom {
         self._evaluated = Some(Rc::downgrade(&expr));
         Ok(())
     }
+
+    fn equals(&self, other: ExprRef) -> bool {
+        match other.borrow().name() {
+            Some(name) => self.name == name,
+            None => false,
+        }
+    }
 }
 
 impl Expr for &Atom {
     fn name(&self) -> Option<&str> {
-        Some(&self.name)
+        (*self).name()
     }
 
     fn func(&self) -> Option<ExprRef> {
-        None
+        (*self).func()
     }
 
     fn arg(&self) -> Option<ExprRef> {
-        None
+        (*self).arg()
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        return match &self._evaluated {
-            Some(weak) => weak.upgrade(),
-            None => None,
-        };
+        (*self).evaluated()
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         (*self).set_evaluated(expr)
+    }
+
+    fn equals(&self, other: ExprRef) -> bool {
+        (*self).equals(other)
     }
 }
 
@@ -169,30 +178,41 @@ impl Expr for Ap {
         self._evaluated = Some(Rc::downgrade(&expr));
         Ok(())
     }
+
+    fn equals(&self, other: ExprRef) -> bool {
+        let other_tmp = other.borrow();
+        match (other_tmp.func(), other_tmp.arg()) {
+            (Some(func), Some(arg)) => {
+                self.func.borrow().equals(func) && self.arg.borrow().equals(arg)
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Expr for &Ap {
     fn name(&self) -> Option<&str> {
-        None
+        (*self).name()
     }
 
     fn func(&self) -> Option<ExprRef> {
-        Some(self.func.clone())
+        (*self).func()
     }
 
     fn arg(&self) -> Option<ExprRef> {
-        Some(self.arg.clone())
+        (*self).arg()
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        return match &self._evaluated {
-            Some(weak) => weak.upgrade(),
-            None => None,
-        };
+        (*self).evaluated()
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         (*self).set_evaluated(expr)
+    }
+
+    fn equals(&self, other: ExprRef) -> bool {
+        (*self).equals(other)
     }
 }
 
@@ -338,13 +358,10 @@ fn parse_number(name: &str) -> Result<i64, String> {
 fn flatten_point(points_expr: ExprRef) -> (i64, i64) {
     if let Some(name) = points_expr.borrow().name().as_ref() {
         if name == &"nil" {
-            println!( "Nil list provided to flatten_point");
+            println!("Nil list provided to flatten_point");
             return (0, 0);
         } else {
-            panic!(
-                "First item in list was non-nil atom({}) not Ap",
-                name
-            );
+            panic!("First item in list was non-nil atom({}) not Ap", name);
         }
     } else {
         if let Some(name) = points_expr.borrow().name().as_ref() {
@@ -355,23 +372,20 @@ fn flatten_point(points_expr: ExprRef) -> (i64, i64) {
         } else {
             let second = points_expr.borrow().func().unwrap().clone();
             if let Some(name) = second.borrow().name().as_ref() {
-                panic!(
-                    "Second item in list was non-nil atom({}) not Ap",
-                    name
-                );
+                panic!("Second item in list was non-nil atom({}) not Ap", name);
             }
 
             let cons = second.borrow().func().unwrap().clone();
             if let Some(name) = cons.borrow().name().as_ref() {
                 if name != &"cons" {
-                    panic!(
-                        "Cons-place item in list was atom({}) not cons",
-                        name
-                    );
+                    panic!("Cons-place item in list was atom({}) not cons", name);
                 }
             }
 
-            return (as_num(points_expr.borrow().arg().unwrap()).unwrap(), as_num(second.borrow().arg().unwrap()).unwrap());
+            return (
+                as_num(points_expr.borrow().arg().unwrap()).unwrap(),
+                as_num(second.borrow().arg().unwrap()).unwrap(),
+            );
         }
     }
 }
@@ -427,7 +441,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
 fn eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &Constants
+    constants: &Constants,
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
@@ -461,11 +475,7 @@ fn try_eval(
             return Ok(function.clone());
         }
     } else {
-        let func = eval(
-            expr.borrow().func().unwrap().clone(),
-            functions,
-            constants,
-        )?;
+        let func = eval(expr.borrow().func().unwrap().clone(), functions, constants)?;
         let x = expr.borrow().arg().unwrap().clone();
         if let Some(name) = func.clone().borrow().name().as_ref() {
             //             if (fun.Name == "neg") return Atom(-asNum(eval(x)))
@@ -476,9 +486,7 @@ fn try_eval(
             //             if (fun.Name == "cdr") return Ap(x, f)
             match *name {
                 "neg" => {
-                    return Ok(atom(
-                        (-as_num(eval(x, functions, constants)?)?).to_string(),
-                    ));
+                    return Ok(atom((-as_num(eval(x, functions, constants)?)?).to_string()));
                 }
                 "i" => {
                     return Ok(x);
@@ -504,24 +512,19 @@ fn try_eval(
                 _ => (),
             }
         } else {
-            let func2 = eval(
-                func.borrow().func().unwrap().clone(),
-                functions,
-                constants,
-            )?
-            .clone();
+            let func2 = eval(func.borrow().func().unwrap().clone(), functions, constants)?.clone();
             let y = func.borrow().arg().unwrap().clone();
             if let Some(name) = func2.clone().borrow().name().as_ref() {
                 match *name {
-//                 if (fun2.Name == "t") return y
+                    //                 if (fun2.Name == "t") return y
                     "t" => {
                         return Ok(y);
                     }
-//                 if (fun2.Name == "f") return x
+                    //                 if (fun2.Name == "f") return x
                     "f" => {
                         return Ok(x);
                     }
-//                 if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
+                    //                 if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
                     "add" => {
                         return Ok(atom(
                             (as_num(eval(x, functions, constants)?)?
@@ -529,7 +532,7 @@ fn try_eval(
                             .to_string(),
                         ));
                     }
-//                 if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
+                    //                 if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
                     "mul" => {
                         return Ok(atom(
                             (as_num(eval(x, functions, constants)?)?
@@ -537,7 +540,7 @@ fn try_eval(
                             .to_string(),
                         ));
                     }
-//                 if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
+                    //                 if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
                     "div" => {
                         return Ok(atom(
                             (as_num(eval(y, functions, constants)?)?
@@ -545,7 +548,7 @@ fn try_eval(
                             .to_string(),
                         ));
                     }
-//                 if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
+                    //                 if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
                     "eq" => {
                         let are_equal = as_num(eval(x, functions, constants)?)?
                             == as_num(eval(y, functions, constants)?)?;
@@ -555,7 +558,7 @@ fn try_eval(
                             constants.f.clone()
                         });
                     }
-//                 if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
+                    //                 if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
                     "lt" => {
                         let is_less_than = as_num(eval(y, functions, constants)?)?
                             < as_num(eval(x, functions, constants)?)?;
@@ -565,29 +568,24 @@ fn try_eval(
                             constants.f.clone()
                         });
                     }
-//                 if (fun2.Name == "cons") return evalCons(y, x)
+                    //                 if (fun2.Name == "cons") return evalCons(y, x)
                     "cons" => {
                         return Ok(eval_cons(y, x, functions, constants)?);
                     }
                     _ => (),
                 }
             } else {
-                let func3 = eval(
-                    func2.borrow().func().unwrap(),
-                    functions,
-                    constants
-                )?
-                .clone();
+                let func3 = eval(func2.borrow().func().unwrap(), functions, constants)?.clone();
                 let z = func2.borrow().arg().unwrap();
                 if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
-//                     if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
+                        //                     if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
                         "s" => return Ok(ap(ap(z, x.clone()), ap(y, x))),
-//                     if (fun3.Name == "c") return Ap(Ap(z, x), y)
+                        //                     if (fun3.Name == "c") return Ap(Ap(z, x), y)
                         "c" => return Ok(ap(ap(z, x), y)),
-//                     if (fun3.Name == "b") return Ap(z, Ap(y, x))
+                        //                     if (fun3.Name == "b") return Ap(z, Ap(y, x))
                         "b" => return Ok(ap(z, ap(y, x))),
-//                     if (fun3.Name == "cons") return Ap(Ap(x, z), y)
+                        //                     if (fun3.Name == "cons") return Ap(Ap(x, z), y)
                         "cons" => return Ok(ap(ap(x, z), y)),
                         _ => (),
                     }
@@ -606,13 +604,10 @@ fn eval_cons(
     head: ExprRef,
     tail: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &Constants
+    constants: &Constants,
 ) -> Result<ExprRef, String> {
     let res = ap(
-        ap(
-            constants.cons.clone(),
-            eval(head, functions, constants)?,
-        ),
+        ap(constants.cons.clone(), eval(head, functions, constants)?),
         eval(tail, functions, constants)?,
     );
     res.borrow_mut().set_evaluated(res.clone())?;
@@ -675,8 +670,37 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn str_to_expr(text: &str) -> Result<ExprRef, String> {
+        let tokens: Vec<&str> = text.split(' ').filter(|s| !s.is_empty()).collect();
+        let (expr, remainder) = deserialize(tokens)?;
+        if remainder.len() > 0 {
+            return Err(format!(
+                "Function body did not cleanly parse, tokens remained: {:?}",
+                remainder
+            ));
+        }
+        Ok(expr)
+    }
+
     #[test]
-    fn pseudo_it_works() {
-        assert_eq!(2 + 2, 4);
+    fn pseudo_addition() {
+        let constants: Constants = Constants {
+            cons: atom("cons".to_owned()),
+            t: atom("t".to_owned()),
+            f: atom("f".to_owned()),
+            nil: atom("nil".to_owned()),
+        };
+
+        let result = eval(
+            str_to_expr("ap ap add 2 2").unwrap(),
+            &hashmap! {},
+            &constants,
+        )
+        .unwrap();
+
+        let expected = atom("4".to_owned());
+        assert!(result.borrow().equals(expected));
     }
 }
