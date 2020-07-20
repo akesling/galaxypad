@@ -335,6 +335,47 @@ fn parse_number(name: &str) -> Result<i64, String> {
     return Err(format!("Failed to parse {} as a number", name));
 }
 
+fn flatten_point(points_expr: ExprRef) -> (i64, i64) {
+    if let Some(name) = points_expr.borrow().name().as_ref() {
+        if name == &"nil" {
+            println!( "Nil list provided to flatten_point");
+            return (0, 0);
+        } else {
+            panic!(
+                "First item in list was non-nil atom({}) not Ap",
+                name
+            );
+        }
+    } else {
+        if let Some(name) = points_expr.borrow().name().as_ref() {
+            panic!(format!(
+                "First item in list was non-nil atom({}) not Ap",
+                name
+            ));
+        } else {
+            let second = points_expr.borrow().func().unwrap().clone();
+            if let Some(name) = second.borrow().name().as_ref() {
+                panic!(
+                    "Second item in list was non-nil atom({}) not Ap",
+                    name
+                );
+            }
+
+            let cons = second.borrow().func().unwrap().clone();
+            if let Some(name) = cons.borrow().name().as_ref() {
+                if name != &"cons" {
+                    panic!(
+                        "Cons-place item in list was atom({}) not cons",
+                        name
+                    );
+                }
+            }
+
+            return (as_num(points_expr.borrow().arg().unwrap()).unwrap(), as_num(second.borrow().arg().unwrap()).unwrap());
+        }
+    }
+}
+
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     if let Some(name) = expr.borrow().name().as_ref() {
         if name == &"nil" {
@@ -578,44 +619,24 @@ fn eval_cons(
     return Ok(res);
 }
 
-//  Vec FlattenVec(ExprRef ref) {
-//    const Expr& first = deref(ref);
-//    if (!IsAp(first)) {
-//      panic("failed parsing vec, doesnt start with Ap");
-//    }
-//
-//    const auto& second = deref(first.func);
-//    if (!IsAp(second)) {
-//      panic("failed parsing vec, second not an Ap");
-//    }
-//
-//    const auto& cons = deref(second.func);
-//    if (cons.name != "cons") {
-//      panic("failed parsing vec, no cons");
-//    }
-//
-//    Vec v;
-//    v.x = AsNum(second.arg);
-//    v.y = AsNum(first.arg);
-//    return v;
-//  }
-fn flatten_vec(points_expr: ExprRef) -> Vec<i64>{
-    return vec![];
-}
+fn vectorize_points_expr(points_expr: ExprRef) -> Vec<(i64, i64)> {
+    let mut result = vec![];
 
-fn vectorize_points_expr(points_expr: ExprRef) -> Vec<i64> {
-    let result = vec![];
-
-    let flattened = get_list_items_from_expr(points_expr);
-//    for expr in flattened {
-//      result.extend(flatten_vec(expr.clone()));
-//    }
+    let flattened: Vec<ExprRef> = get_list_items_from_expr(points_expr).unwrap();
+    for expr in flattened.into_iter() {
+        result.push(flatten_point(expr.clone()));
+    }
 
     return result;
 }
 
-fn print_images(points: ExprRef) {
-    panic!("print_images is not yet implemented, tried to print {:?}", vectorize_points_expr(points));
+fn print_images(images: ExprRef) {
+    let image_lists = get_list_items_from_expr(images).unwrap();
+    for point_list_expr in image_lists.iter() {
+        let points = vectorize_points_expr(point_list_expr.clone());
+        println!("Image points {:?}", points);
+    }
+    panic!("print_images is not yet implemented, tried to print");
 }
 
 fn request_click_from_user() -> Point {
