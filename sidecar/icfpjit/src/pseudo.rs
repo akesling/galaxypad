@@ -73,10 +73,10 @@ struct Atom {
 }
 
 fn atom(name: String) -> Rc<RefCell<dyn Expr>> {
-    return Rc::new(RefCell::new(Atom {
+    Rc::new(RefCell::new(Atom {
         name,
         _evaluated: None,
-    }));
+    }))
 }
 
 impl Expr for Atom {
@@ -93,10 +93,10 @@ impl Expr for Atom {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        return match &self._evaluated {
+        match &self._evaluated {
             Some(weak) => weak.upgrade(),
             None => None,
-        };
+        }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -147,11 +147,11 @@ struct Ap {
 }
 
 fn ap(func: ExprRef, arg: ExprRef) -> Rc<RefCell<dyn Expr>> {
-    return Rc::new(RefCell::new(Ap {
+    Rc::new(RefCell::new(Ap {
         func,
         arg,
         _evaluated: None,
-    }));
+    }))
 }
 
 impl Expr for Ap {
@@ -168,10 +168,10 @@ impl Expr for Ap {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        return match &self._evaluated {
+        match &self._evaluated {
             Some(weak) => weak.upgrade(),
             None => None,
-        };
+        }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -244,11 +244,11 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
         return Ok((atom(candidate_token.to_owned()), tokens[1..].to_vec()));
     }
 
-    return Err(format!(
+    Err(format!(
         "Could not deserialize \"{}\" with remainder {:?}",
         candidate_token,
         tokens[1..].to_vec()
-    ));
+    ))
 }
 
 // Loads a function definition, which must be of the form:
@@ -274,10 +274,10 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
         .split(' ')
         .filter(|s| !s.is_empty())
         .collect();
-    assert!(right_tokens.len() > 0, "Function body was of length zero");
+    assert!(!right_tokens.is_empty(), "Function body was of length zero");
     let (function_body, remainder) = deserialize(right_tokens)?;
     assert!(
-        remainder.len() == 0,
+        remainder.is_empty(),
         format!(
             "Function body did not cleanly parse, tokens remained: {:?}",
             remainder
@@ -290,15 +290,17 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
 // Opens the given filename and attempts to load each line as a function
 // definition (pretty much just for galaxy.txt)
 fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>, String> {
-    return fs::read_to_string(file_path)
-        .expect(&format!(
-            "Something went wrong reading the functions file {}",
-            file_path
-        ))
+    fs::read_to_string(file_path)
+        .unwrap_or_else(|_| {
+            panic!(
+                "Something went wrong reading the functions file {}",
+                file_path
+            )
+        })
         .split('\n')
         .filter(|s| !s.is_empty())
         .map(|line| load_function(line))
-        .collect();
+        .collect()
 }
 
 fn interact(
@@ -324,8 +326,8 @@ fn interact(
     if as_num(flag).unwrap() == 0 {
         return (new_state, data);
     }
-    println!("Recursing through interact");
-    return interact(new_state, send_to_alien_proxy(data), functions, constants);
+
+    interact(new_state, send_to_alien_proxy(data), functions, constants)
 }
 
 fn send_to_alien_proxy(_expr: ExprRef) -> ExprRef {
@@ -352,53 +354,47 @@ fn parse_number(name: &str) -> Result<i64, String> {
         return Ok(0);
     }
 
-    return Err(format!("Failed to parse {} as a number", name));
+    Err(format!("Failed to parse {} as a number", name))
 }
 
 fn flatten_point(points_expr: ExprRef) -> (i64, i64) {
     if let Some(name) = points_expr.borrow().name().as_ref() {
         if name == &"nil" {
             println!("Nil list provided to flatten_point");
-            return (0, 0);
+
+            (0, 0)
         } else {
             panic!("First item in list was non-nil atom({}) not Ap", name);
         }
     } else {
-        if let Some(name) = points_expr.borrow().name().as_ref() {
-            panic!(format!(
-                "First item in list was non-nil atom({}) not Ap",
-                name
-            ));
-        } else {
-            let second = points_expr.borrow().func().unwrap().clone();
-            if let Some(name) = second.borrow().name().as_ref() {
-                panic!("Second item in list was non-nil atom({}) not Ap", name);
-            }
-
-            let cons = second.borrow().func().unwrap().clone();
-            if let Some(name) = cons.borrow().name().as_ref() {
-                if name != &"cons" {
-                    panic!("Cons-place item in list was atom({}) not cons", name);
-                }
-            }
-
-            return (
-                as_num(points_expr.borrow().arg().unwrap()).unwrap(),
-                as_num(second.borrow().arg().unwrap()).unwrap(),
-            );
+        let second = points_expr.borrow().func().unwrap().clone();
+        if let Some(name) = second.borrow().name().as_ref() {
+            panic!("Second item in list was non-nil atom({}) not Ap", name);
         }
+
+        let cons = second.borrow().func().unwrap().clone();
+        if let Some(name) = cons.borrow().name().as_ref() {
+            if name != &"cons" {
+                panic!("Cons-place item in list was atom({}) not cons", name);
+            }
+        }
+
+        (
+            as_num(points_expr.borrow().arg().unwrap()).unwrap(),
+            as_num(second.clone().borrow().arg().unwrap()).unwrap(),
+        )
     }
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     if let Some(name) = expr.borrow().name().as_ref() {
         if name == &"nil" {
-            return Ok(vec![expr.clone()]);
+            Ok(vec![expr.clone()])
         } else {
-            return Err(format!(
+            Err(format!(
                 "First item in list was non-nil atom({}) not Ap",
                 name
-            ));
+            ))
         }
     } else {
         let second = expr.borrow().func().unwrap().clone();
@@ -424,16 +420,17 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         let next = expr.borrow().arg().unwrap();
         if let Some(name) = next.clone().borrow().name().as_ref() {
             if name == &"nil" {
-                return Ok(flattened);
+                Ok(flattened)
             } else {
-                return Err(format!(
+                Err(format!(
                     "get_list_items_from_expr somehow got a non-nil end node in a list {}",
                     name
-                ));
+                ))
             }
         } else {
             flattened.extend(get_list_items_from_expr(next)?);
-            return Ok(flattened);
+
+            Ok(flattened)
         }
     }
 }
@@ -594,10 +591,7 @@ fn try_eval(
         }
     }
 
-    let result = expr.clone();
-    return Ok(result);
-
-    //    Ok(expr.clone())
+    Ok(expr.clone())
 }
 
 fn eval_cons(
@@ -611,7 +605,8 @@ fn eval_cons(
         eval(tail, functions, constants)?,
     );
     res.borrow_mut().set_evaluated(res.clone())?;
-    return Ok(res);
+
+    Ok(res)
 }
 
 fn vectorize_points_expr(points_expr: ExprRef) -> Vec<(i64, i64)> {
@@ -622,7 +617,7 @@ fn vectorize_points_expr(points_expr: ExprRef) -> Vec<(i64, i64)> {
         result.push(flatten_point(expr.clone()));
     }
 
-    return result;
+    result
 }
 
 fn print_images(images: ExprRef) {
