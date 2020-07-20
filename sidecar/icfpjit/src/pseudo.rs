@@ -178,7 +178,14 @@ fn send_to_alien_proxy(expr: ExprRef) -> ExprRef {
 }
 
 fn as_num(expr: ExprRef) -> Result<i64, String> {
-    panic!("as_num is not yet implemented");
+    if let Some(name) = expr.borrow().name().as_ref() {
+        return Ok(parse_number(name)?);
+    }
+    Err(format!("Not a number: {:?}", expr))
+}
+
+fn parse_number(name: &str) -> Result<i64, String> {
+    panic!("parse_number is not yet implemented");
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
@@ -366,63 +373,28 @@ fn request_click_from_user() -> Point {
 fn main() {
     let functions = parse_functions("DUMMY VALUE");
     let mut constants: HashMap<String, ExprRef> = HashMap::new();
-    constants.insert(
-        "cons".to_owned(),
-        Rc::new(RefCell::new(Atom {
-            name: "cons".to_owned(),
-        })),
-    );
-    constants.insert(
-        "t".to_owned(),
-        Rc::new(RefCell::new(Atom {
-            name: "t".to_owned(),
-        })),
-    );
-    constants.insert(
-        "f".to_owned(),
-        Rc::new(RefCell::new(Atom {
-            name: "f".to_owned(),
-        })),
-    );
-    constants.insert(
-        "nil".to_owned(),
-        Rc::new(RefCell::new(Atom {
-            name: "nil".to_owned(),
-        })),
-    );
+    constants.insert("cons".to_owned(), Atom("cons".to_owned()));
+    constants.insert("t".to_owned(), Atom("t".to_owned()));
+    constants.insert("f".to_owned(), Atom("f".to_owned()));
+    constants.insert("nil".to_owned(), Atom("nil".to_owned()));
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
     let mut state: ExprRef = constants.get("nil").unwrap().clone();
     let mut point = Point { x: 0, y: 0 };
 
     loop {
-        let click = Rc::new(RefCell::new(Ap {
-            func: Rc::new(RefCell::new(Ap {
-                func: constants.get("cons").unwrap().clone(),
-                arg: Rc::new(RefCell::new(Atom {
-                    name: point.x.to_string(),
-                    ..Default::default()
-                })),
-                _evaluated: None,
-            })),
-            arg: Rc::new(RefCell::new(Atom {
-                name: point.y.to_string(),
-                ..Default::default()
-            })),
-            _evaluated: None,
-        }));
+        let click = Ap(
+            Ap(
+                constants.get("cons").unwrap().clone(),
+                Atom(point.x.to_string()),
+            ),
+            Atom(point.y.to_string()),
+        );
         let (newState, images) = interact(state.clone(), click.clone(), &functions, &constants);
         print_images(images);
         point = request_click_from_user();
         state = newState;
     }
-    //
-    //
-    //
-    // number asNum(Expr n)
-    //     if (n is Atom)
-    //         return PARSE_NUMBER(n.Name)
-    //     ERROR("not a number")
 }
 
 #[cfg(test)]
