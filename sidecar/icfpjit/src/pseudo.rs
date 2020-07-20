@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs;
 use std::ptr;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 // See video course https://icfpcontest2020.github.io/#/post/2054
 
@@ -55,6 +55,7 @@ lazy_static! {
 }
 
 type ExprRef = Rc<RefCell<dyn Expr>>;
+type WeakExprRef = Weak<RefCell<dyn Expr>>;
 trait Expr: Debug {
     fn name(&self) -> Option<&str>;
     fn func(&self) -> Option<ExprRef>;
@@ -67,10 +68,11 @@ trait Expr: Debug {
 #[derive(Default, Debug, Clone)]
 struct Atom {
     name: String,
+    _evaluated: Option<WeakExprRef>,
 }
 
 fn atom(name: String) -> Rc<RefCell<dyn Expr>> {
-    return Rc::new(RefCell::new(Atom { name }));
+    return Rc::new(RefCell::new(Atom { name, _evaluated: None }));
 }
 
 impl Expr for Atom {
@@ -87,14 +89,15 @@ impl Expr for Atom {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        None
+        return match &self._evaluated {
+            Some(weak) => weak.upgrade(),
+            None => None,
+        }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        Err(format!(
-            "Attempted to set Atom to evaluated with value: {:?}",
-            expr
-        ))
+        self._evaluated = Some(Rc::downgrade(&expr));
+        Ok(())
     }
 }
 
@@ -112,20 +115,21 @@ impl Expr for &Atom {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        None
+        return match &self._evaluated {
+            Some(weak) => weak.upgrade(),
+            None => None,
+        }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        Err(format!(
-            "Attempted to set Atom to evaluated with value: {:?}",
-            expr
-        ))
+        (*self).set_evaluated(expr)
     }
+
 }
 
 #[derive(Debug, Clone)]
 struct Ap {
-    _evaluated: Option<ExprRef>,
+    _evaluated: Option<WeakExprRef>,
 
     func: ExprRef,
     arg: ExprRef,
@@ -153,11 +157,14 @@ impl Expr for Ap {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        return self._evaluated.clone();
+        return match &self._evaluated {
+            Some(weak) => weak.upgrade(),
+            None => None,
+        }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        self._evaluated = Some(expr.clone());
+        self._evaluated = Some(Rc::downgrade(&expr));
         Ok(())
     }
 }
@@ -176,7 +183,10 @@ impl Expr for &Ap {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        return self._evaluated.clone();
+        return match &self._evaluated {
+            Some(weak) => weak.upgrade(),
+            None => None,
+        }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -277,8 +287,10 @@ fn interact(
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = ap(ap(atom("galaxy".to_owned()), state.clone()), event.clone());
-    let res: ExprRef = eval(expr, functions, constants).unwrap();
+    println!("Eval'ing");
+    let res: ExprRef = eval(expr, functions, constants, 0).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
+    println!("Converting results to a list");
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
         panic!(
@@ -290,6 +302,7 @@ fn interact(
     if as_num(flag).unwrap() == 0 {
         return (new_state, data);
     }
+    println!("Recursing through interact");
     return interact(new_state, send_to_alien_proxy(data), functions, constants);
 }
 
@@ -372,24 +385,25 @@ fn eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
+    stack_depth: u64,
 ) -> Result<ExprRef, String> {
-    match expr.borrow().evaluated() {
-        Some(expr) => {
-            return Ok(expr);
+    println!("Eval stack depth {}", stack_depth);
+    if let Some(x) = expr.borrow().evaluated() {
+        return Ok(x);
+    }
+    let mut current_expr = expr;
+    loop {
+        let result = try_eval(current_expr.clone(), functions, constants, stack_depth+1)?;
+        println!("Result achieved through try_eval, attempted to see if its the same or not.");
+        if !ptr::eq(current_expr.as_ref(), result.as_ref()) {
+            current_expr = result.clone();
+            continue;
         }
-        None => {
-            let mut current_expr = expr.clone();
-            loop {
-                let result = try_eval(current_expr.clone(), functions, constants)?;
-                if ptr::eq(current_expr.as_ref(), result.as_ref()) {
-                    // XXX: Circular reference -- memory leak
-                    current_expr.borrow_mut().set_evaluated(result.clone())?;
-                    return Ok(result);
-                } else {
-                    current_expr = result.clone();
-                }
-            }
-        }
+        println!("Looks like they're the same.");
+
+        // XXX: Circular reference -- memory leak
+        current_expr.borrow_mut().set_evaluated(result.clone())?;
+        return Ok(result);
     }
 }
 
@@ -397,124 +411,140 @@ fn try_eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
+    stack_depth: u64,
 ) -> Result<ExprRef, String> {
-    match expr.borrow().evaluated() {
-        Some(x) => {
-            return Ok(x.clone());
+    println!("TryEval stack depth {}", stack_depth);
+    if let Some(x) = expr.borrow().evaluated() {
+        println!("Already evaluated!");
+        return Ok(x.clone());
+    }
+    println!("Not yet evaluated");
+
+    if let Some(name) = expr.borrow().name().as_ref() {
+        println!("It's an atom");
+        if let Some(function) = functions.get(name.to_owned()) {
+            println!("And a function");
+            return Ok(function.clone());
         }
-        None => {
-            if let Some(name) = expr.borrow().name().as_ref() {
-                if let Some(function) = functions.get(name.to_owned()) {
-                    return Ok(function.clone());
+        println!("Not a function");
+    } else {
+        println!("Expr is ap");
+        println!("Func evaling");
+        let func = eval(expr.borrow().func().unwrap().clone(), functions, constants, stack_depth+1)?;
+        println!("Func evaluated");
+        let x = expr.borrow().arg().unwrap().clone();
+        if let Some(name) = func.clone().borrow().name().as_ref() {
+            println!("Func is atom");
+            match *name {
+                "neg" => {
+                    return Ok(atom(
+                        (-as_num(eval(x, functions, constants, stack_depth+1)?)?).to_string(),
+                    ));
+                }
+                "i" => {
+                    return Ok(x);
+                }
+                "nil" => {
+                    return Ok(constants.t.clone());
+                }
+                "isnil" => {
+                    return Ok(ap(
+                        x,
+                        ap(
+                            constants.t.clone(),
+                            ap(constants.t.clone(), constants.f.clone()),
+                        ),
+                    ));
+                }
+                "car" => {
+                    return Ok(ap(x, constants.t.clone()));
+                }
+                "cdr" => {
+                    return Ok(ap(x, constants.f.clone()));
+                }
+                _ => (),
+            }
+        } else {
+            println!("Expr.func is ap");
+            let tmp_func2 = func.borrow().func().unwrap().clone();
+            let func2 = eval(tmp_func2, functions, constants, stack_depth+1)?.clone();
+            println!("Expr.func.func2 evaled");
+            let y = func.borrow().arg().unwrap().clone();
+            if let Some(name) = func2.clone().borrow().name().as_ref() {
+                match *name {
+                    "t" => {
+                        return Ok(y);
+                    }
+                    "f" => {
+                        return Ok(x);
+                    }
+                    "add" => {
+                        return Ok(atom(
+                            (as_num(eval(x, functions, constants, stack_depth+1)?)?
+                                + as_num(eval(y, functions, constants, stack_depth+1)?)?)
+                            .to_string(),
+                        ));
+                    }
+                    "mul" => {
+                        return Ok(atom(
+                            (as_num(eval(x, functions, constants, stack_depth+1)?)?
+                                * as_num(eval(y, functions, constants, stack_depth+1)?)?)
+                            .to_string(),
+                        ));
+                    }
+                    "div" => {
+                        return Ok(atom(
+                            (as_num(eval(x, functions, constants, stack_depth+1)?)?
+                                / as_num(eval(y, functions, constants, stack_depth+1)?)?)
+                            .to_string(),
+                        ));
+                    }
+                    "eq" => {
+                        let are_equal = as_num(eval(x, functions, constants, stack_depth+1)?)?
+                            == as_num(eval(y, functions, constants, stack_depth+1)?)?;
+                        return Ok(if are_equal {
+                            constants.t.clone()
+                        } else {
+                            constants.f.clone()
+                        });
+                    }
+                    "lt" => {
+                        let is_less_than = as_num(eval(x, functions, constants, stack_depth+1)?)?
+                            < as_num(eval(y, functions, constants, stack_depth+1)?)?;
+                        return Ok(if is_less_than {
+                            constants.t.clone()
+                        } else {
+                            constants.f.clone()
+                        });
+                    }
+                    "cons" => {
+                        return Ok(eval_cons(y, x, functions, constants, stack_depth+1)?);
+                    }
+                    _ => (),
                 }
             } else {
-                let func = eval(expr.clone(), functions, constants)?;
-                let x = expr.borrow().arg().unwrap().clone();
-                if let Some(name) = expr.borrow().name().as_ref() {
+                let func3 =
+                    eval(func2.borrow().func().unwrap(), functions, constants, stack_depth+1)?.clone();
+                let z = func2.borrow().arg().unwrap();
+                if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
-                        "neg" => {
-                            return Ok(atom(
-                                (-as_num(eval(x, functions, constants)?)?).to_string(),
-                            ));
-                        }
-                        "i" => {
-                            return Ok(x);
-                        }
-                        "nil" => {
-                            return Ok(constants.t.clone());
-                        }
-                        "isnil" => {
-                            return Ok(ap(
-                                x,
-                                ap(
-                                    constants.t.clone(),
-                                    ap(constants.t.clone(), constants.f.clone()),
-                                ),
-                            ));
-                        }
-                        "car" => {
-                            return Ok(ap(x, constants.t.clone()));
-                        }
-                        "cdr" => {
-                            return Ok(ap(x, constants.f.clone()));
-                        }
+                        "s" => return Ok(ap(ap(z, x.clone()), ap(y, x))),
+                        "c" => return Ok(ap(ap(z, x), y)),
+                        "b" => return Ok(ap(z, ap(y, x))),
+                        "cons" => return Ok(ap(ap(x, z), y)),
                         _ => (),
-                    }
-                } else {
-                    let func2 = eval(func.clone(), functions, constants)?.clone();
-                    let y = func.borrow().arg().unwrap().clone();
-                    if let Some(name) = func2.clone().borrow().name().as_ref() {
-                        match *name {
-                            "t" => {
-                                return Ok(y);
-                            }
-                            "f" => {
-                                return Ok(x);
-                            }
-                            "add" => {
-                                return Ok(atom(
-                                    (as_num(eval(x, functions, constants)?)?
-                                        + as_num(eval(y, functions, constants)?)?)
-                                    .to_string(),
-                                ));
-                            }
-                            "mul" => {
-                                return Ok(atom(
-                                    (as_num(eval(x, functions, constants)?)?
-                                        * as_num(eval(y, functions, constants)?)?)
-                                    .to_string(),
-                                ));
-                            }
-                            "div" => {
-                                return Ok(atom(
-                                    (as_num(eval(x, functions, constants)?)?
-                                        / as_num(eval(y, functions, constants)?)?)
-                                    .to_string(),
-                                ));
-                            }
-                            "eq" => {
-                                let are_equal = as_num(eval(x, functions, constants)?)?
-                                    == as_num(eval(y, functions, constants)?)?;
-                                return Ok(if are_equal {
-                                    constants.t.clone()
-                                } else {
-                                    constants.f.clone()
-                                });
-                            }
-                            "lt" => {
-                                let is_less_than = as_num(eval(x, functions, constants)?)?
-                                    < as_num(eval(y, functions, constants)?)?;
-                                return Ok(if is_less_than {
-                                    constants.t.clone()
-                                } else {
-                                    constants.f.clone()
-                                });
-                            }
-                            "cons" => {
-                                return Ok(eval_cons(y, x, functions, constants)?);
-                            }
-                            _ => (),
-                        }
-                    } else {
-                        let func3 =
-                            eval(func2.borrow().func().unwrap(), functions, constants)?.clone();
-                        let z = func3.borrow().arg().unwrap();
-                        if let Some(name) = func3.clone().borrow().name().as_ref() {
-                            match *name {
-                                "s" => return Ok(ap(ap(z, x.clone()), ap(y, x))),
-                                "c" => return Ok(ap(ap(z, x), y)),
-                                "b" => return Ok(ap(z, ap(y, x))),
-                                "cons" => return Ok(ap(ap(x, z), y)),
-                                _ => (),
-                            }
-                        }
                     }
                 }
             }
         }
     }
+    println!("Nothing matched");
 
-    Ok(expr.clone())
+    let result = expr.clone();
+    println!("Returning.");
+    return Ok(result)
+
+//    Ok(expr.clone())
 }
 
 fn eval_cons(
@@ -522,10 +552,12 @@ fn eval_cons(
     tail: ExprRef,
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
+    stack_depth: u64,
 ) -> Result<ExprRef, String> {
+    println!("EvalCons stack depth {}", stack_depth);
     let res = ap(
-        ap(constants.cons.clone(), eval(head, functions, constants)?),
-        eval(tail, functions, constants)?,
+        ap(constants.cons.clone(), eval(head, functions, constants, stack_depth+1)?),
+        eval(tail, functions, constants, stack_depth+1)?,
     );
     // XXX: Circular reference -- memory leak
     res.borrow_mut().set_evaluated(res.clone())?;
@@ -541,7 +573,10 @@ fn request_click_from_user() -> Point {
 }
 
 fn main() {
+    println!("Start main");
+    println!("Parsing functions");
     let functions: HashMap<String, ExprRef> = load_function_definitions("galaxy.txt").unwrap();
+    println!("Setting up constants");
     let constants = Constants {
         cons: atom("cons".to_owned()),
         t: atom("t".to_owned()),
@@ -553,11 +588,13 @@ fn main() {
     let mut state: ExprRef = constants.nil.clone();
     let mut point = Point { x: 0, y: 0 };
 
+    println!("Starting loop");
     loop {
         let click = ap(
             ap(constants.cons.clone(), atom(point.x.to_string())),
             atom(point.y.to_string()),
         );
+        println!("Staring 'interact' protocol");
         let (new_state, images) = interact(state.clone(), click.clone(), &functions, &constants);
         print_images(images);
         point = request_click_from_user();
