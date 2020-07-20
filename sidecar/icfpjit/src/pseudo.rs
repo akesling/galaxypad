@@ -5,7 +5,6 @@ extern crate lazy_static;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::fmt::Debug;
 use std::fs;
 use std::ptr;
@@ -181,9 +180,7 @@ impl Expr for &Ap {
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        let mut evaluated = &self._evaluated;
-        evaluated = &Some(expr.clone());
-        Ok(())
+        (*self).set_evaluated(expr)
     }
 }
 
@@ -215,7 +212,11 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
         return Ok((atom(candidate_token.to_owned()), tokens[1..].to_vec()));
     }
 
-    return Err(format!("Could not deserialize: {}", candidate_token));
+    return Err(format!(
+        "Could not deserialize \"{}\" with remainder {:?}",
+        candidate_token,
+        tokens[1..].to_vec()
+    ));
 }
 
 // Loads a function definition, which must be of the form:
@@ -256,6 +257,7 @@ fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>
             "Something went wrong reading the functions file {}",
             file_path
         ))
+        .trim()
         .split('\n')
         .map(|line| load_function(line))
         .collect();
@@ -279,13 +281,13 @@ fn interact(
         );
     }
     let (flag, new_state, data) = (items[0].clone(), items[1].clone(), items[2].clone());
-    if (as_num(flag).unwrap() == 0) {
+    if as_num(flag).unwrap() == 0 {
         return (new_state, data);
     }
     return interact(new_state, send_to_alien_proxy(data), functions, constants);
 }
 
-fn send_to_alien_proxy(expr: ExprRef) -> ExprRef {
+fn send_to_alien_proxy(_expr: ExprRef) -> ExprRef {
     panic!("send_to_alien_proxy is not yet implemented");
 }
 
@@ -301,11 +303,11 @@ fn parse_number(name: &str) -> Result<i64, String> {
         return Ok(i);
     }
 
-    if (name == "t") {
+    if name == "t" {
         return Ok(1);
     }
 
-    if (name == "f") {
+    if name == "f" {
         return Ok(0);
     }
 
@@ -331,8 +333,8 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             ));
         }
 
-        let cons = expr.borrow().func().unwrap().clone();
-        if let Some(name) = second.borrow().name().as_ref() {
+        let cons = second.borrow().func().unwrap().clone();
+        if let Some(name) = cons.borrow().name().as_ref() {
             if name != &"cons" {
                 return Err(format!(
                     "Cons-place item in list was atom({}) not cons",
@@ -344,8 +346,15 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         let mut flattened = vec![second.borrow().arg().unwrap()];
 
         let next = expr.borrow().arg().unwrap();
-        if let Some(name) = second.clone().borrow().name().as_ref() {
-            return Ok(flattened);
+        if let Some(name) = next.clone().borrow().name().as_ref() {
+            if name == &"nil" {
+                return Ok(flattened);
+            } else {
+                return Err(format!(
+                    "get_list_items_from_expr somehow got a non-nil end node in a list {}",
+                    name
+                ));
+            }
         } else {
             flattened.extend(get_list_items_from_expr(next)?);
             return Ok(flattened);
@@ -420,7 +429,7 @@ fn try_eval(
                         "car" => {
                             return Ok(ap(x, constants.t.clone()));
                         }
-                        "car" => {
+                        "cdr" => {
                             return Ok(ap(x, constants.f.clone()));
                         }
                         _ => (),
@@ -517,7 +526,7 @@ fn eval_cons(
     return Ok(res);
 }
 
-fn print_images(points: ExprRef) {
+fn print_images(_points: ExprRef) {
     panic!("print_images is not yet implemented");
 }
 
