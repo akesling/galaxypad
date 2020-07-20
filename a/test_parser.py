@@ -15,18 +15,15 @@ from galaxy import (
 )
 
 
-# class TestClasses(unittest.TestCase):
-#     def test_repr(self):
-#         for e in [
-#             Expr(),
-#             Value("0"),
-#             Value("nil"),
-#             Tree(Expr(), Value("2")),
-#             Tree(Tree(Value("4"), Value("5")), Expr()),
-#             Vect(0, 0),
-#             Vect(1, 2),
-#         ]:
-#             self.assertEqual(eval(repr(e)), e)
+class TestClasses(unittest.TestCase):
+    def test_repr(self):
+        for e in [
+            Value("0"),
+            Value("nil"),
+            Tree(Value("0"), Value("2")),
+            Tree(Tree(Value("cons"), Value("5")), Value("nil")),
+        ]:
+            self.assertEqual(eval(repr(e)), e)
 
 
 def pair(h, t):

@@ -18,11 +18,11 @@ sys.setrecursionlimit(10000)
 class Value:
     """ Atoms are the leaves of our tree """
 
-    Name: Optional[str] = None
+    Name: str
     Evaluated: Optional["Expr"] = None
 
-    def __init__(self, Name=None):
-        self.Name = Name
+    def __init__(self, Name: str):
+        self.Name = str(Name)
         self.Evaluated = None
 
     def nlr(self) -> Iterable["Expr"]:
@@ -33,9 +33,15 @@ class Value:
             return self.Name == other.Name
         return False
 
+    def __int__(self) -> int:
+        return int(self.Name)
+
     def unparse(self) -> str:
         assert self.Name is not None, self
         return self.Name
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({repr(self.Name)})"
 
 
 class Tree:
@@ -45,7 +51,7 @@ class Tree:
     Right: Optional["Expr"] = None
     Evaluated: Optional["Expr"] = None
 
-    def __init__(self, Left=None, Right=None):
+    def __init__(self, Left: Optional["Expr"] = None, Right: Optional["Expr"] = None):
         self.Left = Left
         self.Right = Right
         self.Evaluated = None
@@ -74,14 +80,16 @@ class Tree:
     def unparse(self) -> str:
         return "ap"
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({repr(self.Left)},{repr(self.Right)})"
+
 
 Expr = Union[Tree, Value]
-
-
-def asNum(n: Expr) -> int:
-    if isinstance(n, Value) and n.Name is not None:
-        return int(n.Name)
-    raise ValueError(f"not a number {n}")
+# mypy doesn't support recursive types: https://github.com/python/mypy/issues/731
+# Vector = Union[List['Vector'], Tuple['Vector'], int, None]
+VectorElem = Union[List, Tuple, int, None]  # Hack for now
+Vector = Union[List[VectorElem], Tuple[VectorElem], int, None]
+Modulation = str
 
 
 nil: Expr = Value("nil")
@@ -92,12 +100,12 @@ t: Expr = Value("t")
 f: Expr = Value("f")
 
 
-def vector(expr: Expr) -> Any:
+def vector(expr: Expr) -> Vector:
     """ Vector notation """
     if isinstance(expr, Value):
         if expr.Name == "nil":
             return []
-        return asNum(expr)
+        return int(expr)
     if isinstance(expr, Tree):
         tok: List[Union[List, Tuple, int]] = unparse(expr).split()  # type: ignore
         again = True
@@ -186,7 +194,7 @@ def modulate(expr: Expr) -> str:
     if expr == Value("nil"):
         return "00"
     if isinstance(expr, Value):
-        value = asNum(expr)
+        value = int(expr)
         if value == 0:
             return "010"
         sign_mod = "01" if value >= 0 else "10"
@@ -281,7 +289,7 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
         x: Expr = expr.Right
         if isinstance(left, Value):
             if left.Name == "neg":
-                return Value(str(-asNum(evaluate(x)))), True
+                return Value(str(-int(evaluate(x)))), True
             if left.Name == "i":
                 return x, True
             if left.Name == "nil":
@@ -304,16 +312,16 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
                     return x, True
                 if left2.Name == "add":
                     return (
-                        Value(str(asNum(evaluate(x)) + asNum(evaluate(y)))),
+                        Value(str(int(evaluate(x)) + int(evaluate(y)))),
                         True,
                     )
                 if left2.Name == "mul":
                     return (
-                        Value(str(asNum(evaluate(x)) * asNum(evaluate(y)))),
+                        Value(str(int(evaluate(x)) * int(evaluate(y)))),
                         True,
                     )
                 if left2.Name == "div":
-                    a, b = asNum(evaluate(y)), asNum(evaluate(x))
+                    a, b = int(evaluate(y)), int(evaluate(x))
                     return (
                         Value(str(a // b if a * b > 0 else (a + (-a % b)) // b)),
                         True,
@@ -321,13 +329,13 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
                 if left2.Name == "lt":
                     return (
                         (t, True)
-                        if asNum(evaluate(y)) < asNum(evaluate(x))
+                        if int(evaluate(y)) < int(evaluate(x))
                         else (f, True)
                     )
                 if left2.Name == "eq":
                     return (
                         (t, True)
-                        if asNum(evaluate(y)) == asNum(evaluate(x))
+                        if int(evaluate(y)) == int(evaluate(x))
                         else (f, True)
                     )
                 if left2.Name == "cons":
@@ -356,8 +364,7 @@ def evalCons(a: Expr, b: Expr) -> Expr:
     return res
 
 
-def SEND_TO_ALIEN_PROXY(data: Any) -> Any:
-    data = vector(data) if isinstance(data, (Value, Tree)) else data
+def SEND_TO_ALIEN_PROXY(data: Vector) -> Vector:
     server_url = "https://icfpc2020-api.testkontur.ru/aliens/send"
     api_key = os.environ["ICFP_API_KEY"]
     print("Sending vector:", data)
@@ -374,7 +381,7 @@ def SEND_TO_ALIEN_PROXY(data: Any) -> Any:
 
 
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
-def interact(state: Any, event: Any) -> Tuple[Any, Any]:
+def interact(state: Vector, event: Vector) -> Tuple[Vector, Vector]:
     """ Interact with the game """
     state = state if isinstance(state, (Value, Tree)) else unvector(state)
     event = event if isinstance(event, (Value, Tree)) else unvector(event)
