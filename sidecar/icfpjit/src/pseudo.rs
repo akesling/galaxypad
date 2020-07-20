@@ -148,12 +148,14 @@ struct Ap {
     arg: ExprRef,
 }
 
-fn ap(func: ExprRef, arg: ExprRef) -> Rc<RefCell<dyn Expr>> {
-    Rc::new(RefCell::new(Ap {
-        func,
-        arg,
-        _evaluated: None,
-    }))
+impl Ap {
+    fn new(func: ExprRef, arg: ExprRef) -> ExprRef {
+        Rc::new(RefCell::new(Ap {
+            func,
+            arg,
+            _evaluated: None,
+        }))
+    }
 }
 
 impl Expr for Ap {
@@ -230,7 +232,7 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
     if candidate_token == "ap" {
         let (left, left_remainder) = deserialize(tokens[1..].to_vec())?;
         let (right, right_remainder) = deserialize(left_remainder)?;
-        let ap_expr = ap(left, right);
+        let ap_expr = Ap::new(left, right);
         return Ok((ap_expr, right_remainder));
     }
 
@@ -312,7 +314,7 @@ fn interact(
     constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = ap(ap(Atom::new("galaxy"), state.clone()), event.clone());
+    let expr: ExprRef = Ap::new(Ap::new(Atom::new("galaxy"), state.clone()), event.clone());
     println!("Eval'ing");
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
@@ -494,19 +496,19 @@ fn try_eval(
                     return Ok(constants.t.clone());
                 }
                 "isnil" => {
-                    return Ok(ap(
+                    return Ok(Ap::new(
                         x,
-                        ap(
+                        Ap::new(
                             constants.t.clone(),
-                            ap(constants.t.clone(), constants.f.clone()),
+                            Ap::new(constants.t.clone(), constants.f.clone()),
                         ),
                     ));
                 }
                 "car" => {
-                    return Ok(ap(x, constants.t.clone()));
+                    return Ok(Ap::new(x, constants.t.clone()));
                 }
                 "cdr" => {
-                    return Ok(ap(x, constants.f.clone()));
+                    return Ok(Ap::new(x, constants.f.clone()));
                 }
                 _ => (),
             }
@@ -576,13 +578,13 @@ fn try_eval(
                 if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
                         //                     if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
-                        "s" => return Ok(ap(ap(z, x.clone()), ap(y, x))),
+                        "s" => return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x))),
                         //                     if (fun3.Name == "c") return Ap(Ap(z, x), y)
-                        "c" => return Ok(ap(ap(z, x), y)),
+                        "c" => return Ok(Ap::new(Ap::new(z, x), y)),
                         //                     if (fun3.Name == "b") return Ap(z, Ap(y, x))
-                        "b" => return Ok(ap(z, ap(y, x))),
+                        "b" => return Ok(Ap::new(z, Ap::new(y, x))),
                         //                     if (fun3.Name == "cons") return Ap(Ap(x, z), y)
-                        "cons" => return Ok(ap(ap(x, z), y)),
+                        "cons" => return Ok(Ap::new(Ap::new(x, z), y)),
                         _ => (),
                     }
                 }
@@ -599,8 +601,8 @@ fn eval_cons(
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
 ) -> Result<ExprRef, String> {
-    let res = ap(
-        ap(constants.cons.clone(), eval(head, functions, constants)?),
+    let res = Ap::new(
+        Ap::new(constants.cons.clone(), eval(head, functions, constants)?),
         eval(tail, functions, constants)?,
     );
     res.borrow_mut().set_evaluated(res.clone())?;
@@ -650,8 +652,8 @@ fn main() {
 
     println!("Starting loop");
     loop {
-        let click = ap(
-            ap(constants.cons.clone(), Atom::new(point.x)),
+        let click = Ap::new(
+            Ap::new(constants.cons.clone(), Atom::new(point.x)),
             Atom::new(point.y),
         );
         println!("Starting 'interact' protocol");
