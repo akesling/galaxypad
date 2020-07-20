@@ -192,11 +192,51 @@ fn as_num(expr: ExprRef) -> Result<i64, String> {
 }
 
 fn parse_number(name: &str) -> Result<i64, String> {
-    panic!("parse_number is not yet implemented");
+    if let Ok(i) = name.parse::<i64>() {
+        return Ok(i);
+    }
+
+    if (name == "t") {
+        return Ok(1);
+    }
+
+    if (name == "f") {
+        return Ok(0);
+    }
+
+    return Err(format!("Failed to parse {} as a number", name))
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
-    panic!("Eval is not yet implemented");
+    if let Some(name) = expr.borrow().name().as_ref() {
+        if name == &"nil" {
+            return Ok(vec![expr.clone()]);
+        } else {
+            return Err(format!("First item in list was non-nil Atom({}) not Ap", name))
+        }
+    } else {
+        let second = expr.borrow().func().unwrap().clone();
+        if let Some(name) = second.borrow().name().as_ref() {
+            return Err(format!("Second item in list was non-nil Atom({}) not Ap", name))
+        }
+
+        let cons = expr.borrow().func().unwrap().clone();
+        if let Some(name) = second.borrow().name().as_ref() {
+            if name != &"cons" {
+                return Err(format!("Cons-place item in list was Atom({}) not cons", name))
+            }
+        }
+
+        let mut flattened = vec![second.borrow().arg().unwrap()];
+
+        let next = expr.borrow().arg().unwrap();
+        if let Some(name) = second.clone().borrow().name().as_ref() {
+            return Ok(flattened);
+        } else {
+            flattened.extend(get_list_items_from_expr(next)?);
+            return Ok(flattened);
+        }
+    }
 }
 
 fn eval(
@@ -259,10 +299,7 @@ fn try_eval(
                                 x,
                                 Ap(
                                     constants.t.clone(),
-                                    Ap(
-                                        constants.t.clone(),
-                                        constants.f.clone(),
-                                    ),
+                                    Ap(constants.t.clone(), constants.f.clone()),
                                 ),
                             ));
                         }
@@ -358,10 +395,7 @@ fn eval_cons(
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     let res = Ap(
-        Ap(
-            constants.cons.clone(),
-            eval(head, functions, constants)?,
-        ),
+        Ap(constants.cons.clone(), eval(head, functions, constants)?),
         eval(tail, functions, constants)?,
     );
     // XXX: Circular reference -- memory leak
@@ -392,10 +426,7 @@ fn main() {
 
     loop {
         let click = Ap(
-            Ap(
-                constants.cons.clone(),
-                Atom(point.x.to_string()),
-            ),
+            Ap(constants.cons.clone(), Atom(point.x.to_string())),
             Atom(point.y.to_string()),
         );
         let (newState, images) = interact(state.clone(), click.clone(), &functions, &constants);
