@@ -4,8 +4,11 @@ from itertools import zip_longest
 from dataclasses import dataclass
 from typing import Optional, Union, List, Tuple, Dict, NamedTuple, Iterable
 
-from PIL import Image
-from imgcat import imgcat
+# from PIL import Image
+# from imgcat import imgcat
+
+import sdl2.ext
+from random import randint
 
 
 @dataclass
@@ -278,21 +281,18 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
     return interact(unvector(newState), SEND_TO_ALIEN_PROXY(data))
 
 
-# Stubs
-def PRINT_IMAGES(images: Expr) -> None:
-    # SIZE = 256
-    SIZE=32
+def print_images(images: Expr, pixelview, SIZE) -> None:
+    print("images", images)
+    sdl2.ext.fill(winsurf, BLACK)
     imvec = vector(images)  # convert to lists
     while imvec != []:
         image, imvec = imvec  # type: ignore
         print("image", image)
-        im = Image.new("RGB", (SIZE * 2, SIZE * 2))
-        color = 0xFFFFFF & hash(id(image))  # Maybe random?
+        # im = Image.new("RGB", (SIZE * 2, SIZE * 2))
+        color = sdl2.ext.Color(randint(128, 255), randint(128, 255), randint(128, 255))
         while image != []:
             pixel, image = image  # type: ignore
-            offset = [pixel[0] + SIZE, pixel[1] + SIZE]
-            im.putpixel(offset, color)
-        imgcat(im, height=40)
+            pixelview[pixel[0] + SIZE // 2][pixel[1] + SIZE // 2] = color
     print("Printed images")
 
 
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     # Initial state
     state: Expr = Value("nil")
     click: Expr = unvector([0, 0])
-    newState, images = interact(state, click)
+    state, images = interact(state, click)
     # # main loop
     # while True:
     #     click: Expr = unvector([0, 0])
@@ -318,9 +318,6 @@ if __name__ == "__main__":
     #     click = REQUEST_CLICK_FROM_USER()
     #     state = newState
 
-    #!/usr/bin/python2
-    import sdl2.ext
-    from random import randint
 
     BLACK = sdl2.ext.Color(0, 0, 0)
 
@@ -334,7 +331,7 @@ if __name__ == "__main__":
 
     # Initial image
     sdl2.ext.fill(winsurf, BLACK)
-    print_images()
+    print_images(images, pixelview, SIZE)
     while running:
         events = sdl2.ext.get_events()
         for event in events:
@@ -343,9 +340,8 @@ if __name__ == "__main__":
                 break
             if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
                 print('click', event.button.x, event.button.y)
-                sdl2.ext.fill(winsurf, BLACK)
-                color = sdl2.ext.Color(randint(128, 255), randint(128, 255), randint(128, 255))
-                for _ in range(10000):
-                    pixelview[randint(0, SIZE - 1)][randint(0, SIZE - 1)] = color
+                click = unvector([event.button.x - SIZE // 2, event.button.y - SIZE // 2])
+                state, images = interact(state, click)
+                print_images(images, pixelview, SIZE)
         win.refresh()
     sdl2.ext.quit()
