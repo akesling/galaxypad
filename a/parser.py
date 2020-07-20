@@ -306,37 +306,46 @@ def SEND_TO_ALIEN_PROXY(data: Expr) -> Expr:
 
 
 if __name__ == "__main__":
-    state: Expr = nil
+    # Initial state
+    state: Expr = Value("nil")
+    click: Expr = unvector([0, 0])
+    newState, images = interact(state, click)
+    # # main loop
+    # while True:
+    #     click: Expr = unvector([0, 0])
+    #     newState, images = interact(state, click)
+    #     PRINT_IMAGES(images)
+    #     click = REQUEST_CLICK_FROM_USER()
+    #     state = newState
 
-    # main loop
-    for _ in range(2):  # while True:
-        click: Expr = unvector([0, 0])
-        newState, images = interact(state, click)
-        PRINT_IMAGES(images)
-        click = REQUEST_CLICK_FROM_USER()
-        state = newState
-    # s = "ap ap cons 7 ap ap cons 123 nil"
-    # for expr in parse(s).nlr():
-    #     print(unparse(expr))
-    # assert parse(s) == parse(s)
-    # # print(parse('ap ap cons ap ap cons 0 ap ap cons ap ap :1162 14 ap neg 64 ap ap cons :1043 ap ap cons :1059 ap ap cons ap neg 1 nil ap ap cons ap ap cons 1 ap ap cons ap ap :1162 ap neg 4 94 ap ap cons :1044 ap ap cons :1060 ap ap cons 2 nil ap ap cons ap ap cons 2 ap ap cons ap ap :1162 ap neg 78 ap neg 67 ap ap cons :1045 ap ap cons :1061 ap ap cons 1 nil ap ap cons ap ap cons 3 ap ap cons ap ap :1162 ap neg 38 ap neg 46 ap ap cons :1046 ap ap cons :1062 ap ap cons ap neg 1 nil ap ap cons ap ap cons 4 ap ap cons ap ap :1162 44 ap neg 34 ap ap cons :1047 ap ap cons :1063 ap ap cons ap neg 1 nil ap ap cons ap ap cons 5 ap ap cons ap ap :1162 60 ap neg 30 ap ap cons :1048 ap ap cons :1064 ap ap cons 3 nil ap ap cons ap ap cons 6 ap ap cons ap ap :1162 ap neg 81 11 ap ap cons :1049 ap ap cons :1065 ap ap cons 0 nil ap ap cons ap ap cons 7 ap ap cons ap ap :1162 ap neg 49 34 ap ap cons :1050 ap ap cons :1066 ap ap cons ap neg 1 nil ap ap cons ap ap cons 8 ap ap cons ap ap :1162 52 27 ap ap cons :1051 ap ap cons :1067 ap ap cons ap neg 1 nil ap ap cons ap ap cons 9 ap ap cons ap ap :1162 99 15 ap ap cons :1052 ap ap cons :1068 ap ap cons ap neg 1 nil ap ap cons ap ap cons 10 ap ap cons ap ap :1162 96 35 ap ap cons :1053 ap ap cons :1069 ap ap cons ap neg 1 nil nil'))
-    # f1 = parse_file("galaxy.txt")
-    # f2 = parse_file("galaxy.txt")
-    # # b = f1[':1029']
-    # # print(unparse(b))
-    # for k in f1.keys():
-    #     assert f1[k] == f2[k], k
-    # print(vector(parse("ap ap cons 7 ap ap cons 123 nil")))
-    # print(vector(parse("ap ap cons ap ap cons 0 nil nil")))
-    # print(vector(parse("ap ap cons ap ap cons ap ap cons 0 nil nil nil")))
-    # print(
-    #     vector(
-    #         parse(
-    #             "ap ap cons ap ap cons ap ap cons 0 nil nil ap ap cons ap ap cons 1 nil nil"
-    #         )
-    #     )
-    # )
-    # print(vector(parse("ap ap cons 0 ap ap cons 1 nil")))
-    # print(vector(parse("ap ap cons ap ap cons 0 nil ap ap cons 1 nil")))
-    print(vector(parse("ap ap cons 0 nil")))
+    #!/usr/bin/python2
+    import sdl2.ext
+    from random import randint
 
+    BLACK = sdl2.ext.Color(0, 0, 0)
+
+    sdl2.ext.init()
+    SIZE = 512
+    win = sdl2.ext.Window("Galaxy", size=(SIZE, SIZE))
+    win.show()
+    winsurf = win.get_surface()
+    running = True
+    pixelview = sdl2.ext.PixelView(winsurf)
+
+    # Initial image
+    sdl2.ext.fill(winsurf, BLACK)
+    print_images()
+    while running:
+        events = sdl2.ext.get_events()
+        for event in events:
+            if event.type == sdl2.SDL_QUIT:
+                running = False
+                break
+            if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
+                print('click', event.button.x, event.button.y)
+                sdl2.ext.fill(winsurf, BLACK)
+                color = sdl2.ext.Color(randint(128, 255), randint(128, 255), randint(128, 255))
+                for _ in range(10000):
+                    pixelview[randint(0, SIZE - 1)][randint(0, SIZE - 1)] = color
+        win.refresh()
+    sdl2.ext.quit()
