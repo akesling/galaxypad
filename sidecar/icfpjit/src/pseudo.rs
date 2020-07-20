@@ -57,64 +57,17 @@ lazy_static! {
 type ExprRef = Rc<RefCell<dyn Expr>>;
 type WeakExprRef = Weak<RefCell<dyn Expr>>;
 trait Expr: Debug {
-    fn name(&self) -> Option<&str>;
-    fn func(&self) -> Option<ExprRef>;
-    fn arg(&self) -> Option<ExprRef>;
+    fn name(&self) -> Option<&str> { None }
+    fn func(&self) -> Option<ExprRef> { None }
+    fn arg(&self) -> Option<ExprRef> { None }
     fn evaluated(&self) -> Option<ExprRef>;
     // NOTE(akesling): Beware memory leaks through circular dependencies on evaluated results!
     fn set_evaluated(&mut self, ExprRef) -> Result<(), String>;
     fn equals(&self, other: ExprRef) -> bool;
 }
 
-#[derive(Default, Debug, Clone)]
-struct Atom {
-    name: String,
-    _evaluated: Option<WeakExprRef>,
-}
-
-impl Atom {
-    fn new<T: std::string::ToString>(name: T) -> ExprRef {
-        Rc::new(RefCell::new(Atom {
-            name: name.to_string(),
-            _evaluated: None,
-        }))
-    }
-}
-
-impl Expr for Atom {
-    fn name(&self) -> Option<&str> {
-        Some(&self.name)
-    }
-
-    fn func(&self) -> Option<ExprRef> {
-        None
-    }
-
-    fn arg(&self) -> Option<ExprRef> {
-        None
-    }
-
-    fn evaluated(&self) -> Option<ExprRef> {
-        match &self._evaluated {
-            Some(weak) => weak.upgrade(),
-            None => None,
-        }
-    }
-
-    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        self._evaluated = Some(Rc::downgrade(&expr));
-        Ok(())
-    }
-
-    fn equals(&self, other: ExprRef) -> bool {
-        match other.borrow().name() {
-            Some(name) => self.name == name,
-            None => false,
-        }
-    }
-}
-
-impl Expr for &Atom {
+// Implement Expr for references whose value type implements Expr
+impl<T> Expr for &T where T: Expr {
     fn name(&self) -> Option<&str> {
         (*self).name()
     }
@@ -140,6 +93,47 @@ impl Expr for &Atom {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+struct Atom {
+    _evaluated: Option<WeakExprRef>,
+
+    name: String,
+}
+
+impl Atom {
+    fn new<T: std::string::ToString>(name: T) -> ExprRef {
+        Rc::new(RefCell::new(Atom {
+            name: name.to_string(),
+            _evaluated: None,
+        }))
+    }
+}
+
+impl Expr for Atom {
+    fn name(&self) -> Option<&str> {
+        Some(&self.name)
+    }
+
+    fn evaluated(&self) -> Option<ExprRef> {
+        match &self._evaluated {
+            Some(weak) => weak.upgrade(),
+            None => None,
+        }
+    }
+
+    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
+        self._evaluated = Some(Rc::downgrade(&expr));
+        Ok(())
+    }
+
+    fn equals(&self, other: ExprRef) -> bool {
+        match other.borrow().name() {
+            Some(name) => self.name == name,
+            None => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Ap {
     _evaluated: Option<WeakExprRef>,
@@ -159,10 +153,6 @@ impl Ap {
 }
 
 impl Expr for Ap {
-    fn name(&self) -> Option<&str> {
-        None
-    }
-
     fn func(&self) -> Option<ExprRef> {
         Some(self.func.clone())
     }
@@ -190,32 +180,6 @@ impl Expr for Ap {
             }
             _ => false,
         }
-    }
-}
-
-impl Expr for &Ap {
-    fn name(&self) -> Option<&str> {
-        (*self).name()
-    }
-
-    fn func(&self) -> Option<ExprRef> {
-        (*self).func()
-    }
-
-    fn arg(&self) -> Option<ExprRef> {
-        (*self).arg()
-    }
-
-    fn evaluated(&self) -> Option<ExprRef> {
-        (*self).evaluated()
-    }
-
-    fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        (*self).set_evaluated(expr)
-    }
-
-    fn equals(&self, other: ExprRef) -> bool {
-        (*self).equals(other)
     }
 }
 
