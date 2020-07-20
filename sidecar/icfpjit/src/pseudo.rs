@@ -10,8 +10,6 @@ use std::fs;
 use std::ptr;
 use std::rc::{Rc, Weak};
 
-// See video course https://icfpcontest2020.github.io/#/post/2054
-
 struct Constants {
     cons: ExprRef,
     t: ExprRef,
@@ -189,7 +187,7 @@ struct Point {
     y: u64,
 }
 
-// Takes a vector of tokens and recursively consumes the tail of the token vector
+/// Takes a vector of tokens and recursively consumes the tail of the token vector
 fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
     let candidate_token = tokens[0];
     if candidate_token == "ap" {
@@ -218,8 +216,8 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
     ))
 }
 
-// Loads a function definition, which must be of the form:
-// <name> = <body expr>
+/// Loads a function definition, which must be of the form:
+/// <name> = <body expr>
 fn load_function(line: &str) -> Result<(String, ExprRef), String> {
     let left_and_right: Vec<&str> = line.split('=').filter(|s| !s.is_empty()).collect();
     assert!(
@@ -254,8 +252,8 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
     Ok((function_name, function_body))
 }
 
-// Opens the given filename and attempts to load each line as a function
-// definition (pretty much just for galaxy.txt)
+/// Opens the given filename and attempts to load each line as a function
+/// definition (pretty much just for galaxy.txt)
 fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>, String> {
     fs::read_to_string(file_path)
         .unwrap_or_else(|_| {
@@ -447,7 +445,6 @@ fn eval(
             continue;
         }
 
-        // XXX: Circular reference -- memory leak
         initial_expr.borrow_mut().set_evaluated(result.clone())?;
         return Ok(result);
     }
@@ -478,12 +475,6 @@ fn try_eval(
             .arg()
             .ok_or_else(|| "arg expected on expr of try_eval")?;
         if let Some(name) = func.clone().borrow().name().as_ref() {
-            //             if (fun.Name == "neg") return Atom(-asNum(eval(x)))
-            //             if (fun.Name == "i") return x
-            //             if (fun.Name == "nil") return t
-            //             if (fun.Name == "isnil") return Ap(x, Ap(t, Ap(t, f)))
-            //             if (fun.Name == "car") return Ap(x, t)
-            //             if (fun.Name == "cdr") return Ap(x, f)
             match *name {
                 "neg" => {
                     return Ok(Atom::new(-as_num(eval(x, functions, constants)?)?));
@@ -525,36 +516,30 @@ fn try_eval(
                 .ok_or_else(|| "arg expected on func of try_eval")?;
             if let Some(name) = func2.clone().borrow().name().as_ref() {
                 match *name {
-                    //                 if (fun2.Name == "t") return y
                     "t" => {
                         return Ok(y);
                     }
-                    //                 if (fun2.Name == "f") return x
                     "f" => {
                         return Ok(x);
                     }
-                    //                 if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
                     "add" => {
                         return Ok(Atom::new(
                             as_num(eval(x, functions, constants)?)?
                                 + as_num(eval(y, functions, constants)?)?,
                         ));
                     }
-                    //                 if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
                     "mul" => {
                         return Ok(Atom::new(
                             as_num(eval(x, functions, constants)?)?
                                 * as_num(eval(y, functions, constants)?)?,
                         ));
                     }
-                    //                 if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
                     "div" => {
                         return Ok(Atom::new(
                             as_num(eval(y, functions, constants)?)?
                                 / as_num(eval(x, functions, constants)?)?,
                         ));
                     }
-                    //                 if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
                     "eq" => {
                         let are_equal = as_num(eval(x, functions, constants)?)?
                             == as_num(eval(y, functions, constants)?)?;
@@ -564,7 +549,6 @@ fn try_eval(
                             constants.f.clone()
                         });
                     }
-                    //                 if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
                     "lt" => {
                         let is_less_than = as_num(eval(y, functions, constants)?)?
                             < as_num(eval(x, functions, constants)?)?;
@@ -574,7 +558,6 @@ fn try_eval(
                             constants.f.clone()
                         });
                     }
-                    //                 if (fun2.Name == "cons") return evalCons(y, x)
                     "cons" => {
                         return Ok(eval_cons(y, x, functions, constants)?);
                     }
@@ -595,13 +578,9 @@ fn try_eval(
                     .ok_or_else(|| "arg expected on func2 of try_eval")?;
                 if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
-                        //                     if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
                         "s" => return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x))),
-                        //                     if (fun3.Name == "c") return Ap(Ap(z, x), y)
                         "c" => return Ok(Ap::new(Ap::new(z, x), y)),
-                        //                     if (fun3.Name == "b") return Ap(z, Ap(y, x))
                         "b" => return Ok(Ap::new(z, Ap::new(y, x))),
-                        //                     if (fun3.Name == "cons") return Ap(Ap(x, z), y)
                         "cons" => return Ok(Ap::new(Ap::new(x, z), y)),
                         _ => (),
                     }
