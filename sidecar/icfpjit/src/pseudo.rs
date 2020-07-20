@@ -70,7 +70,7 @@ struct Atom {
     name: String,
 }
 
-fn Atom(name: String) -> Rc<RefCell<dyn Expr>> {
+fn atom(name: String) -> Rc<RefCell<dyn Expr>> {
     return Rc::new(RefCell::new(Atom { name }));
 }
 
@@ -132,7 +132,7 @@ struct Ap {
     arg: ExprRef,
 }
 
-fn Ap(func: ExprRef, arg: ExprRef) -> Rc<RefCell<dyn Expr>> {
+fn ap(func: ExprRef, arg: ExprRef) -> Rc<RefCell<dyn Expr>> {
     return Rc::new(RefCell::new(Ap {
         func,
         arg,
@@ -199,20 +199,20 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
     if candidate_token == "ap" {
         let (left, left_remainder) = deserialize(tokens[1..].to_vec())?;
         let (right, right_remainder) = deserialize(left_remainder)?;
-        let ap_expr = Ap(left, right);
+        let ap_expr = ap(left, right);
         return Ok((ap_expr, right_remainder));
     }
 
     if ATOMS.contains(candidate_token) {
-        return Ok((Atom(candidate_token.to_owned()), tokens[1..].to_vec()));
+        return Ok((atom(candidate_token.to_owned()), tokens[1..].to_vec()));
     }
 
     if let Ok(i) = candidate_token.parse::<i64>() {
-        return Ok((Atom(i.to_string()), tokens[1..].to_vec()));
+        return Ok((atom(i.to_string()), tokens[1..].to_vec()));
     }
 
     if candidate_token.starts_with(':') {
-        return Ok((Atom(candidate_token.to_owned()), tokens[1..].to_vec()));
+        return Ok((atom(candidate_token.to_owned()), tokens[1..].to_vec()));
     }
 
     return Err(format!("Could not deserialize: {}", candidate_token));
@@ -221,16 +221,16 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
 // Loads a function definition, which must be of the form:
 // <name> = <body expr>
 fn load_function(line: &str) -> Result<(String, ExprRef), String> {
-    let left_and_right: Vec<&str> = line.split('=').collect();
+    let left_and_right: Vec<&str> = line.trim().split('=').collect();
     assert!(
         left_and_right.len() == 2,
         "Function line could not be split in two"
     );
 
-    let left_tokens: Vec<&str> = left_and_right[0].split(' ').collect();
+    let left_tokens: Vec<&str> = left_and_right[0].trim().split(' ').collect();
     assert!(
         left_tokens.len() == 1,
-        "Function name was longer than expected"
+        format!("Function name was longer than expected {:?}", left_tokens)
     );
     let function_name = left_tokens[0].to_owned();
 
@@ -261,10 +261,6 @@ fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>
         .collect();
 }
 
-fn parse_functions(script_string: &str) -> HashMap<String, ExprRef> {
-    panic!("Parse functions is not yet implemented");
-}
-
 fn interact(
     state: ExprRef,
     event: ExprRef,
@@ -272,7 +268,7 @@ fn interact(
     constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = Ap(Ap(Atom("galaxy".to_owned()), state.clone()), event.clone());
+    let expr: ExprRef = ap(ap(atom("galaxy".to_owned()), state.clone()), event.clone());
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
@@ -282,11 +278,11 @@ fn interact(
             items.len()
         );
     }
-    let (flag, newState, data) = (items[0].clone(), items[1].clone(), items[2].clone());
+    let (flag, new_state, data) = (items[0].clone(), items[1].clone(), items[2].clone());
     if (as_num(flag).unwrap() == 0) {
-        return (newState, data);
+        return (new_state, data);
     }
-    return interact(newState, send_to_alien_proxy(data), functions, constants);
+    return interact(new_state, send_to_alien_proxy(data), functions, constants);
 }
 
 fn send_to_alien_proxy(expr: ExprRef) -> ExprRef {
@@ -322,7 +318,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             return Ok(vec![expr.clone()]);
         } else {
             return Err(format!(
-                "First item in list was non-nil Atom({}) not Ap",
+                "First item in list was non-nil atom({}) not Ap",
                 name
             ));
         }
@@ -330,7 +326,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         let second = expr.borrow().func().unwrap().clone();
         if let Some(name) = second.borrow().name().as_ref() {
             return Err(format!(
-                "Second item in list was non-nil Atom({}) not Ap",
+                "Second item in list was non-nil atom({}) not Ap",
                 name
             ));
         }
@@ -339,7 +335,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         if let Some(name) = second.borrow().name().as_ref() {
             if name != &"cons" {
                 return Err(format!(
-                    "Cons-place item in list was Atom({}) not cons",
+                    "Cons-place item in list was atom({}) not cons",
                     name
                 ));
             }
@@ -402,7 +398,7 @@ fn try_eval(
                 if let Some(name) = expr.borrow().name().as_ref() {
                     match *name {
                         "neg" => {
-                            return Ok(Atom(
+                            return Ok(atom(
                                 (-as_num(eval(x, functions, constants)?)?).to_string(),
                             ));
                         }
@@ -413,19 +409,19 @@ fn try_eval(
                             return Ok(constants.t.clone());
                         }
                         "isnil" => {
-                            return Ok(Ap(
+                            return Ok(ap(
                                 x,
-                                Ap(
+                                ap(
                                     constants.t.clone(),
-                                    Ap(constants.t.clone(), constants.f.clone()),
+                                    ap(constants.t.clone(), constants.f.clone()),
                                 ),
                             ));
                         }
                         "car" => {
-                            return Ok(Ap(x, constants.t.clone()));
+                            return Ok(ap(x, constants.t.clone()));
                         }
                         "car" => {
-                            return Ok(Ap(x, constants.f.clone()));
+                            return Ok(ap(x, constants.f.clone()));
                         }
                         _ => (),
                     }
@@ -441,21 +437,21 @@ fn try_eval(
                                 return Ok(x);
                             }
                             "add" => {
-                                return Ok(Atom(
+                                return Ok(atom(
                                     (as_num(eval(x, functions, constants)?)?
                                         + as_num(eval(y, functions, constants)?)?)
                                     .to_string(),
                                 ));
                             }
                             "mul" => {
-                                return Ok(Atom(
+                                return Ok(atom(
                                     (as_num(eval(x, functions, constants)?)?
                                         * as_num(eval(y, functions, constants)?)?)
                                     .to_string(),
                                 ));
                             }
                             "div" => {
-                                return Ok(Atom(
+                                return Ok(atom(
                                     (as_num(eval(x, functions, constants)?)?
                                         / as_num(eval(y, functions, constants)?)?)
                                     .to_string(),
@@ -490,10 +486,10 @@ fn try_eval(
                         let z = func3.borrow().arg().unwrap();
                         if let Some(name) = func3.clone().borrow().name().as_ref() {
                             match *name {
-                                "s" => return Ok(Ap(Ap(z, x.clone()), Ap(y, x))),
-                                "c" => return Ok(Ap(Ap(z, x), y)),
-                                "b" => return Ok(Ap(z, Ap(y, x))),
-                                "cons" => return Ok(Ap(Ap(x, z), y)),
+                                "s" => return Ok(ap(ap(z, x.clone()), ap(y, x))),
+                                "c" => return Ok(ap(ap(z, x), y)),
+                                "b" => return Ok(ap(z, ap(y, x))),
+                                "cons" => return Ok(ap(ap(x, z), y)),
                                 _ => (),
                             }
                         }
@@ -512,12 +508,12 @@ fn eval_cons(
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
 ) -> Result<ExprRef, String> {
-    let res = Ap(
-        Ap(constants.cons.clone(), eval(head, functions, constants)?),
+    let res = ap(
+        ap(constants.cons.clone(), eval(head, functions, constants)?),
         eval(tail, functions, constants)?,
     );
     // XXX: Circular reference -- memory leak
-    res.borrow_mut().set_evaluated(res.clone());
+    res.borrow_mut().set_evaluated(res.clone())?;
     return Ok(res);
 }
 
@@ -530,12 +526,12 @@ fn request_click_from_user() -> Point {
 }
 
 fn main() {
-    let functions = parse_functions("DUMMY VALUE");
+    let functions: HashMap<String, ExprRef> = load_function_definitions("galaxy.txt").unwrap();
     let constants = Constants {
-        cons: Atom("cons".to_owned()),
-        t: Atom("t".to_owned()),
-        f: Atom("f".to_owned()),
-        nil: Atom("nil".to_owned()),
+        cons: atom("cons".to_owned()),
+        t: atom("t".to_owned()),
+        f: atom("f".to_owned()),
+        nil: atom("nil".to_owned()),
     };
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
@@ -543,14 +539,14 @@ fn main() {
     let mut point = Point { x: 0, y: 0 };
 
     loop {
-        let click = Ap(
-            Ap(constants.cons.clone(), Atom(point.x.to_string())),
-            Atom(point.y.to_string()),
+        let click = ap(
+            ap(constants.cons.clone(), atom(point.x.to_string())),
+            atom(point.y.to_string()),
         );
-        let (newState, images) = interact(state.clone(), click.clone(), &functions, &constants);
+        let (new_state, images) = interact(state.clone(), click.clone(), &functions, &constants);
         print_images(images);
         point = request_click_from_user();
-        state = newState;
+        state = new_state;
     }
 }
 
