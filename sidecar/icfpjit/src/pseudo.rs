@@ -106,6 +106,7 @@ struct Atom {
 }
 
 impl Atom {
+    #[allow(clippy::new_ret_no_self)]
     fn new<T: std::string::ToString>(name: T) -> ExprRef {
         Rc::new(RefCell::new(Atom {
             name: name.to_string(),
@@ -148,6 +149,7 @@ struct Ap {
 }
 
 impl Ap {
+    #[allow(clippy::new_ret_no_self)]
     fn new(func: ExprRef, arg: ExprRef) -> ExprRef {
         Rc::new(RefCell::new(Ap {
             func,
