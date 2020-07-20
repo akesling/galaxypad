@@ -684,6 +684,13 @@ mod tests {
         Ok(expr)
     }
 
+    fn assert_equal(result: ExprRef, expectation: ExprRef) {
+        assert!(
+            result.borrow().equals(expectation.clone()),
+            format!("{:?} != {:?}", result, expectation)
+        );
+    }
+
     #[test]
     fn pseudo_addition() {
         let constants: Constants = Constants {
@@ -694,13 +701,33 @@ mod tests {
         };
 
         let result = eval(
-            str_to_expr("ap ap add 2 2").unwrap(),
+            str_to_expr("ap ap add 2 3").unwrap(),
             &hashmap! {},
             &constants,
         )
         .unwrap();
 
-        let expected = atom("4".to_owned());
-        assert!(result.borrow().equals(expected));
+        let expected = atom("5".to_owned());
+        assert_equal(result.clone(), expected.clone());
+    }
+
+    #[test]
+    fn pseudo_division() {
+        let constants: Constants = Constants {
+            cons: atom("cons".to_owned()),
+            t: atom("t".to_owned()),
+            f: atom("f".to_owned()),
+            nil: atom("nil".to_owned()),
+        };
+
+        let result = eval(
+            str_to_expr("ap ap div -9 4").unwrap(),
+            &hashmap! {},
+            &constants,
+        )
+        .unwrap();
+
+        let expected = atom("-2".to_owned());
+        assert_equal(result.clone(), expected.clone());
     }
 }
