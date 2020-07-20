@@ -72,7 +72,10 @@ struct Atom {
 }
 
 fn atom(name: String) -> Rc<RefCell<dyn Expr>> {
-    return Rc::new(RefCell::new(Atom { name, _evaluated: None }));
+    return Rc::new(RefCell::new(Atom {
+        name,
+        _evaluated: None,
+    }));
 }
 
 impl Expr for Atom {
@@ -90,9 +93,9 @@ impl Expr for Atom {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => Some(weak.upgrade().unwrap()),
+            Some(weak) => weak.upgrade(),
             None => None,
-        }
+        };
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -116,15 +119,14 @@ impl Expr for &Atom {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => Some(weak.upgrade().unwrap()),
+            Some(weak) => weak.upgrade(),
             None => None,
-        }
+        };
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
         (*self).set_evaluated(expr)
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -158,9 +160,9 @@ impl Expr for Ap {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => Some(weak.upgrade().unwrap()),
+            Some(weak) => weak.upgrade(),
             None => None,
-        }
+        };
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -184,9 +186,9 @@ impl Expr for &Ap {
 
     fn evaluated(&self) -> Option<ExprRef> {
         return match &self._evaluated {
-            Some(weak) => Some(weak.upgrade().unwrap()),
+            Some(weak) => weak.upgrade(),
             None => None,
-        }
+        };
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
@@ -391,31 +393,20 @@ fn eval(
         return Ok(x);
     }
 
-//    Expr initialExpr = expr
-//    while (true)
-//        Expr result = tryEval(expr)
-//        if (result == expr)
-//            initialExpr.Evaluated = result
-//            return result
-//        expr = result
+    let mut initial_expr = expr.clone();
     let mut current_expr = expr.clone();
     loop {
-        let result = try_eval(current_expr.clone(), functions, constants, stack_depth+1)?;
+        let result = try_eval(current_expr.clone(), functions, constants, stack_depth + 1)?;
         if !ptr::eq(current_expr.as_ref(), result.as_ref()) {
             current_expr = result.clone();
             continue;
         }
 
-        if let Some(x) = current_expr.borrow().evaluated() {
-            return Ok(x);
-        }
-
         // XXX: Circular reference -- memory leak
-        current_expr.borrow_mut().set_evaluated(result.clone())?;
+        initial_expr.borrow_mut().set_evaluated(result.clone())?;
         return Ok(result);
     }
 }
-
 fn try_eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
@@ -431,13 +422,24 @@ fn try_eval(
             return Ok(function.clone());
         }
     } else {
-        let func = eval(expr.borrow().func().unwrap().clone(), functions, constants, stack_depth+1)?;
+        let func = eval(
+            expr.borrow().func().unwrap().clone(),
+            functions,
+            constants,
+            stack_depth + 1,
+        )?;
         let x = expr.borrow().arg().unwrap().clone();
         if let Some(name) = func.clone().borrow().name().as_ref() {
+            //             if (fun.Name == "neg") return Atom(-asNum(eval(x)))
+            //             if (fun.Name == "i") return x
+            //             if (fun.Name == "nil") return t
+            //             if (fun.Name == "isnil") return Ap(x, Ap(t, Ap(t, f)))
+            //             if (fun.Name == "car") return Ap(x, t)
+            //             if (fun.Name == "cdr") return Ap(x, f)
             match *name {
                 "neg" => {
                     return Ok(atom(
-                        (-as_num(eval(x, functions, constants, stack_depth+1)?)?).to_string(),
+                        (-as_num(eval(x, functions, constants, stack_depth + 1)?)?).to_string(),
                     ));
                 }
                 "i" => {
@@ -464,70 +466,92 @@ fn try_eval(
                 _ => (),
             }
         } else {
-            let tmp_func2 = func.borrow().func().unwrap().clone();
-            let func2 = eval(tmp_func2, functions, constants, stack_depth+1)?.clone();
+            let func2 = eval(
+                func.borrow().func().unwrap().clone(),
+                functions,
+                constants,
+                stack_depth + 1,
+            )?
+            .clone();
             let y = func.borrow().arg().unwrap().clone();
             if let Some(name) = func2.clone().borrow().name().as_ref() {
                 match *name {
+//                 if (fun2.Name == "t") return y
                     "t" => {
                         return Ok(y);
                     }
+//                 if (fun2.Name == "f") return x
                     "f" => {
                         return Ok(x);
                     }
+//                 if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
                     "add" => {
                         return Ok(atom(
-                            (as_num(eval(x, functions, constants, stack_depth+1)?)?
-                                + as_num(eval(y, functions, constants, stack_depth+1)?)?)
+                            (as_num(eval(x, functions, constants, stack_depth + 1)?)?
+                                + as_num(eval(y, functions, constants, stack_depth + 1)?)?)
                             .to_string(),
                         ));
                     }
+//                 if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
                     "mul" => {
                         return Ok(atom(
-                            (as_num(eval(x, functions, constants, stack_depth+1)?)?
-                                * as_num(eval(y, functions, constants, stack_depth+1)?)?)
+                            (as_num(eval(x, functions, constants, stack_depth + 1)?)?
+                                * as_num(eval(y, functions, constants, stack_depth + 1)?)?)
                             .to_string(),
                         ));
                     }
+//                 if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
                     "div" => {
                         return Ok(atom(
-                            (as_num(eval(y, functions, constants, stack_depth+1)?)?
-                                / as_num(eval(x, functions, constants, stack_depth+1)?)?)
+                            (as_num(eval(y, functions, constants, stack_depth + 1)?)?
+                                / as_num(eval(x, functions, constants, stack_depth + 1)?)?)
                             .to_string(),
                         ));
                     }
+//                 if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
                     "eq" => {
-                        let are_equal = as_num(eval(x, functions, constants, stack_depth+1)?)?
-                            == as_num(eval(y, functions, constants, stack_depth+1)?)?;
+                        let are_equal = as_num(eval(x, functions, constants, stack_depth + 1)?)?
+                            == as_num(eval(y, functions, constants, stack_depth + 1)?)?;
                         return Ok(if are_equal {
                             constants.t.clone()
                         } else {
                             constants.f.clone()
                         });
                     }
+//                 if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
                     "lt" => {
-                        let is_less_than = as_num(eval(x, functions, constants, stack_depth+1)?)?
-                            < as_num(eval(y, functions, constants, stack_depth+1)?)?;
+                        let is_less_than = as_num(eval(y, functions, constants, stack_depth + 1)?)?
+                            < as_num(eval(x, functions, constants, stack_depth + 1)?)?;
                         return Ok(if is_less_than {
                             constants.t.clone()
                         } else {
                             constants.f.clone()
                         });
                     }
+//                 if (fun2.Name == "cons") return evalCons(y, x)
                     "cons" => {
-                        return Ok(eval_cons(y, x, functions, constants, stack_depth+1)?);
+                        return Ok(eval_cons(y, x, functions, constants, stack_depth + 1)?);
                     }
                     _ => (),
                 }
             } else {
-                let func3 =
-                    eval(func2.borrow().func().unwrap(), functions, constants, stack_depth+1)?.clone();
+                let func3 = eval(
+                    func2.borrow().func().unwrap(),
+                    functions,
+                    constants,
+                    stack_depth + 1,
+                )?
+                .clone();
                 let z = func2.borrow().arg().unwrap();
                 if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
+//                     if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
                         "s" => return Ok(ap(ap(z, x.clone()), ap(y, x))),
+//                     if (fun3.Name == "c") return Ap(Ap(z, x), y)
                         "c" => return Ok(ap(ap(z, x), y)),
+//                     if (fun3.Name == "b") return Ap(z, Ap(y, x))
                         "b" => return Ok(ap(z, ap(y, x))),
+//                     if (fun3.Name == "cons") return Ap(Ap(x, z), y)
                         "cons" => return Ok(ap(ap(x, z), y)),
                         _ => (),
                     }
@@ -537,9 +561,9 @@ fn try_eval(
     }
 
     let result = expr.clone();
-    return Ok(result)
+    return Ok(result);
 
-//    Ok(expr.clone())
+    //    Ok(expr.clone())
 }
 
 fn eval_cons(
@@ -550,10 +574,12 @@ fn eval_cons(
     stack_depth: u64,
 ) -> Result<ExprRef, String> {
     let res = ap(
-        ap(constants.cons.clone(), eval(head, functions, constants, stack_depth+1)?),
-        eval(tail, functions, constants, stack_depth+1)?,
+        ap(
+            constants.cons.clone(),
+            eval(head, functions, constants, stack_depth + 1)?,
+        ),
+        eval(tail, functions, constants, stack_depth + 1)?,
     );
-    // XXX: Circular reference -- memory leak
     res.borrow_mut().set_evaluated(res.clone())?;
     return Ok(res);
 }
