@@ -7,6 +7,10 @@ from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 import sdl2.ext
 
+from images import print_image_stack
+
+sys.setrecursionlimit(10000)
+
 
 @dataclass
 class Value:
@@ -278,6 +282,7 @@ def interact(state: Expr, event: Expr) -> Tuple[Expr, Expr]:
 
 
 def print_images(images: Expr, pixelview, SIZE, BIG) -> None:
+    imstack = []
     imvec = vector(images)  # convert to lists
     while imvec != []:
         image, imvec = imvec  # type: ignore
@@ -285,8 +290,8 @@ def print_images(images: Expr, pixelview, SIZE, BIG) -> None:
         while image != []:
             pixel, image = image  # type: ignore
             offset = [(p + SIZE // 2) * BIG for p in pixel]
-            for x in range(offset[0], offset[0] + BIG):
-                for y in range(offset[1], offset[1] + BIG):
+            for x in range(max(offset[0], 0), min(offset[0] + BIG, SIZE * BIG)):
+                for y in range(max(offset[1], 0), min(offset[1] + BIG, SIZE * BIG)):
                     pixelview[y][x] = color
             # pixelview[pixel[1] + SIZE // 2][pixel[0] + SIZE // 2] = color
 
@@ -299,13 +304,16 @@ if __name__ == "__main__":
         [3, 6],
         [0, -14],
         [-4, 10],
+        [9, -3],
+        [-4, 10],
+        [1, 4],
     ]:
         state, images = interact(state, unvector(click))
-
-    BLACK = sdl2.ext.Color(0, 0, 0)
+    print_image_stack(vector(images))
+    exit()
 
     sdl2.ext.init()
-    SIZE = 256
+    SIZE = 512
     BIG = 1
 
     win = sdl2.ext.Window("Galaxy", size=(SIZE * BIG, SIZE * BIG))
@@ -315,7 +323,7 @@ if __name__ == "__main__":
     pixelview = sdl2.ext.PixelView(winsurf)
 
     # Initial image
-    sdl2.ext.fill(winsurf, BLACK)
+    sdl2.ext.fill(winsurf, sdl2.ext.Color(0, 0, 0))
     print_images(images, pixelview, SIZE, BIG)
     while running:
         events = sdl2.ext.get_events()
@@ -324,15 +332,15 @@ if __name__ == "__main__":
                 running = False
                 break
             if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
-                print("click", event.button.x, event.button.y)
+                # print("click", event.button.x, event.button.y)
                 pixel = [event.button.x, event.button.y]
                 point = [(i // BIG) - SIZE // 2 for i in pixel]
-                print(point)
+                # print(point)
                 click = unvector(point)
                 state, images = interact(state, click)
-                sdl2.ext.fill(winsurf, BLACK)
-                print("state", vector(state))
-                print("images", vector(images))
+                sdl2.ext.fill(winsurf, sdl2.ext.Color(0, 0, 0))
+                # print("state", vector(state))
+                # print("images", vector(images))
                 print_images(images, pixelview, SIZE, BIG)
         win.refresh()
     sdl2.ext.quit()
