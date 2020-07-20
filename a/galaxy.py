@@ -26,7 +26,7 @@ sys.setrecursionlimit(10000)
 
 # Set rendering parameters
 WIDTH = 320  # How much space to render (centers on 0)
-HEIGHT = 250  # How much space to render (centers on 0)
+HEIGHT = 320  # How much space to render (centers on 0)
 BIG = 3  # How many render pixels per game pixes (bigger is easier)
 
 # Colors from https://ethanschoonover.com/solarized/
