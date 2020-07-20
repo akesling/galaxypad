@@ -21,6 +21,10 @@ struct Atom {
     name: String,
 }
 
+fn Atom(name: String) -> Rc<RefCell<dyn Expr>> {
+    return Rc::new(RefCell::new(Atom { name }));
+}
+
 impl Expr for Atom {
     fn name(&self) -> Option<&str> {
         Some(&self.name)
@@ -77,6 +81,14 @@ struct Ap {
 
     func: ExprRef,
     arg: ExprRef,
+}
+
+fn Ap(func: ExprRef, arg: ExprRef) -> Rc<RefCell<dyn Expr>> {
+    return Rc::new(RefCell::new(Ap {
+        func,
+        arg,
+        _evaluated: None,
+    }));
 }
 
 impl Expr for Ap {
@@ -143,18 +155,7 @@ fn interact(
     constants: &HashMap<String, ExprRef>,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = Rc::new(RefCell::new(Ap {
-        func: Rc::new(RefCell::new(Ap {
-            func: Rc::new(RefCell::new(Atom {
-                name: "galaxy".to_owned(),
-                ..Default::default()
-            })),
-            arg: state.clone(),
-            _evaluated: None,
-        })),
-        arg: event.clone(),
-        _evaluated: None,
-    }));
+    let expr: ExprRef = Ap(Ap(Atom("galaxy".to_owned()), state.clone()), event.clone());
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
@@ -227,45 +228,34 @@ fn try_eval(
                 if let Some(name) = expr.borrow().name().as_ref() {
                     match *name {
                         "neg" => {
-                            return Ok(Rc::new(RefCell::new(Atom {
-                                name: (-as_num(eval(x, functions, constants)?)?).to_string(),
-                            })));
-                        },
+                            return Ok(Atom(
+                                (-as_num(eval(x, functions, constants)?)?).to_string(),
+                            ));
+                        }
                         "i" => {
                             return Ok(x);
-                        },
+                        }
                         "nil" => {
                             return Ok(constants.get("t").unwrap().clone());
-                        },
+                        }
                         "isnil" => {
-                            return Ok(Rc::new(RefCell::new(Ap{
-                                func: x,
-                                arg: Rc::new(RefCell::new(Ap{
-                                    func: constants.get("t").unwrap().clone(),
-                                    arg: Rc::new(RefCell::new(Ap{
-                                        func: constants.get("t").unwrap().clone(),
-                                        arg: constants.get("f").unwrap().clone(),
-                                        _evaluated: None,
-                                    })),
-                                    _evaluated: None,
-                                })),
-                                _evaluated: None,
-                            })));
-                        },
+                            return Ok(Ap(
+                                x,
+                                Ap(
+                                    constants.get("t").unwrap().clone(),
+                                    Ap(
+                                        constants.get("t").unwrap().clone(),
+                                        constants.get("f").unwrap().clone(),
+                                    ),
+                                ),
+                            ));
+                        }
                         "car" => {
-                            return Ok(Rc::new(RefCell::new(Ap{
-                                func: x,
-                                arg: constants.get("t").unwrap().clone(),
-                                _evaluated: None,
-                            })));
-                        },
+                            return Ok(Ap(x, constants.get("t").unwrap().clone()));
+                        }
                         "car" => {
-                            return Ok(Rc::new(RefCell::new(Ap{
-                                func: x,
-                                arg: constants.get("f").unwrap().clone(),
-                                _evaluated: None,
-                            })));
-                        },
+                            return Ok(Ap(x, constants.get("f").unwrap().clone()));
+                        }
                         _ => (),
                     }
                 } else {
@@ -275,40 +265,98 @@ fn try_eval(
                         match *name {
                             "t" => {
                                 return Ok(y);
-                            },
-                            "f" => {return Ok(x);},
-                //                if (fun2.Name == "add") return Atom(asNum(eval(x)) + asNum(eval(y)))
+                            }
+                            "f" => {
+                                return Ok(x);
+                            }
                             "add" => {
-                                return Ok(Rc::new(RefCell::new(Atom{
-                                    name: (as_num(eval(x, functions, constants)?)? + as_num(eval(y, functions, constants)?)?).to_string(),
-                                })));
-                            },
-                //                if (fun2.Name == "mul") return Atom(asNum(eval(x)) * asNum(eval(y)))
-                            "mul" => (),
-                //                if (fun2.Name == "div") return Atom(asNum(eval(y)) / asNum(eval(x)))
-                            "div" => (),
-                //                if (fun2.Name == "lt") return asNum(eval(y)) < asNum(eval(x)) ? t : f
-                            "eq" => (),
-                //                if (fun2.Name == "eq") return asNum(eval(x)) == asNum(eval(y)) ? t : f
-                            "cons" => (),
-                //                if (fun2.Name == "cons") return evalCons(y, x)
+                                return Ok(Atom(
+                                    (as_num(eval(x, functions, constants)?)?
+                                        + as_num(eval(y, functions, constants)?)?)
+                                    .to_string(),
+                                ));
+                            }
+                            "mul" => {
+                                return Ok(Atom(
+                                    (as_num(eval(x, functions, constants)?)?
+                                        * as_num(eval(y, functions, constants)?)?)
+                                    .to_string(),
+                                ));
+                            }
+                            "div" => {
+                                return Ok(Atom(
+                                    (as_num(eval(x, functions, constants)?)?
+                                        / as_num(eval(y, functions, constants)?)?)
+                                    .to_string(),
+                                ));
+                            }
+                            "eq" => {
+                                let are_equal = as_num(eval(x, functions, constants)?)?
+                                    == as_num(eval(y, functions, constants)?)?;
+                                return Ok(if are_equal {
+                                    constants.get("t").unwrap().clone()
+                                } else {
+                                    constants.get("f").unwrap().clone()
+                                });
+                            }
+                            "lt" => {
+                                let is_less_than = as_num(eval(x, functions, constants)?)?
+                                    < as_num(eval(y, functions, constants)?)?;
+                                return Ok(if is_less_than {
+                                    constants.get("t").unwrap().clone()
+                                } else {
+                                    constants.get("f").unwrap().clone()
+                                });
+                            }
+                            "cons" => {
+                                return Ok(eval_cons(y, x)?);
+                            }
                             _ => (),
                         }
+                    } else {
+                        let func3 =
+                            eval(func2.borrow().func().unwrap(), functions, constants)?.clone();
+                        let z = func3.borrow().arg().unwrap();
+                        if let Some(name) = func3.clone().borrow().name().as_ref() {
+                            match *name {
+                                "s" => {
+                                    return Ok(Ap(
+                                        Ap(z, x.clone()),
+                                        Ap(y, x),
+                                    ))
+                                }
+                                "c" => {
+                                    return Ok(Ap(
+                                        Ap(z, x),
+                                        y,
+                                    ))
+                                }
+                                "b" => {
+                                    return Ok(Ap(
+                                        z,
+                                        Ap(y, x),
+                                    ))
+                                }
+                                "cons" => {
+                                    return Ok(Ap(
+                                        Ap(x, z),
+                                        y,
+                                    ))
+                                }
+                                _ => (),
+                            }
+                        }
                     }
-                //            if (fun2 is Ap)
-                //                Expr fun3 = eval(fun2.Fun)
-                //                Expr z = fun2.Arg
-                //                if (fun3 is Atom)
-                //                    if (fun3.Name == "s") return Ap(Ap(z, x), Ap(y, x))
-                //                    if (fun3.Name == "c") return Ap(Ap(z, x), y)
-                //                    if (fun3.Name == "b") return Ap(z, Ap(y, x))
-                //                    if (fun3.Name == "cons") return Ap(Ap(x, z), y)
                 }
             }
         }
     }
 
     Ok(expr.clone())
+}
+
+fn eval_cons(head: ExprRef, tail: ExprRef) -> Result<ExprRef, String> {
+    panic!("eval_cons is not yet implemented");
 }
 
 fn print_images(points: ExprRef) {
