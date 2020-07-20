@@ -222,20 +222,26 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
 // Loads a function definition, which must be of the form:
 // <name> = <body expr>
 fn load_function(line: &str) -> Result<(String, ExprRef), String> {
-    let left_and_right: Vec<&str> = line.trim().split('=').collect();
+    let left_and_right: Vec<&str> = line.split('=').filter(|s| !s.is_empty()).collect();
     assert!(
         left_and_right.len() == 2,
         "Function line could not be split in two"
     );
 
-    let left_tokens: Vec<&str> = left_and_right[0].trim().split(' ').collect();
+    let left_tokens: Vec<&str> = left_and_right[0]
+        .split(' ')
+        .filter(|s| !s.is_empty())
+        .collect();
     assert!(
         left_tokens.len() == 1,
         format!("Function name was longer than expected {:?}", left_tokens)
     );
     let function_name = left_tokens[0].to_owned();
 
-    let right_tokens: Vec<&str> = left_and_right[1].split(' ').collect();
+    let right_tokens: Vec<&str> = left_and_right[1]
+        .split(' ')
+        .filter(|s| !s.is_empty())
+        .collect();
     assert!(right_tokens.len() > 0, "Function body was of length zero");
     let (function_body, remainder) = deserialize(right_tokens)?;
     assert!(
@@ -257,8 +263,8 @@ fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>
             "Something went wrong reading the functions file {}",
             file_path
         ))
-        .trim()
         .split('\n')
+        .filter(|s| !s.is_empty())
         .map(|line| load_function(line))
         .collect();
 }
