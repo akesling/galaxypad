@@ -214,7 +214,7 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
         return Ok((Atom::new(i), tokens[1..].to_vec()));
     }
 
-    if candidate_token.starts_with(':') {
+    if candidate_token.starts_with(':') || candidate_token.starts_with('x') {
         return Ok((Atom::new(candidate_token), tokens[1..].to_vec()));
     }
 
@@ -666,7 +666,6 @@ mod tests {
     #[test]
     fn pseudo_addition() {
         let result = eval(str_to_expr("ap ap add 2 3").unwrap(), &hashmap! {}).unwrap();
-
         let expected = Atom::new(5);
         assert_equal(result, expected);
     }
@@ -674,8 +673,29 @@ mod tests {
     #[test]
     fn pseudo_division() {
         let result = eval(str_to_expr("ap ap div -9 4").unwrap(), &hashmap! {}).unwrap();
-
         let expected = Atom::new(-2);
         assert_equal(result, expected);
+    }
+
+    #[test]
+    fn pseudo_cons_application() {
+        let result = eval(str_to_expr("ap ap ap cons x0 x1 x2").unwrap(), &hashmap! {}).unwrap();
+        let expected = Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1"));
+        assert_equal(result, expected);
+    }
+
+    #[test]
+    fn pseudo_isnil() {
+        let result_true = eval(str_to_expr("ap isnil nil").unwrap(), &hashmap! {}).unwrap();
+        let expected_true = Atom::new(T);
+        assert_equal(result_true, expected_true);
+
+        let result_false = eval(
+            str_to_expr("ap isnil ap ap cons x0 x1").unwrap(),
+            &hashmap! {},
+        )
+        .unwrap();
+        let expected_false = Atom::new(F);
+        assert_equal(result_false, expected_false);
     }
 }
