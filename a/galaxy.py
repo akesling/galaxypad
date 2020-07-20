@@ -24,6 +24,32 @@ import sdl2.ext
 
 sys.setrecursionlimit(10000)
 
+# Set rendering parameters
+WIDTH = 320  # How much space to render (centers on 0)
+HEIGHT = 240  # How much space to render (centers on 0)
+BIG = 2  # How many render pixels per game pixes (bigger is easier)
+
+# Colors from https://ethanschoonover.com/solarized/
+C03 = 0xFF002B36  # base03
+C02 = 0xFF073642  # base02
+C01 = 0xFF586E75  # base01
+C00 = 0xFF657B83  # base00
+C0 = 0xFF839496  # base0
+C1 = 0xFF93A1A1  # base1
+C2 = 0xFFEEE8D5  # base2
+C3 = 0xFFFDF6E3  # base3
+Cy = 0xFFB58900  # yellow
+Co = 0xFFCB4B16  # orange
+Cr = 0xFFDC322F  # red
+Cm = 0xFFD33682  # magenta
+Cv = 0xFF6C71C4  # violet
+Cb = 0xFF268BD2  # blue
+Cc = 0xFF2AA198  # cyan
+Cg = 0xFF859900  # green
+C_BACKGROUND = C03
+C_CURSOR = Cr
+COLORS = (C3, (Cb, (Cy, (Cm, (Cc, (Co, (Cv, (Cg, (Cr, ())))))))))
+
 
 class Value:
     """ Atoms are the leaves of our tree """
@@ -104,9 +130,6 @@ Expr = Union[Tree, Value]
 # Vector = Union[Tuple['Vector', 'Vector'], Tuple[()], int]
 Vector = Union[Tuple[Any, Any], Tuple[()], int]  # HACK for type matching
 Modulation = str
-
-t: Expr = Value("t")
-f: Expr = Value("f")
 
 
 def vector(expr: Expr) -> Vector:
@@ -269,9 +292,18 @@ def evaluate(orig: Expr) -> Expr:
     return current
 
 
+def evalint(orig: Expr) -> int:
+    """ Evaluate and convert to integer value """
+    expr: Expr = evaluate(orig)
+    if isinstance(expr, Value):
+        return int(expr)
+    raise ValueError(f"Failed to evaluate to integer {orig} -> {expr}")
+
+
 def tryEval(expr: Expr) -> Tuple[Expr, bool]:
     """ Try to perform a computation, return result and success """
     assert isinstance(expr, (Value, Tree)), expr
+    t, f = Value("t"), Value("f")
     if expr.Evaluated:
         return expr.Evaluated, False
     if isinstance(expr, Value) and str(expr) in functions:
@@ -283,7 +315,7 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
         x: Expr = expr.right
         if isinstance(left, Value):
             if str(left) == "neg":
-                return Value(-int(evaluate(x))), True  # type: ignore
+                return Value(-evalint(x)), True
             if str(left) == "i":
                 return x, True
             if str(left) == "nil":
@@ -305,20 +337,16 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
                 if str(left2) == "f":
                     return x, True
                 if str(left2) == "add":
-                    return Value(int(evaluate(x)) + int(evaluate(y))), True  # type: ignore
+                    return Value(evalint(x) + evalint(y)), True
                 if str(left2) == "mul":
-                    return Value(int(evaluate(x)) * int(evaluate(y))), True  # type: ignore
+                    return Value(evalint(x) * evalint(y)), True
                 if str(left2) == "div":
-                    a, b = int(evaluate(y)), int(evaluate(x))  # type: ignore
+                    a, b = evalint(y), evalint(x)
                     return Value(a // b if a * b > 0 else (a + (-a % b)) // b), True
                 if str(left2) == "lt":
-                    return (
-                        (t, True) if int(evaluate(y)) < int(evaluate(x)) else (f, True)
-                    )
+                    return (t, True) if evalint(y) < evalint(x) else (f, True)
                 if str(left2) == "eq":
-                    return (
-                        (t, True) if int(evaluate(y)) == int(evaluate(x)) else (f, True)
-                    )
+                    return (t, True) if evalint(y) == evalint(x) else (f, True)
                 if str(left2) == "cons":
                     return evalCons(y, x), True
             if isinstance(left2, Tree):
@@ -340,7 +368,7 @@ def tryEval(expr: Expr) -> Tuple[Expr, bool]:
 
 def evalCons(a: Expr, b: Expr) -> Expr:
     """ Evaluate a pair """
-    res: Expr = Tree(Tree(Value('cons'), evaluate(a)), evaluate(b))
+    res: Expr = Tree(Tree(Value("cons"), evaluate(a)), evaluate(b))
     res.Evaluated = res
     return res
 
@@ -348,17 +376,12 @@ def evalCons(a: Expr, b: Expr) -> Expr:
 def SEND_TO_ALIEN_PROXY(data: Vector) -> Vector:
     server_url = "https://icfpc2020-api.testkontur.ru/aliens/send"
     api_key = os.environ["ICFP_API_KEY"]
-    print("Sending vector:", data)
     modulation = modulate(unvector(data))
+    print("Sending vector:", data)
     res = requests.post(server_url, params=dict(apiKey=api_key), data=modulation)
     if res.status_code != 200:
-        print('Unexpected server response from URL "%s":' % server_url)
-        print("HTTP code:", res.status_code)
-        print("Response body:", res.text)
-        raise ValueError("Server response:", res.text)
-    result = vector(demodulate(res.text))
-    print("Received vector:", result)
-    return result
+        raise ValueError(f"Server ({res.status_code}): {res.text}")
+    return vector(demodulate(res.text))
 
 
 # See https://message-from-space.readthedocs.io/en/latest/message38.html
@@ -366,29 +389,38 @@ def interact(state: Vector, event: Vector) -> Tuple[Vector, Vector]:
     """ Interact with the game """
     expr: Expr = Tree(Tree(Value("galaxy"), unvector(state)), unvector(event))
     res: Expr = evaluate(expr)
-    assert unparse(res) == unparse(demodulate(modulate(res))), f"modem {unparse(res)}"
-    flag, (state, (data, term)) = vector(res)
-    assert vector(unvector(state)) == state
-    assert vector(unvector(data)) == data
-    assert isinstance(flag, int), f"bad flag {flag}"
-    assert isinstance(state, (list, tuple)), f"bad state {state}"
-    assert isinstance(data, (list, tuple)), f"bad data {data}"
+    flag, (state, (data, _)) = vector(res)  # type: ignore
     if flag == 0:
         return state, data
     return interact(state, SEND_TO_ALIEN_PROXY(data))
 
 
-def print_images(images: Vector, pixelview, SIZE, BIG) -> None:
-    assert isinstance(images, tuple), f"Images must be tuple {images}"
+def draw_pixel(pixel, pixelview, color) -> None:
+    offset = ((pixel[0] + WIDTH // 2) * BIG, (pixel[1] + HEIGHT // 2) * BIG)
+    for x in range(offset[0], offset[0] + BIG):
+        for y in range(offset[1], offset[1] + BIG):
+            assert 0 <= x < WIDTH * BIG and 0 <= y < HEIGHT * BIG, f"offscreen {pixel}"
+            pixelview[y][x] = color
+
+
+def draw_cursor(pixel, pixelview) -> None:
+    for i in range(-3, 4):
+        if -WIDTH // 2 < pixel[0] + i < WIDTH // 2:
+            draw_pixel((pixel[0] + i, pixel[1]), pixelview, C_CURSOR)
+        if -HEIGHT // 2 < pixel[1] + i < HEIGHT // 2:
+            draw_pixel((pixel[0], pixel[1] + i), pixelview, C_CURSOR)
+
+
+def print_images(images: Vector, pixelview, colors=COLORS) -> None:
+    mask = set()
     while images:
-        image, images = images
+        image, images = images  # type: ignore
+        color, colors = colors  # type: ignore
         while image:
             pixel, image = image
-            offset = [(p + SIZE // 2) * BIG for p in pixel]
-            for x in range(offset[0], offset[0] + BIG):
-                for y in range(offset[1], offset[1] + BIG):
-                    assert 0 <= x < SIZE * BIG and 0 <= y < SIZE * BIG, f"offscreen {x, y}"
-                    pixelview[y][x] = (pixelview[y][x] + 0x202020) & 0xFFFFFF + 0xFF000000
+            if pixel not in mask:
+                draw_pixel(pixel, pixelview, color)
+                mask.add(pixel)
 
 
 if __name__ == "__main__":
@@ -396,30 +428,36 @@ if __name__ == "__main__":
     click: Vector
     for click in [(0, 0)] * 8 + [
         (8, 4),
-        # (2, -8),
-        # (3, 6),
-        # (0, -14),
-        # (-4, 10),
-        # (9, -3),
-        # (-4, 10),
-        # (1, 4),
-        # (0, 1),  # Uncomment to skip galaxy screen
+        (2, -8),
+        (3, 6),
+        (0, -14),
+        (-4, 10),
+        (9, -3),
+        (-4, 10),
+        (1, 4),
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
     ]:
         state, images = interact(state, click)
 
     sdl2.ext.init()
-    SIZE = 320  # Size of the display in game pixels
-    BIG = 3  # How much "bigger" each pixel should be, scales up
 
-    win = sdl2.ext.Window("Galaxy", size=(SIZE * BIG, SIZE * BIG))
+    win = sdl2.ext.Window("Galaxy", size=(WIDTH * BIG, HEIGHT * BIG))
     win.show()
     winsurf = win.get_surface()
     running = True
     pixelview = sdl2.ext.PixelView(winsurf)
 
     # Initial image
-    sdl2.ext.fill(winsurf, sdl2.ext.Color(0, 0, 0))
-    print_images(images, pixelview, SIZE, BIG)
+    sdl2.ext.fill(winsurf, C_BACKGROUND)
+    print_images(images, pixelview)
     while running:
         events = sdl2.ext.get_events()
         for event in events:
@@ -427,11 +465,13 @@ if __name__ == "__main__":
                 running = False
                 break
             if event.type == sdl2.SDL_MOUSEBUTTONDOWN:
-                pixel = [event.button.x, event.button.y]
-                point = tuple([(i // BIG) - SIZE // 2 for i in pixel])
-                print("click", point)
-                state, images = interact(state, point)
-                sdl2.ext.fill(winsurf, sdl2.ext.Color(0, 0, 0))
-                print_images(images, pixelview, SIZE, BIG)
+                x, y = event.button.x, event.button.y
+                pixel = (x // BIG - WIDTH // 2, y // BIG - HEIGHT // 2)
+                draw_cursor(pixel, pixelview)  # Show the pixel that was clicked
+                win.refresh()
+                print("click", pixel)
+                state, images = interact(state, pixel)
+                sdl2.ext.fill(winsurf, C_BACKGROUND)
+                print_images(images, pixelview)
         win.refresh()
     sdl2.ext.quit()
