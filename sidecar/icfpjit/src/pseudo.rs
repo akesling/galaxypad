@@ -291,7 +291,7 @@ fn interact(
     constants: &Constants
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = Ap::new(Ap::new(Atom::new("galaxy"), state), event);
+    let expr: ExprRef = Ap::new(Ap::new(Atom::new(":galaxy"), state), event);
     let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
@@ -452,7 +452,7 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Constan
     let mut current_expr = expr;
     loop {
         let result = try_eval(current_expr.clone(), functions, constants)?;
-        if ptr::eq(result.as_ref(), current_expr.as_ref()) {
+        if ptr::eq(current_expr.as_ref(), result.as_ref()) || result.borrow().equals(current_expr) {
             initial_expr.borrow_mut().set_evaluated(result.clone())?;
             return Ok(result);
         }
