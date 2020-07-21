@@ -453,6 +453,7 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, 
         return Ok(result);
     }
 }
+
 fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
