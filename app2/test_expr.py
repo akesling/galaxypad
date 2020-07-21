@@ -19,6 +19,11 @@ class TestClasses(unittest.TestCase):
         self.assertEqual(Value(1), Value("1"))
         self.assertEqual(Value(-1), Value("-1"))
         self.assertNotEqual(Value(0), Value("1"))
+        self.assertEqual(int(Value(0)), 0)
+        self.assertEqual(int(Value(1)), 1)
+        self.assertEqual(int(Value(-1)), -1)
+        with self.assertRaises(ValueError):
+            int(Value('nil'))
 
     def test_tree(self):
         a = Tree(Tree(Value(1), Value(2)), Value(3))

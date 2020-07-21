@@ -22,6 +22,9 @@ class Value(Expr):
     def __eq__(self, other) -> bool:
         return type(self) == type(other) and self.name == other.name
 
+    def __int__(self) -> int:
+        return int(self.name)
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({repr(self.name)})"
 
@@ -29,9 +32,11 @@ class Value(Expr):
         return isinstance(self.name, str)
 
 
+
 class Tree(Expr):
     left: Expr
     right: Expr
+    value: Optional[Expr] = None
 
     def __init__(self, left: Expr, right: Expr, parent: Optional[Expr] = None):
         left.parent = self
@@ -39,6 +44,7 @@ class Tree(Expr):
         self.left = left
         self.right = right
         self.parent = parent
+        self.value = None
 
     def __eq__(self, other) -> bool:
         if type(self) == type(other):
@@ -115,7 +121,7 @@ def unparse(expr: Expr) -> str:
             if isinstance(n, Value):
                 tokens.append(n.name)
             elif isinstance(n, Tree):
-                tokens.append('ap')
+                tokens.append("ap")
             else:
                 raise ValueError(f"Unparse unknown type {type(n)} {n}")
         return " ".join(tokens)

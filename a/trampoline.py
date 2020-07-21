@@ -313,37 +313,36 @@ def evaluate(tree_or_value):
     if isinstance(tree_or_value, int):
         return tree_or_value
     if isinstance(tree_or_value, Tree):
-        return evaluate_tree(tree_or_value)
+        value = evaluate_tree(tree_or_value)
+        tree_or_value.value = value
+        return value
     raise ValueError(f"bad tree_or_value {tree_or_value}")
 
 
 def evaluate_tree(tree):
     if tree.value is not None:
         return tree.value
-
     x = evaluate(tree.right)
     left = tree.left
     if left == "inc":
-        value = x + 1
+        return x + 1
     elif isinstance(left, Tree):
-
         y = evaluate(left.right)
         left2 = left.left
         if left2 == "+":
-            value = y + x
-        else:
-            raise ValueError(f"bad left2 {left2}")
-    else:
-        raise ValueError(f"bad left {left}")
-    tree.value = value
-    return value
+            return y + x
+        raise ValueError(f"bad left2 {left2}")
+    raise ValueError(f"bad left {left}")
 
 
 def evaluate_c(tree_or_value, cont):
     if isinstance(tree_or_value, int):
         return cont(tree_or_value)
     if isinstance(tree_or_value, Tree):
-        return evaluate_tree_c(tree_or_value, cont)
+        def fv(value):
+            tree_or_value.value = value
+            return cont(value)
+        return lambda: evaluate_tree_c(tree_or_value, fv)
     raise ValueError(f"bad tree_or_value {tree_or_value}")
 
 
@@ -351,27 +350,19 @@ def evaluate_tree_c(tree, cont):
     if tree.value is not None:
         return cont(tree.value)
 
-    def fallthrough(value):
-        tree.value = value
-        return cont(value)
-
     def fx(x):
         left = tree.left
         if left == "inc":
-            value = x + 1
+            return cont(x + 1)
         elif isinstance(left, Tree):
             def fy(y):
                 y = evaluate(left.right)
                 left2 = left.left
                 if left2 == "+":
-                    value = y + x
-                else:
-                    raise ValueError(f"bad left2 {left2}")
-                return fallthrough(value)
+                    return cont(y + x)
+                raise ValueError(f"bad left2 {left2}")
             return lambda: evaluate_c(left.right, fy)
-        else:
-            raise ValueError(f"bad left {left}")
-        return fallthrough(value)
+        raise ValueError(f"bad left {left}")
     return lambda: evaluate_c(tree.right, fx)
 
 

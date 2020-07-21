@@ -62,3 +62,72 @@ def my_func(..., cont: Callable[[], Callable]):
 # Called like
 trampoline(my_func, ..., lambda x: x)
 ```
+
+eval scratchpad
+```python
+
+def tryEval(expr: Expr) -> Tuple[Expr, bool]:
+    """ Try to perform a computation, return result and success """
+    assert isinstance(expr, (Value, Tree)), expr
+    t, f = Value("t"), Value("f")
+    if expr.Evaluated:
+        return expr.Evaluated, False
+    if isinstance(expr, Value) and str(expr) in functions:
+        return functions[str(expr)], True
+    if isinstance(expr, Tree):
+        assert isinstance(expr.left, (Value, Tree)), expr
+        assert isinstance(expr.right, (Value, Tree)), expr
+        left: Expr = evaluate(expr.left)
+        x: Expr = expr.right
+        if left == Value("neg"):
+            return Value(-evalint(x)), True
+        if isinstance(left, Value):
+            if str(left) == "i":
+                return x, True
+            if str(left) == "nil":
+                return t, True
+            if str(left) == "isnil":
+                return Tree(x, Tree(t, Tree(t, f))), True
+            if str(left) == "car":
+                return Tree(x, t), True
+            if str(left) == "cdr":
+                return Tree(x, f), True
+        if isinstance(left, Tree):
+            assert isinstance(left.left, (Value, Tree)), left
+            assert isinstance(left.right, (Value, Tree)), left
+            left2: Expr = evaluate(left.left)
+            y: Expr = left.right
+            if isinstance(left2, Value):
+                if str(left2) == "t":
+                    return y, True
+                if str(left2) == "f":
+                    return x, True
+                if str(left2) == "add":
+                    return Value(evalint(x) + evalint(y)), True
+                if str(left2) == "mul":
+                    return Value(evalint(x) * evalint(y)), True
+                if str(left2) == "div":
+                    a, b = evalint(y), evalint(x)
+                    return Value(a // b if a * b > 0 else (a + (-a % b)) // b), True
+                if str(left2) == "lt":
+                    return (t, True) if evalint(y) < evalint(x) else (f, True)
+                if str(left2) == "eq":
+                    return (t, True) if evalint(y) == evalint(x) else (f, True)
+                if str(left2) == "cons":
+                    return evalCons(y, x), True
+            if isinstance(left2, Tree):
+                assert isinstance(left2.left, (Value, Tree)), left2
+                assert isinstance(left2.right, (Value, Tree)), left2
+                left3: Expr = evaluate(left2.left)
+                z: Expr = left2.right
+                if isinstance(left3, Value):
+                    if str(left3) == "s":
+                        return Tree(Tree(z, x), Tree(y, x)), True
+                    if str(left3) == "c":
+                        return Tree(Tree(z, x), y), True
+                    if str(left3) == "b":
+                        return Tree(z, Tree(y, x)), True
+                    if str(left3) == "cons":
+                        return Tree(Tree(x, z), y), True
+    return expr, False
+```
