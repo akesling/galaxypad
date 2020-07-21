@@ -6,6 +6,10 @@ def evaluate(expr: Expr) -> Expr:
     raise NotImplementedError("TODO")
 
 
+class Evaluator:
+    pass
+
+
 if __name__ == '__main__':
     import sys
 
