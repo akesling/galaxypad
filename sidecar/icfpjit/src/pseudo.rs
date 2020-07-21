@@ -16,7 +16,7 @@ const CONS: &str = "cons";
 const NIL: &str = "nil";
 
 lazy_static! {
-    static ref ATOMS: HashSet<&'static str> = hashset!{
+    static ref OPERATOR_ATOMS: HashSet<&'static str> = hashset!{
         "add",
         //"inc",
         //"dec",
@@ -206,7 +206,7 @@ fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
         return Ok((ap_expr, right_remainder));
     }
 
-    if ATOMS.contains(candidate_token) {
+    if OPERATOR_ATOMS.contains(candidate_token) {
         return Ok((Atom::new(candidate_token), tokens[1..].to_vec()));
     }
 
