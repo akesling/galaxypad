@@ -330,7 +330,7 @@ fn parse_number(name: &str) -> Result<i64, String> {
 
 fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
     if let Some(name) = points_expr.borrow().name().as_ref() {
-        if name == &NIL {
+        if name == &"nil" {
             println!("Nil list provided to flatten_point");
 
             Ok((0, 0))
@@ -351,7 +351,7 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
             .func()
             .ok_or_else(|| "func expected on second of flatten_point")?;
         if let Some(name) = cons.borrow().name().as_ref() {
-            if name != &CONS {
+            if name != &"cons" {
                 panic!("Cons-place item in list was atom({}) not cons", name);
             }
         }
@@ -376,7 +376,7 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     if let Some(name) = expr.borrow().name().as_ref() {
-        if name == &NIL {
+        if name == &"nil" {
             Ok(vec![expr.clone()])
         } else {
             Err(format!(
@@ -401,7 +401,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             .func()
             .ok_or_else(|| "func expected on second of get_list_items_from_expr")?;
         if let Some(name) = cons.borrow().name().as_ref() {
-            if name != &CONS {
+            if name != &"cons" {
                 return Err(format!(
                     "Cons-place item in list was atom({}) not cons",
                     name
@@ -419,7 +419,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
             .arg()
             .ok_or_else(|| "arg expected on expr of get_list_items_from_expr")?;
         if let Some(name) = next.clone().borrow().name().as_ref() {
-            if name == &NIL {
+            if name == &"nil" {
                 Ok(flattened)
             } else {
                 Err(format!(
@@ -444,13 +444,12 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, 
     let mut current_expr = expr;
     loop {
         let result = try_eval(current_expr.clone(), functions)?;
-        if !ptr::eq(current_expr.as_ref(), result.as_ref()) {
-            current_expr = result;
-            continue;
+        if ptr::eq(result.as_ref(), current_expr.as_ref()) {
+            initial_expr.borrow_mut().set_evaluated(result.clone())?;
+            return Ok(result);
         }
+        current_expr = result;
 
-        initial_expr.borrow_mut().set_evaluated(result.clone())?;
-        return Ok(result);
     }
 }
 
