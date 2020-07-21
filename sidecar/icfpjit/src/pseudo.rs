@@ -670,40 +670,53 @@ mod tests {
         );
     }
 
+    fn assert_expression_evaluates_to(
+        expr: &str,
+        expected: ExprRef,
+        functions: &HashMap<String, ExprRef>,
+    ) {
+        let result = eval(str_to_expr(expr).unwrap(), functions).unwrap();
+        assert!(
+            result.borrow().equals(expected.clone()),
+            format!("{} != {:?}", expr, expected)
+        );
+    }
+
     #[test]
     fn pseudo_addition() {
-        let result = eval(str_to_expr("ap ap add 2 3").unwrap(), &hashmap! {}).unwrap();
-        let expected = Atom::new(5);
-        assert_equal(result, expected);
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap ap add 2 3", Atom::new(5), &functions);
+        assert_expression_evaluates_to("ap ap add 2 -3", Atom::new(-1), &functions);
+        assert_expression_evaluates_to("ap ap add -2 -3", Atom::new(-5), &functions);
+        assert_expression_evaluates_to("ap ap add -2 3", Atom::new(1), &functions);
+        assert_expression_evaluates_to("ap ap add -2 0", Atom::new(-2), &functions);
+        assert_expression_evaluates_to("ap ap add 2 0", Atom::new(2), &functions);
+        assert_expression_evaluates_to("ap ap add 0 -2", Atom::new(-2), &functions);
+        assert_expression_evaluates_to("ap ap add 0 2", Atom::new(2), &functions);
     }
 
     #[test]
     fn pseudo_division() {
-        let result = eval(str_to_expr("ap ap div -9 4").unwrap(), &hashmap! {}).unwrap();
-        let expected = Atom::new(-2);
-        assert_equal(result, expected);
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap ap div -9 4", Atom::new(-2), &functions);
     }
 
     #[test]
     fn pseudo_cons_application() {
-        let result = eval(str_to_expr("ap ap ap cons x0 x1 x2").unwrap(), &hashmap! {}).unwrap();
-        let expected = Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1"));
-        assert_equal(result, expected);
+        let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap ap cons x0 x1 x2",
+            Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1")),
+            &functions,
+        );
     }
 
     #[test]
     fn pseudo_isnil() {
-        let result_true = eval(str_to_expr("ap isnil nil").unwrap(), &hashmap! {}).unwrap();
-        let expected_true = Atom::new(T);
-        assert_equal(result_true, expected_true);
+        let functions = hashmap! {};
 
-        let result_false = eval(
-            str_to_expr("ap isnil ap ap cons x0 x1").unwrap(),
-            &hashmap! {},
-        )
-        .unwrap();
-        let expected_false = Atom::new(F);
-        assert_equal(result_false, expected_false);
+        assert_expression_evaluates_to("ap isnil nil", Atom::new(T), &functions);
+        assert_expression_evaluates_to("ap isnil ap ap cons x0 x1", Atom::new(F), &functions);
     }
 
     #[test]
@@ -714,12 +727,7 @@ mod tests {
         )
         .unwrap();
 
-        let result_true = eval(str_to_expr("ap :2000 x0").unwrap(), &functions).unwrap();
-        let expected_true = Atom::new("x0");
-        assert_equal(result_true, expected_true);
-
-        let result_false = eval(str_to_expr("ap :1000 x0").unwrap(), &functions).unwrap();
-        let expected_false = Atom::new("x0");
-        assert_equal(result_false, expected_false);
+        assert_expression_evaluates_to("ap :2000 x0", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap :1000 x0", Atom::new("x0"), &functions);
     }
 }
