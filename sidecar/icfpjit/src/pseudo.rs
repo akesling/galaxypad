@@ -459,8 +459,8 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
     }
 
     if let Some(name) = expr.borrow().name().as_ref() {
-        if let Some(function) = functions.get(name.to_owned()) {
-            return Ok(function.clone());
+        if let Some(f) = functions.get(name.to_owned()) {
+            return Ok(f.clone());
         }
     } else {
         let func = eval(
