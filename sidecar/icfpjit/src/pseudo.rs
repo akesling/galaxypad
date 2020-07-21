@@ -10,6 +10,13 @@ use std::fs;
 use std::ptr;
 use std::rc::{Rc, Weak};
 
+struct Constants {
+    cons: ExprRef,
+    t: ExprRef,
+    f: ExprRef,
+    nil: ExprRef,
+}
+
 const T: &str = "t";
 const F: &str = "f";
 const CONS: &str = "cons";
@@ -281,10 +288,11 @@ fn interact(
     state: ExprRef,
     event: ExprRef,
     functions: &HashMap<String, ExprRef>,
+    constants: &Constants
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap::new(Ap::new(Atom::new("galaxy"), state), event);
-    let res: ExprRef = eval(expr, functions).unwrap();
+    let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
@@ -298,7 +306,7 @@ fn interact(
         return (new_state, data);
     }
 
-    interact(new_state, send_to_alien_proxy(data), functions)
+    interact(new_state, send_to_alien_proxy(data), functions, constants)
 }
 
 fn send_to_alien_proxy(_expr: ExprRef) -> ExprRef {
@@ -435,7 +443,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     }
 }
 
-fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
+fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Constants) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
     }
@@ -443,7 +451,7 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, 
     let initial_expr = expr.clone();
     let mut current_expr = expr;
     loop {
-        let result = try_eval(current_expr.clone(), functions)?;
+        let result = try_eval(current_expr.clone(), functions, constants)?;
         if ptr::eq(result.as_ref(), current_expr.as_ref()) {
             initial_expr.borrow_mut().set_evaluated(result.clone())?;
             return Ok(result);
@@ -453,7 +461,7 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, 
     }
 }
 
-fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprRef, String> {
+fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Constants) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
     }
@@ -468,6 +476,7 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
                 .func()
                 .ok_or_else(|| "func expected on expr of try_eval")?,
             functions,
+            constants
         )?;
         let x = expr
             .borrow()
@@ -476,25 +485,25 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
         if let Some(name) = func.clone().borrow().name().as_ref() {
             match *name {
                 "neg" => {
-                    return Ok(Atom::new(-as_num(eval(x, functions)?)?));
+                    return Ok(Atom::new(-as_num(eval(x, functions, constants)?)?));
                 }
                 "i" => {
                     return Ok(x);
                 }
                 "nil" => {
-                    return Ok(Atom::new(T));
+                    return Ok(constants.t.clone());
                 }
                 "isnil" => {
                     return Ok(Ap::new(
                         x,
-                        Ap::new(Atom::new(T), Ap::new(Atom::new(T), Atom::new(F))),
+                        Ap::new(constants.t.clone(), Ap::new(constants.t.clone(), constants.f.clone())),
                     ));
                 }
                 "car" => {
-                    return Ok(Ap::new(x, Atom::new(T)));
+                    return Ok(Ap::new(x, constants.t.clone()));
                 }
                 "cdr" => {
-                    return Ok(Ap::new(x, Atom::new(F)));
+                    return Ok(Ap::new(x, constants.f.clone()));
                 }
                 _ => (),
             }
@@ -504,6 +513,7 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
                     .func()
                     .ok_or_else(|| "func expected on func of try_eval")?,
                 functions,
+                constants
             )?;
             let y = func
                 .borrow()
@@ -519,39 +529,39 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
                     }
                     "add" => {
                         return Ok(Atom::new(
-                            as_num(eval(x, functions)?)? + as_num(eval(y, functions)?)?,
+                            as_num(eval(x, functions, constants)?)? + as_num(eval(y, functions, constants)?)?,
                         ));
                     }
                     "mul" => {
                         return Ok(Atom::new(
-                            as_num(eval(x, functions)?)? * as_num(eval(y, functions)?)?,
+                            as_num(eval(x, functions, constants)?)? * as_num(eval(y, functions, constants)?)?,
                         ));
                     }
                     "div" => {
                         return Ok(Atom::new(
-                            as_num(eval(y, functions)?)? / as_num(eval(x, functions)?)?,
+                            as_num(eval(y, functions, constants)?)? / as_num(eval(x, functions, constants)?)?,
                         ));
                     }
                     "eq" => {
                         let are_equal =
-                            as_num(eval(x, functions)?)? == as_num(eval(y, functions)?)?;
+                            as_num(eval(x, functions, constants)?)? == as_num(eval(y, functions, constants)?)?;
                         return Ok(if are_equal {
-                            Atom::new(T)
+                            constants.t.clone()
                         } else {
-                            Atom::new(F)
+                            constants.f.clone()
                         });
                     }
                     "lt" => {
                         let is_less_than =
-                            as_num(eval(y, functions)?)? < as_num(eval(x, functions)?)?;
+                            as_num(eval(y, functions, constants)?)? < as_num(eval(x, functions, constants)?)?;
                         return Ok(if is_less_than {
-                            Atom::new(T)
+                            constants.t.clone()
                         } else {
-                            Atom::new(F)
+                            constants.f.clone()
                         });
                     }
                     "cons" => {
-                        return Ok(eval_cons(y, x, functions)?);
+                        return Ok(eval_cons(y, x, functions, constants)?);
                     }
                     _ => (),
                 }
@@ -561,7 +571,7 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>) -> Result<ExprR
                         .borrow()
                         .func()
                         .ok_or_else(|| "func expected on func2 of try_eval")?,
-                    functions,
+                    functions, constants,
                 )?;
                 let z = func2
                     .borrow()
@@ -587,10 +597,11 @@ fn eval_cons(
     head: ExprRef,
     tail: ExprRef,
     functions: &HashMap<String, ExprRef>,
+    constants: &Constants
 ) -> Result<ExprRef, String> {
     let res = Ap::new(
-        Ap::new(Atom::new(CONS), eval(head, functions)?),
-        eval(tail, functions)?,
+        Ap::new(constants.cons.clone(), eval(head, functions, constants)?),
+        eval(tail, functions, constants)?,
     );
     res.borrow_mut().set_evaluated(res.clone())?;
 
@@ -621,19 +632,29 @@ fn request_click_from_user() -> Point {
     panic!("request_click_from_user is not yet implemented");
 }
 
+fn get_constants() -> Constants {
+    Constants {
+        t: Atom::new(T),
+        f: Atom::new(F),
+        cons: Atom::new(CONS),
+        nil: Atom::new(NIL),
+    }
+}
+
 fn main() {
     let functions: HashMap<String, ExprRef> = load_function_definitions("galaxy.txt").unwrap();
+    let constants = get_constants();
 
     // See https://message-from-space.readthedocs.io/en/latest/message39.html
-    let mut state: ExprRef = Atom::new(NIL);
+    let mut state: ExprRef = constants.nil.clone();
     let mut point = Point { x: 0, y: 0 };
 
     loop {
         let click = Ap::new(
-            Ap::new(Atom::new(CONS), Atom::new(point.x)),
+            Ap::new(constants.cons.clone(), Atom::new(point.x)),
             Atom::new(point.y),
         );
-        let (new_state, images) = interact(state, click, &functions);
+        let (new_state, images) = interact(state, click, &functions, &constants);
         print_images(images);
         point = request_click_from_user();
         state = new_state;
@@ -668,7 +689,8 @@ mod tests {
         expected: ExprRef,
         functions: &HashMap<String, ExprRef>,
     ) {
-        let result = eval(str_to_expr(expr).unwrap(), functions).unwrap();
+        let constants = get_constants();
+        let result = eval(str_to_expr(expr).unwrap(), functions, &constants).unwrap();
         assert!(
             result.borrow().equals(expected.clone()),
             format!("{} => {:?} != {:?}", expr, result, expected)
