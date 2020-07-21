@@ -11,7 +11,7 @@ use std::ptr;
 use std::rc::{Rc, Weak};
 
 const T: &str = "t";
-const F: &str = "t";
+const F: &str = "f";
 const CONS: &str = "cons";
 const NIL: &str = "nil";
 
@@ -663,13 +663,6 @@ mod tests {
             .collect()
     }
 
-    fn assert_equal(result: ExprRef, expectation: ExprRef) {
-        assert!(
-            result.borrow().equals(expectation.clone()),
-            format!("{:?} != {:?}", result, expectation)
-        );
-    }
-
     fn assert_expression_evaluates_to(
         expr: &str,
         expected: ExprRef,
@@ -678,7 +671,7 @@ mod tests {
         let result = eval(str_to_expr(expr).unwrap(), functions).unwrap();
         assert!(
             result.borrow().equals(expected.clone()),
-            format!("{} != {:?}", expr, expected)
+            format!("{} => {:?} != {:?}", expr, result, expected)
         );
     }
 
@@ -717,6 +710,128 @@ mod tests {
 
         assert_expression_evaluates_to("ap isnil nil", Atom::new(T), &functions);
         assert_expression_evaluates_to("ap isnil ap ap cons x0 x1", Atom::new(F), &functions);
+    }
+
+    #[test]
+    fn pseudo_true() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new("x0"), &functions);
+    }
+
+    #[test]
+    fn pseudo_false() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap ap f x0 x1", Atom::new("x1"), &functions);
+    }
+
+    #[test]
+    fn pseudo_identity() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap i x0", Atom::new("x0"), &functions);
+    }
+
+    #[test]
+    fn pseudo_equals() {
+        let functions = hashmap! {};
+
+        for num in -20..20 {
+            let expr_string = format!("ap ap eq {} {}", num, num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(T), &functions);
+        }
+
+        for num in -20..20 {
+            let expr_string = format!("ap ap eq 30 {}", num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            let expr_string = format!("ap ap eq {} 30 ", num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            let expr_string = format!("ap ap eq {} -30", num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            let expr_string = format!("ap ap eq {} -30", num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+        }
+        assert_expression_evaluates_to("ap ap eq t f", Atom::new(F), &functions);
+        assert_expression_evaluates_to("ap ap eq f t", Atom::new(F), &functions);
+    }
+
+    #[test]
+    fn pseudo_less_than() {
+        let functions = hashmap! {};
+
+        for num in -20..20 {
+            let expr_string = format!("ap ap lt {} {}", num - 1, num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(T), &functions);
+        }
+    }
+
+    #[test]
+    fn pseudo_negate() {
+        let functions = hashmap! {};
+
+        for num in -20..20 {
+            let expr_string = format!("ap neg {}", num);
+            assert_expression_evaluates_to(&expr_string, Atom::new(-num), &functions);
+        }
+    }
+
+    #[test]
+    fn pseudo_s_combinator() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap ap s x0 x1 x2",
+            Ap::new(
+                Ap::new(Atom::new("x0"), Atom::new("x2")),
+                Ap::new(Atom::new("x1"), Atom::new("x2")),
+            ),
+            &functions,
+        );
+    }
+
+    #[test]
+    fn pseudo_c_combinator() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap ap c x0 x1 x2",
+            Ap::new(Ap::new(Atom::new("x0"), Atom::new("x2")), Atom::new("x1")),
+            &functions,
+        );
+    }
+
+    #[test]
+    fn pseudo_b_combinator() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap ap b x0 x1 x2",
+            Ap::new(Atom::new("x0"), Ap::new(Atom::new("x1"), Atom::new("x2"))),
+            &functions,
+        );
+    }
+
+    #[test]
+    fn pseudo_car() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap car ap ap cons x0 x1", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to(
+            "ap car x0",
+            Ap::new(Atom::new("x0"), Atom::new(T)),
+            &functions,
+        );
+    }
+
+    #[test]
+    fn pseudo_cdr() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap cdr ap ap cons x0 x2", Atom::new("x2"), &functions);
+        assert_expression_evaluates_to(
+            "ap cdr x0",
+            Ap::new(Atom::new("x0"), Atom::new(F)),
+            &functions,
+        );
+    }
+
+    #[test]
+    fn pseudo_nil() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap nil x0", Atom::new(T), &functions);
     }
 
     #[test]
