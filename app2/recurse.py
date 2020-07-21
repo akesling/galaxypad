@@ -29,6 +29,12 @@ UNARY_MATH = (neg, inc, dec)
 BINARY_MATH = (add, mul, div, lt, eq)
 
 
+class Evaluator:
+    pass
+    # Owns functions, and let this wrap function evaluation / replacement
+
+
+
 def evaluate(expr: Expr) -> Expr:
     """ Evaluate an expression, returning evaluated tree """
     evaluation = evaluate_r(expr)
@@ -152,7 +158,17 @@ if __name__ == "__main__":
     import sys
 
     from expr import parse, unparse
-    evaluate(parse('ap ap cons 0 nil'))
+
+    # TODO: remove
+    for line in open('../galaxy.txt').readlines():
+        name, _, *tokens = line.strip().split()
+        try:
+            evaluate(parse(' '.join(tokens)))
+        except RecursionError:
+            print("Recursion error", name)
+        except ValueError as e:
+            print("Value error", name, e)
+
 
     if len(sys.argv) == 2:
         print(unparse(evaluate(parse(sys.argv[1]))))
