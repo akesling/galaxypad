@@ -4,7 +4,6 @@ use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::fs;
 use std::ptr;
 use std::rc::{Rc, Weak};
 
@@ -268,14 +267,8 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
 
 /// Opens the given filename and attempts to load each line as a function
 /// definition (pretty much just for galaxy.txt)
-fn load_function_definitions(file_path: &str) -> Result<HashMap<String, ExprRef>, String> {
-    fs::read_to_string(file_path)
-        .unwrap_or_else(|_| {
-            panic!(
-                "Something went wrong reading the functions file {}",
-                file_path
-            )
-        })
+fn load_function_definitions(script_contents: &str) -> Result<HashMap<String, ExprRef>, String> {
+    script_contents
         .split('\n')
         .filter(|s| !s.is_empty())
         .map(|line| load_function(line))
@@ -613,14 +606,7 @@ fn vectorize_points_expr(list_of_points_expr: ExprRef) -> Result<Vec<(i64, i64)>
     Ok(result)
 }
 
-fn print_images(images: ExprRef) {
-
-    let image_lists = get_list_items_from_expr(images).unwrap();
-    let mut points_lists: Vec<Vec<(i64, i64)>> = vec![];
-    for point_list_expr in image_lists.iter() {
-        points_lists.push(vectorize_points_expr(point_list_expr.clone()).unwrap());
-    }
-
+fn print_images(point_lists: Vec<Vec<(i64, i64)>>) {
     const SIZE: (u32, u32) = (1024, 1024);
     const CENTER: (u32, u32) = (SIZE.0/2, SIZE.1/2);
     {
@@ -628,7 +614,7 @@ fn print_images(images: ExprRef) {
         // create a canvas to draw on
         let mut canvas = Canvas::new(SIZE.0, SIZE.1);
         // create a new drawing
-        for points in points_lists {
+        for points in point_lists {
             for p in points {
                 let rect = Drawing::new()
                     // give it a shape
@@ -667,23 +653,59 @@ fn get_constants() -> Constants {
     }
 }
 
-fn main() {
-    let functions: HashMap<String, ExprRef> = load_function_definitions("galaxy.txt").unwrap();
+fn iterate(state: ExprRef, point: &Point, constants: &Constants, functions: &HashMap<String, ExprRef>, render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>)) -> ExprRef {
+    let click = Ap::new(
+        Ap::new(constants.cons.clone(), Atom::new(point.x)),
+        Atom::new(point.y),
+    );
+
+    let (new_state, images) = interact(state, click, &functions, &constants);
+    let image_lists = get_list_items_from_expr(images).unwrap();
+    let mut points_lists: Vec<Vec<(i64, i64)>> = vec![];
+    for point_list_expr in image_lists.iter() {
+        points_lists.push(vectorize_points_expr(point_list_expr.clone()).unwrap());
+    }
+
+    render_to_display(points_lists);
+    new_state
+}
+
+struct Callback<'a> {
+    state: ExprRef,
+    point: Point,
+    functions: HashMap<String, ExprRef>,
+    render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
+    request_click_from_user: &'a dyn Fn() -> Point,
+    constants: Constants,
+}
+impl<'a> Callback<'a> {
+    fn call(&mut self) {
+        self.state = iterate(self.state.clone(), &self.point, &self.constants, &self.functions, self.render_to_display);
+        self.point = (self.request_click_from_user)();
+    }
+}
+
+fn entry_point<'a>(request_click_from_user: &'a dyn Fn() -> Point, render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>)) -> Callback<'a> {
+    let galaxy_script = std::include_str!("../galaxy.txt");
     let constants = get_constants();
 
-    // See https://message-from-space.readthedocs.io/en/latest/message39.html
-    let mut state: ExprRef = constants.nil.clone();
-    let mut point = Point { x: 0, y: 0 };
+    let mut callback = Callback{
+        state: constants.nil.clone(),
+        point: Point { x: 0, y: 0 },
+        render_to_display: render_to_display,
+        request_click_from_user: request_click_from_user,
+        functions: load_function_definitions(galaxy_script).unwrap(),
+        constants: constants,
+    };
+    callback.call();
 
+    callback
+}
+
+fn main() {
+    let mut callback = entry_point(&request_click_from_user, &print_images);
     loop {
-        let click = Ap::new(
-            Ap::new(constants.cons.clone(), Atom::new(point.x)),
-            Atom::new(point.y),
-        );
-        let (new_state, images) = interact(state, click, &functions, &constants);
-        print_images(images);
-        point = request_click_from_user();
-        state = new_state;
+        callback.call();
     }
 }
 
