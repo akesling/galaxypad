@@ -1,7 +1,5 @@
-#[macro_use]
-extern crate maplit;
-#[macro_use]
-extern crate lazy_static;
+use maplit::hashset;
+use lazy_static::lazy_static;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -71,7 +69,7 @@ trait Expr: Debug {
     }
     fn evaluated(&self) -> Option<ExprRef>;
     // NOTE(akesling): Beware memory leaks through circular dependencies on evaluated results!
-    fn set_evaluated(&mut self, ExprRef) -> Result<(), String>;
+    fn set_evaluated(&mut self, other: ExprRef) -> Result<(), String>;
     fn equals(&self, other: ExprRef) -> bool;
 }
 
@@ -660,6 +658,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::hashmap;
 
     fn str_to_expr(text: &str) -> Result<ExprRef, String> {
         let tokens: Vec<&str> = text.split(' ').filter(|s| !s.is_empty()).collect();
