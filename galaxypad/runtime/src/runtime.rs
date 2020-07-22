@@ -195,7 +195,7 @@ impl Expr for Ap {
 }
 
 #[derive(Default)]
-struct Point {
+pub struct Point {
     x: u64,
     y: u64,
 }
@@ -698,7 +698,7 @@ fn iterate(
     new_state
 }
 
-struct Callback<'a> {
+pub struct Callback<'a> {
     state: ExprRef,
     point: Point,
     functions: HashMap<String, ExprRef>,
@@ -719,7 +719,7 @@ impl<'a> Callback<'a> {
     }
 }
 
-fn entry_point<'a>(
+pub fn entry_point<'a>(
     request_click_from_user: &'a dyn Fn() -> Point,
     render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
 ) -> Callback<'a> {
