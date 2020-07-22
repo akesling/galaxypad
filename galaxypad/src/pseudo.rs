@@ -614,12 +614,44 @@ fn vectorize_points_expr(list_of_points_expr: ExprRef) -> Result<Vec<(i64, i64)>
 }
 
 fn print_images(images: ExprRef) {
+
     let image_lists = get_list_items_from_expr(images).unwrap();
+    let mut points_lists: Vec<Vec<(i64, i64)>> = vec![];
     for point_list_expr in image_lists.iter() {
-        let points = vectorize_points_expr(point_list_expr.clone());
-        println!("Image points {:?}", points);
+        points_lists.push(vectorize_points_expr(point_list_expr.clone()).unwrap());
     }
-    panic!("print_images is not yet implemented, tried to print");
+
+    const SIZE: (u32, u32) = (1024, 1024);
+    const CENTER: (u32, u32) = (SIZE.0/2, SIZE.1/2);
+    {
+        use draw::*;
+        // create a canvas to draw on
+        let mut canvas = Canvas::new(SIZE.0, SIZE.1);
+        // create a new drawing
+        for points in points_lists {
+            for p in points {
+                let rect = Drawing::new()
+                    // give it a shape
+                    .with_shape(Shape::Rectangle {
+                        width: 1,
+                        height: 1,
+                    })
+                    // give it a cool style
+                    .with_style(Style::filled(Color::black()));
+
+                let projected_point = (p.0 as u32 + CENTER.0, p.1 as u32 + CENTER.1);
+                canvas.display_list.add(rect.with_xy(projected_point.0 as f32, projected_point.1 as f32));
+            }
+        }
+
+        // save the canvas as an svg
+        render::save(
+            &canvas,
+            "tests/svg/basic_end_to_end.svg",
+            SvgRenderer::new(),
+        )
+        .expect("Failed to save");
+    }
 }
 
 fn request_click_from_user() -> Point {
