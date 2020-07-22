@@ -384,62 +384,62 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     if let Some(name) = expr.borrow().name().as_ref() {
+        if name == &NIL {
+            return Ok(vec![expr.clone()]);
+        }
+
+        return Err(format!(
+            "First item in list was non-nil atom({}) not Ap",
+            name
+        ));
+    }
+
+    let second = expr
+        .borrow()
+        .func()
+        .ok_or_else(|| "func expected on func of get_list_items_from_expr")?;
+    if let Some(name) = second.borrow().name().as_ref() {
+        return Err(format!(
+            "Second item in list was non-nil atom({}) not Ap",
+            name
+        ));
+    }
+
+    let cons = second
+        .borrow()
+        .func()
+        .ok_or_else(|| "func expected on second of get_list_items_from_expr")?;
+    if let Some(name) = cons.borrow().name().as_ref() {
+        if name != &"cons" {
+            return Err(format!(
+                "Cons-place item in list was atom({}) not cons",
+                name
+            ));
+        }
+    }
+
+    let mut flattened = vec![second
+        .borrow()
+        .arg()
+        .ok_or_else(|| "arg expected on second of get_list_items_from_expr")?];
+
+    let next = expr
+        .borrow()
+        .arg()
+        .ok_or_else(|| "arg expected on expr of get_list_items_from_expr")?;
+    if let Some(name) = next.clone().borrow().name().as_ref() {
         if name == &"nil" {
-            Ok(vec![expr.clone()])
+            Ok(flattened)
         } else {
             Err(format!(
-                "First item in list was non-nil atom({}) not Ap",
+                "get_list_items_from_expr somehow got a non-nil end node in a list {}",
                 name
             ))
         }
     } else {
-        let second = expr
-            .borrow()
-            .func()
-            .ok_or_else(|| "func expected on func of get_list_items_from_expr")?;
-        if let Some(name) = second.borrow().name().as_ref() {
-            return Err(format!(
-                "Second item in list was non-nil atom({}) not Ap",
-                name
-            ));
-        }
+        flattened.extend(get_list_items_from_expr(next)?);
 
-        let cons = second
-            .borrow()
-            .func()
-            .ok_or_else(|| "func expected on second of get_list_items_from_expr")?;
-        if let Some(name) = cons.borrow().name().as_ref() {
-            if name != &"cons" {
-                return Err(format!(
-                    "Cons-place item in list was atom({}) not cons",
-                    name
-                ));
-            }
-        }
-
-        let mut flattened = vec![second
-            .borrow()
-            .arg()
-            .ok_or_else(|| "arg expected on second of get_list_items_from_expr")?];
-
-        let next = expr
-            .borrow()
-            .arg()
-            .ok_or_else(|| "arg expected on expr of get_list_items_from_expr")?;
-        if let Some(name) = next.clone().borrow().name().as_ref() {
-            if name == &"nil" {
-                Ok(flattened)
-            } else {
-                Err(format!(
-                    "get_list_items_from_expr somehow got a non-nil end node in a list {}",
-                    name
-                ))
-            }
-        } else {
-            flattened.extend(get_list_items_from_expr(next)?);
-
-            Ok(flattened)
-        }
+        Ok(flattened)
     }
 }
 
