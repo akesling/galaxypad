@@ -3,100 +3,200 @@
 from expr import Expr, Value, Tree
 from typing import Callable, Any
 
-# Python still doesn't have recursive types
-Continuation = Callable[[Expr], Callable]
+inc = Value("inc")
+dec = Value("dec")
+neg = Value("neg")
+i = Value("i")
+nil = Value("nil")
+isnil = Value("isnil")
+car = Value("car")
+cdr = Value("cdr")
+t = Value("t")
+f = Value("f")
+add = Value("add")
+mul = Value("mul")
+div = Value("div")
+lt = Value("lt")
+eq = Value("eq")
+cons = Value("cons")
+s = Value("s")
+c = Value("c")
+b = Value("b")
+UNARY_MATH = (neg, inc, dec)
+BINARY_MATH = (add, mul, div, lt, eq)
 
 
-def evaluate(expr: Expr) -> Expr:
-    """ Evaluate an expression, returning evaluated tree """
-    def done(evaluation):
-        if isinstance(evaluation, Expr):
-            return evaluation
-        raise ValueError(f"bad evalution {evaluation}")
-    # Consume continuations until base value
+class Evaluator:
+    pass
+    # Owns functions, and let this wrap function evaluation / replacement
+
+
+def trampoline(call: Callable):
+    """ Consume continuations until a base value """
     # https://en.wikipedia.org/wiki/Trampoline_(computing)
-    call: Callable = evaluate_c(expr, done)
+    # https://eli.thegreenplace.net/2017/on-recursion-continuations-and-trampolines/
     while callable(call):
         call = call()
     return call
 
 
-def evaluate_c(expr: Expr, cont: Continuation) -> Callable:
+def evaluate(expr: Expr) -> Expr:
+    """ Evaluate an expression, returning evaluated tree """
+    # Consume continuations until base value
+    evaluation = trampoline(evaluate_c(expr, lambda x: x))
+    if isinstance(evaluation, Expr):
+        return evaluation
+    raise ValueError(f"bad evalution {evaluation}")
+
+
+def evaluate_c(expr: Expr, call: Callable) -> Callable:
     """ Evaluate an expression, continuation passing style """
     if isinstance(expr, Value):
-        return cont(expr)
+        return call(expr)
     if isinstance(expr, Tree):
-        def fv(value):
+
+        def value(value):
             expr.value = value
-            return cont(value)
-        return lambda: evaluate_tree_c(expr, fv)  # mypy bug?
+            return call(value)
+
+        return lambda: evaluate_tree_c(expr, value)  # type: ignore
     raise ValueError(f"bad expr {expr}")
 
 
-def evaluate_int_c(expr: Expr, cont: Continuation) -> Callable:
+def evaluate_integer_c(expr: Expr, call: Callable) -> Callable:
     """ Evaluate to an integer, continuation passing style """
-    def fv(value):
-        if isinstance(value, Value):
-            return cont(int(value))
-        raise ValueError(f"bad value {value}")
-    return lambda: evaluate_c(expr, fv)
+
+    def integer(integer):
+        if isinstance(integer, Value):
+            return call(int(integer))
+        raise ValueError(f"bad integer {integer}")
+
+    return evaluate_c(expr, integer)
 
 
-def evaluate_math_c(expr: Expr, cont: Continu)
-
-
-def evaluate_tree_c(tree: Tree, cont: Continuation) -> Callable:
-    """ Evaluate a tree, continuation passing style """
-    if tree.value is not None:
-        return cont(tree.value)
-
-    def left(left: Expr):
-        x = tree.right
-        # Non arithmetic, single argument
-        if left == Value('i'):
-            return cont(x)
-        if left == Value('nil'):
-            return cont(Value("t"))
-        # Arithmetic, single argument
-        def intx(intx: int):
-            if left 
-        return lambda: evaluate_int_c(x, intx)
-        if isinstance(left, Tree):
-            left2 = left.left
-            y = left.right
-            if left2 == Value('t'):
-                return cont(y)
-            if left2 == Value('f'):
-                return cont(x)
-        # Arithmetic methods
-        def fx(ix):
-            if left == Value('inc'):
-                return cont(ix + 1)
-    return lambda: evaluate_c(tree.left, left)
-
-
-
-    def fx(x):
+def evaluate_math_c(tree: Tree, call: Callable) -> Callable:
+    """ Evaluate arithmetic, continuation passing style """
+    if isinstance(tree, Tree):
         left = tree.left
-        if left == Value("inc"):
-            return cont(x + 1)
-        elif isinstance(left, Tree):
-            def fy(y):
-                y = evaluate(left.right)
+
+        def x(x):
+            if left == neg:
+                return call(Value(-x))
+            if left == inc:
+                return call(Value(x + 1))
+            if left == dec:
+                return call(Value(x - 1))
+            if isinstance(left, Tree):
                 left2 = left.left
-                if left2 == Value("add"):
-                    return cont(y + x)
-                raise ValueError(f"bad left2 {left2}")
-            return lambda: evaluate_c(left.right, fy)
-        raise ValueError(f"bad left {left}")
-    return lambda: evaluate_c(tree.right, fx)
+
+                def y(y):
+                    if left2 == add:
+                        return call(Value(y + x))
+                    if left2 == mul:
+                        return call(Value(y * x))
+                    if left2 == div:
+                        return call(Value(y // x if y * x > 0 else (y + (-y % x)) // x))
+                    if left2 == lt:
+                        return call(t if y < x else f)
+                    if left2 == eq:
+                        return call(t if y == x else f)
+                    raise ValueError(f"bad binary math {tree}")
+
+                return evaluate_integer_c(left.right, y)
+            raise ValueError(f"bad unary math {tree}")
+
+        return evaluate_integer_c(tree.right, x)
+    raise ValueError(f"bad math {tree}")
 
 
+def evaluate_tree_c(tree: Tree, call: Callable) -> Callable:
+    """ Evaluate a tree, continuation passing style """
+    if isinstance(tree, Tree):
+        if tree.value is not None:
+            return call(tree.value)
 
-if __name__ == '__main__':
+        def left(left):
+            x = tree.right
+            if left == i:
+                return call(x)
+            if left == nil:
+                return call(t)
+            if left == isnil:
+                return call(Tree(x, Tree(t, Tree(t, f))))
+            if left == car:
+                return call(Tree(x, t))
+            if left == cdr:
+                return call(Tree(x, f))
+            if left in UNARY_MATH:
+                return evaluate_math_c(tree, call)
+            if isinstance(left, Tree):
+
+                def left2(left2):
+                    y = left.right
+                    if left2 == t:
+                        return call(y)
+                    if left2 == f:
+                        return call(x)
+                    if left2 == cons:
+                        return evaluate_cons_c(y, x, call)
+                    if left2 in BINARY_MATH:
+                        return evaluate_math_c(tree, call)
+                    if isinstance(left2, Tree):
+
+                        def left3(left3):
+                            z = left2.right
+                            if left3 == s:
+                                return call(Tree(Tree(z, x), Tree(y, x)))
+                            if left3 == c:
+                                return call(Tree(Tree(x, x), y))
+                            if left3 == b:
+                                return call(Tree(z, Tree(y, x)))
+                            if left3 == cons:
+                                return call(Tree(Tree(x, z), y))
+                            return call(tree)
+
+                        return evaluate_c(left2.left, left3)
+                    return call(tree)
+
+                return evaluate_c(left.left, left2)
+            return call(tree)  # TODO maybe remove these lambdas
+
+        return evaluate_c(tree.left, left)
+    raise ValueError(f"bad tree {tree}")
+
+
+def evaluate_cons_c(a: Expr, b: Expr, call: Callable) -> Callable:
+    """ Evaluate a cons, continuation passing style """
+
+    def eval_a(eval_a):
+        def eval_b(eval_b):
+            def pair(pair):
+                # Manually set value to prevent infinite loop
+                res = Tree(pair, eval_b)
+                res.value = res
+                return call(res)
+
+            return evaluate_c(Tree(cons, eval_a), pair)
+
+        return evaluate_c(b, eval_b)
+
+    return evaluate_c(a, eval_a)
+
+
+if __name__ == "__main__":
     import sys
 
     from expr import parse, unparse
+
+    # TODO: remove
+    for line in open("../galaxy.txt").readlines():
+        name, _, *tokens = line.strip().split()
+        try:
+            evaluate(parse(" ".join(tokens)))
+        except RecursionError:
+            print("Recursion error", name)
+        except ValueError as e:
+            print("Value error", name, e)
 
     if len(sys.argv) == 2:
         print(unparse(evaluate(parse(sys.argv[1]))))

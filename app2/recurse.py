@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-
-#!/usr/bin/env python
-
 from expr import Expr, Value, Tree
 from typing import Callable, Any
 
@@ -54,7 +51,7 @@ def evaluate_r(expr: Expr) -> Expr:
     raise ValueError(f"bad expr {expr}")
 
 
-def evaluate_int_r(expr: Expr) -> int:
+def evaluate_integer_r(expr: Expr) -> int:
     """ Evaluate to an integer, recursive style """
     value = evaluate_r(expr)
     if isinstance(value, Value):
@@ -62,19 +59,11 @@ def evaluate_int_r(expr: Expr) -> int:
     raise ValueError(f"bad value {value}")
 
 
-def is_math_expr(expr: Expr) -> bool:
-    """ Return if this tree can be evaluated as arithmetic """
-    return isinstance(expr, Tree) and (
-        expr.left == neg
-        or (isinstance(expr.left, Tree) and expr.left.left in BINARY_MATH)
-    )
-
-
 def evaluate_math_r(tree: Tree) -> Value:
     """ Evaluate """
     if isinstance(tree, Tree):
         left = tree.left
-        x = evaluate_int_r(tree.right)
+        x = evaluate_integer_r(tree.right)
         if left == neg:
             return Value(-x)
         if left == inc:
@@ -83,7 +72,7 @@ def evaluate_math_r(tree: Tree) -> Value:
             return Value(x - 1)
         if isinstance(left, Tree):
             left2 = left.left
-            y = evaluate_int_r(left.right)
+            y = evaluate_integer_r(left.right)
             if left2 == add:
                 return Value(y + x)
             if left2 == mul:
@@ -139,6 +128,8 @@ def evaluate_tree_r(tree: Tree) -> Expr:
                     return Tree(z, Tree(y, x))
                 if left3 == cons:
                     return Tree(Tree(x, z), y)
+                return tree
+            return tree
         return tree
     raise ValueError(f"bad tree {tree}")
 
