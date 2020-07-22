@@ -725,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_addition() {
+    fn addition() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap ap add 2 3", Atom::new(5), &functions);
         assert_expression_evaluates_to("ap ap add 2 -3", Atom::new(-1), &functions);
@@ -738,13 +738,13 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_division() {
+    fn division() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap ap div -9 4", Atom::new(-2), &functions);
     }
 
     #[test]
-    fn pseudo_cons_application() {
+    fn cons_application() {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap ap cons x0 x1 x2",
@@ -754,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_isnil() {
+    fn isnil() {
         let functions = hashmap! {};
 
         assert_expression_evaluates_to("ap isnil nil", Atom::new(T), &functions);
@@ -762,25 +762,25 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_true() {
+    fn true_combinator() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap ap t x0 x1", Atom::new("x0"), &functions);
     }
 
     #[test]
-    fn pseudo_false() {
+    fn false_combinator() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap ap f x0 x1", Atom::new("x1"), &functions);
     }
 
     #[test]
-    fn pseudo_identity() {
+    fn identity() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap i x0", Atom::new("x0"), &functions);
     }
 
     #[test]
-    fn pseudo_equals() {
+    fn equals() {
         let functions = hashmap! {};
 
         for num in -20..20 {
@@ -803,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_less_than() {
+    fn less_than() {
         let functions = hashmap! {};
 
         for num in -20..20 {
@@ -813,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_negate() {
+    fn negate() {
         let functions = hashmap! {};
 
         for num in -20..20 {
@@ -823,7 +823,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_s_combinator() {
+    fn s_combinator() {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap ap s x0 x1 x2",
@@ -836,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_c_combinator() {
+    fn c_combinator() {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap ap c x0 x1 x2",
@@ -846,7 +846,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_b_combinator() {
+    fn b_combinator() {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap ap b x0 x1 x2",
@@ -856,7 +856,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_car() {
+    fn car() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap car ap ap cons x0 x1", Atom::new("x0"), &functions);
         assert_expression_evaluates_to(
@@ -867,7 +867,7 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_cdr() {
+    fn cdr() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap cdr ap ap cons x0 x2", Atom::new("x2"), &functions);
         assert_expression_evaluates_to(
@@ -878,13 +878,13 @@ mod tests {
     }
 
     #[test]
-    fn pseudo_nil() {
+    fn nil() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap nil x0", Atom::new(T), &functions);
     }
 
     #[test]
-    fn pseudo_simple_recursion() {
+    fn simple_recursion() {
         let functions = build_test_functions(
             ":2000 = ap ap c t :2000
             :1000 = ap f :1000",
