@@ -1,0 +1,12 @@
+[package]
+name = "galaxypad"
+version = "0.0.0"
+authors = ["Alex Kesling <alex@kesling.co>"]
+
+[[bin]]
+name = "pseudo"
+path = "src/pseudo.rs"
+
+[dependencies]
+maplit = "1.0.2"
+lazy_static = "1.4.0"
