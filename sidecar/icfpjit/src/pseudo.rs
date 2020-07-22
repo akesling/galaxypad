@@ -338,48 +338,42 @@ fn parse_number(name: &str) -> Result<i64, String> {
 
 fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
     if let Some(name) = points_expr.borrow().name().as_ref() {
-        if name == &"nil" {
-            println!("Nil list provided to flatten_point");
-
-            Ok((0, 0))
-        } else {
-            panic!("First item in list was non-nil atom({}) not Ap", name);
-        }
-    } else {
-        let second = points_expr
-            .borrow()
-            .func()
-            .ok_or_else(|| "func expected on points_expr of flatten_point")?;
-        if let Some(name) = second.borrow().name().as_ref() {
-            panic!("Second item in list was non-nil atom({}) not Ap", name);
-        }
-
-        let cons = second
-            .borrow()
-            .func()
-            .ok_or_else(|| "func expected on second of flatten_point")?;
-        if let Some(name) = cons.borrow().name().as_ref() {
-            if name != &"cons" {
-                panic!("Cons-place item in list was atom({}) not cons", name);
-            }
-        }
-
-        Ok((
-            as_num(
-                points_expr
-                    .borrow()
-                    .arg()
-                    .ok_or_else(|| "arg expected on points_expr of flatten_point")?,
-            )?,
-            as_num(
-                second
-                    .clone()
-                    .borrow()
-                    .arg()
-                    .ok_or_else(|| "arg expected on second of flatten_point")?,
-            )?,
-        ))
+        return Err(format!("First item in pair was atom({}) not Ap", name));
     }
+
+    let second = points_expr
+        .borrow()
+        .func()
+        .ok_or_else(|| "func expected on points_expr of flatten_point")?;
+    if let Some(name) = second.borrow().name().as_ref() {
+        return Err(format!("Second item in list was non-nil atom({}) not Ap", name));
+    }
+
+    let cons = second
+        .borrow()
+        .func()
+        .ok_or_else(|| "func expected on second of flatten_point")?;
+    if let Some(name) = cons.borrow().name().as_ref() {
+        if name != &"cons" {
+            return Err(format!("Cons-place item in list was atom({}) not cons", name));
+        }
+    }
+
+    Ok((
+        as_num(
+            points_expr
+                .borrow()
+                .arg()
+                .ok_or_else(|| "arg expected on points_expr of flatten_point")?,
+        )?,
+        as_num(
+            second
+                .clone()
+                .borrow()
+                .arg()
+                .ok_or_else(|| "arg expected on second of flatten_point")?,
+        )?,
+    ))
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
@@ -613,7 +607,9 @@ fn vectorize_points_expr(points_expr: ExprRef) -> Result<Vec<(i64, i64)>, String
 
     let flattened: Vec<ExprRef> = get_list_items_from_expr(points_expr)?;
     for expr in flattened.into_iter() {
-        result.push(flatten_point(expr)?);
+        if !expr.borrow().equals(Atom::new(NIL)) {
+            result.push(flatten_point(expr)?);
+        }
     }
 
     Ok(result)
