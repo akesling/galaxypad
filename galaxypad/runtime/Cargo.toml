@@ -1,12 +1,12 @@
 [package]
-name = "galaxypad"
+name = "runtime"
 version = "0.0.0"
 edition = "2018"
 authors = ["Alex Kesling <alex@kesling.co>"]
 
 [[bin]]
-name = "pseudo"
-path = "src/pseudo.rs"
+name = "runtime"
+path = "src/runtime.rs"
 
 [dependencies]
 draw = "0.3.0"
