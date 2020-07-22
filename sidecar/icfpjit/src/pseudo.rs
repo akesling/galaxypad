@@ -602,11 +602,11 @@ fn eval_cons(
     Ok(res)
 }
 
-fn vectorize_points_expr(points_expr: ExprRef) -> Result<Vec<(i64, i64)>, String> {
+fn vectorize_points_expr(list_of_points_expr: ExprRef) -> Result<Vec<(i64, i64)>, String> {
     let mut result = vec![];
 
-    let flattened: Vec<ExprRef> = get_list_items_from_expr(points_expr)?;
-    for expr in flattened.into_iter() {
+    let pairs: Vec<ExprRef> = get_list_items_from_expr(list_of_points_expr)?;
+    for expr in pairs.into_iter() {
         if !expr.borrow().equals(Atom::new(NIL)) {
             result.push(flatten_point(expr)?);
         }
