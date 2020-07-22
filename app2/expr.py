@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 from itertools import zip_longest
-from typing import Iterable, List, Optional, Tuple, Union, TypeVar
+from typing import Iterable, List, Optional, Tuple, Union, Iterable, Generator
 
 
 class Expr:
     parent: Optional["Expr"]
+    value: Optional["Expr"] = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -32,11 +33,9 @@ class Value(Expr):
         return isinstance(self.name, str)
 
 
-
 class Tree(Expr):
     left: Expr
     right: Expr
-    value: Optional[Expr] = None
 
     def __init__(self, left: Expr, right: Expr, parent: Optional[Expr] = None):
         left.parent = self
@@ -81,12 +80,17 @@ def nlr(expr: Expr) -> Iterable[Expr]:
 
 def parse(string: str) -> Expr:
     """ Parse a string like 'ap inc 0' into an Expr """
-    tokens: List[str] = string.strip().split()
+    tokens = string.strip().split()
+    return parse_tokens(tokens)
+
+
+def parse_tokens(tokens: Iterable[str]) -> Expr:
+    """ Parse tokens like ('ap', 'inc', '0') into an Expr """
     stack: List[Tree] = []
     expr: Optional[Expr] = None  # Contains the object to return at the end
     null = Expr()  # Special placeholder value
-    while tokens:
-        token, *tokens = tokens
+    token_iter = iter(tokens)
+    for token in token_iter:
         expr = Tree(null, null) if token == "ap" else Value(token)
         if stack:
             if stack[-1].left == null:
@@ -103,8 +107,8 @@ def parse(string: str) -> Expr:
             break
 
     assert not stack, f"Unconsumed stack, (incomplete expr?): {stack}"
-    assert tokens == [], f"Failed to parse tokens {string} -> {tokens}"
-    assert isinstance(expr, Expr), f"Invalid expression type {expr} {string}"
+    assert not any(token_iter), f"Failed to parse all tokens in {tokens}"
+    assert isinstance(expr, Expr), f"Invalid expression type {expr} {tokens}"
     assert not any(n == null for n in nlr(expr)), f"Unparse null {expr}"
     for n in nlr(expr):
         if isinstance(n, Tree):
@@ -113,19 +117,24 @@ def parse(string: str) -> Expr:
     return expr
 
 
-def unparse(expr: Expr) -> str:
-    """ Unparse and Expr into a string like 'ap inc 0' """
+def unparse_tokens(expr: Expr) -> Iterable[str]:
+    """ Generator to unparse an expression into tokens """
     if isinstance(expr, (Value, Tree)):
-        tokens: List[str] = []
         for n in nlr(expr):
             if isinstance(n, Value):
-                tokens.append(n.name)
+                yield n.name
             elif isinstance(n, Tree):
-                tokens.append("ap")
+                yield "ap"
             else:
                 raise ValueError(f"Unparse unknown type {type(n)} {n}")
-        return " ".join(tokens)
+        return
     raise ValueError(f"Can't unparse type {type(expr)} {expr}")
+
+
+def unparse(expr: Expr) -> str:
+    """ Unparse and Expr into a string like 'ap inc 0' """
+    tokens: Iterable[str] = unparse_tokens(expr)
+    return " ".join(tokens)
 
 
 if __name__ == "__main__":
