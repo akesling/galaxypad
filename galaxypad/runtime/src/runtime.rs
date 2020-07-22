@@ -1,5 +1,5 @@
-use maplit::hashset;
 use lazy_static::lazy_static;
+use maplit::hashset;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -279,7 +279,7 @@ fn interact(
     state: ExprRef,
     event: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &Constants
+    constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap::new(Ap::new(Atom::new(":galaxy"), state), event);
@@ -337,7 +337,10 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         .func()
         .ok_or_else(|| "func expected on points_expr of flatten_point")?;
     if let Some(name) = second.borrow().name().as_ref() {
-        return Err(format!("Second item in list was non-nil atom({}) not Ap", name));
+        return Err(format!(
+            "Second item in list was non-nil atom({}) not Ap",
+            name
+        ));
     }
 
     let cons = second
@@ -346,7 +349,10 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         .ok_or_else(|| "func expected on second of flatten_point")?;
     if let Some(name) = cons.borrow().name().as_ref() {
         if name != &"cons" {
-            return Err(format!("Cons-place item in list was atom({}) not cons", name));
+            return Err(format!(
+                "Cons-place item in list was atom({}) not cons",
+                name
+            ));
         }
     }
 
@@ -428,7 +434,11 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
     }
 }
 
-fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Constants) -> Result<ExprRef, String> {
+fn eval(
+    expr: ExprRef,
+    functions: &HashMap<String, ExprRef>,
+    constants: &Constants,
+) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
     }
@@ -442,11 +452,14 @@ fn eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Constan
             return Ok(result);
         }
         current_expr = result;
-
     }
 }
 
-fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Constants) -> Result<ExprRef, String> {
+fn try_eval(
+    expr: ExprRef,
+    functions: &HashMap<String, ExprRef>,
+    constants: &Constants,
+) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
         return Ok(x);
     }
@@ -461,7 +474,7 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Con
                 .func()
                 .ok_or_else(|| "func expected on expr of try_eval")?,
             functions,
-            constants
+            constants,
         )?;
         let x = expr
             .borrow()
@@ -481,7 +494,10 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Con
                 "isnil" => {
                     return Ok(Ap::new(
                         x,
-                        Ap::new(constants.t.clone(), Ap::new(constants.t.clone(), constants.f.clone())),
+                        Ap::new(
+                            constants.t.clone(),
+                            Ap::new(constants.t.clone(), constants.f.clone()),
+                        ),
                     ));
                 }
                 "car" => {
@@ -498,7 +514,7 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Con
                     .func()
                     .ok_or_else(|| "func expected on func of try_eval")?,
                 functions,
-                constants
+                constants,
             )?;
             let y = func
                 .borrow()
@@ -514,22 +530,25 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Con
                     }
                     "add" => {
                         return Ok(Atom::new(
-                            as_num(eval(x, functions, constants)?)? + as_num(eval(y, functions, constants)?)?,
+                            as_num(eval(x, functions, constants)?)?
+                                + as_num(eval(y, functions, constants)?)?,
                         ));
                     }
                     "mul" => {
                         return Ok(Atom::new(
-                            as_num(eval(x, functions, constants)?)? * as_num(eval(y, functions, constants)?)?,
+                            as_num(eval(x, functions, constants)?)?
+                                * as_num(eval(y, functions, constants)?)?,
                         ));
                     }
                     "div" => {
                         return Ok(Atom::new(
-                            as_num(eval(y, functions, constants)?)? / as_num(eval(x, functions, constants)?)?,
+                            as_num(eval(y, functions, constants)?)?
+                                / as_num(eval(x, functions, constants)?)?,
                         ));
                     }
                     "eq" => {
-                        let are_equal =
-                            as_num(eval(x, functions, constants)?)? == as_num(eval(y, functions, constants)?)?;
+                        let are_equal = as_num(eval(x, functions, constants)?)?
+                            == as_num(eval(y, functions, constants)?)?;
                         return Ok(if are_equal {
                             constants.t.clone()
                         } else {
@@ -537,8 +556,8 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Con
                         });
                     }
                     "lt" => {
-                        let is_less_than =
-                            as_num(eval(y, functions, constants)?)? < as_num(eval(x, functions, constants)?)?;
+                        let is_less_than = as_num(eval(y, functions, constants)?)?
+                            < as_num(eval(x, functions, constants)?)?;
                         return Ok(if is_less_than {
                             constants.t.clone()
                         } else {
@@ -556,7 +575,8 @@ fn try_eval(expr: ExprRef, functions: &HashMap<String, ExprRef>, constants: &Con
                         .borrow()
                         .func()
                         .ok_or_else(|| "func expected on func2 of try_eval")?,
-                    functions, constants,
+                    functions,
+                    constants,
                 )?;
                 let z = func2
                     .borrow()
@@ -582,7 +602,7 @@ fn eval_cons(
     head: ExprRef,
     tail: ExprRef,
     functions: &HashMap<String, ExprRef>,
-    constants: &Constants
+    constants: &Constants,
 ) -> Result<ExprRef, String> {
     let res = Ap::new(
         Ap::new(constants.cons.clone(), eval(head, functions, constants)?),
@@ -608,7 +628,7 @@ fn vectorize_points_expr(list_of_points_expr: ExprRef) -> Result<Vec<(i64, i64)>
 
 fn print_images(point_lists: Vec<Vec<(i64, i64)>>) {
     const SIZE: (u32, u32) = (1024, 1024);
-    const CENTER: (u32, u32) = (SIZE.0/2, SIZE.1/2);
+    const CENTER: (u32, u32) = (SIZE.0 / 2, SIZE.1 / 2);
     {
         use draw::*;
         // create a canvas to draw on
@@ -626,7 +646,9 @@ fn print_images(point_lists: Vec<Vec<(i64, i64)>>) {
                     .with_style(Style::filled(Color::black()));
 
                 let projected_point = (p.0 as u32 + CENTER.0, p.1 as u32 + CENTER.1);
-                canvas.display_list.add(rect.with_xy(projected_point.0 as f32, projected_point.1 as f32));
+                canvas
+                    .display_list
+                    .add(rect.with_xy(projected_point.0 as f32, projected_point.1 as f32));
             }
         }
 
@@ -653,7 +675,13 @@ fn get_constants() -> Constants {
     }
 }
 
-fn iterate(state: ExprRef, point: &Point, constants: &Constants, functions: &HashMap<String, ExprRef>, render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>)) -> ExprRef {
+fn iterate(
+    state: ExprRef,
+    point: &Point,
+    constants: &Constants,
+    functions: &HashMap<String, ExprRef>,
+    render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
+) -> ExprRef {
     let click = Ap::new(
         Ap::new(constants.cons.clone(), Atom::new(point.x)),
         Atom::new(point.y),
@@ -680,22 +708,31 @@ struct Callback<'a> {
 }
 impl<'a> Callback<'a> {
     fn call(&mut self) {
-        self.state = iterate(self.state.clone(), &self.point, &self.constants, &self.functions, self.render_to_display);
+        self.state = iterate(
+            self.state.clone(),
+            &self.point,
+            &self.constants,
+            &self.functions,
+            self.render_to_display,
+        );
         self.point = (self.request_click_from_user)();
     }
 }
 
-fn entry_point<'a>(request_click_from_user: &'a dyn Fn() -> Point, render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>)) -> Callback<'a> {
+fn entry_point<'a>(
+    request_click_from_user: &'a dyn Fn() -> Point,
+    render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
+) -> Callback<'a> {
     let galaxy_script = std::include_str!("../galaxy.txt");
     let constants = get_constants();
 
-    let mut callback = Callback{
+    let mut callback = Callback {
         state: constants.nil.clone(),
         point: Point { x: 0, y: 0 },
-        render_to_display: render_to_display,
-        request_click_from_user: request_click_from_user,
+        render_to_display,
+        request_click_from_user,
         functions: load_function_definitions(galaxy_script).unwrap(),
-        constants: constants,
+        constants,
     };
     callback.call();
 
