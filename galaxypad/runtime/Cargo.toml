@@ -1,0 +1,18 @@
+[package]
+name = "runtime"
+version = "0.0.0"
+edition = "2018"
+authors = ["Alex Kesling <alex@kesling.co>"]
+
+[lib]
+name = "runtime"
+path = "src/runtime.rs"
+
+[[bin]]
+name = "runtime_binary"
+path = "src/runtime.rs"
+
+[dependencies]
+draw = "0.3.0"
+maplit = "1.0.2"
+lazy_static = "1.4.0"
