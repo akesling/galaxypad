@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from expr import Expr, Value, Tree
-from typing import Callable, Any
+from expr import Expr, Value, Tree, parse_tokens, nlr
+from typing import Callable, Any, Dict
 
 inc = Value("inc")
 dec = Value("dec")
@@ -22,78 +22,55 @@ cons = Value("cons")
 s = Value("s")
 c = Value("c")
 b = Value("b")
-UNARY_MATH = (neg, inc, dec)
-BINARY_MATH = (add, mul, div, lt, eq)
 
 
-class Evaluator:
-    pass
-    # Owns functions, and let this wrap function evaluation / replacement
+functions: Dict[str, Expr] = {}
+for line in open("galaxy.txt").readlines():
+    name, _, *tokens = line.strip().split()
+    functions[name] = parse_tokens(tokens)
 
 
+def insert(old: Expr, new: Expr) -> Expr:
+    if old is new or old == new:
+        return new
+    for parent in old.parents:
+        if isinstance(parent, Tree):
+            if parent.left is old:
+                parent.left = new
+            if parent.right is old:
+                parent.right = new
+            new.parents.append(parent)
+        else:
+            raise ValueError(f"Non tree parent {parent}->{old}:{new}")
+    return new
 
-def evaluate(expr: Expr) -> Expr:
+
+def evaluate(orig: Expr) -> Expr:
     """ Evaluate an expression, returning evaluated tree """
-    evaluation = evaluate_r(expr)
-    if isinstance(evaluation, Expr):
-        return evaluation
-    raise ValueError(f"bad evalution {evaluation}")
+    again = True
+    while again:
+        print("evaluate", unparse(orig))
+        again = False
+        for expr in nlr(orig):
+            result = try_eval(expr)
+            if expr is orig:
+                orig = result
+            if result is not expr:
+                insert(expr, result)
+                again = True
+                break
+    return orig
 
 
-def evaluate_r(expr: Expr) -> Expr:
-    """ Evaluate an expression, recursive style """
-    if isinstance(expr, Value):
-        return expr
+def try_eval(expr: Expr) -> Expr:
+    """ Evaluate a expr, recursive style """
+    if isinstance(expr, Value) and expr.name in functions:
+        return functions[expr.name]
     if isinstance(expr, Tree):
-        value = evaluate_tree_r(expr)
-        expr.value = value
-        return value
-    raise ValueError(f"bad expr {expr}")
-
-
-def evaluate_integer_r(expr: Expr) -> int:
-    """ Evaluate to an integer, recursive style """
-    value = evaluate_r(expr)
-    if isinstance(value, Value):
-        return int(value)
-    raise ValueError(f"bad value {value}")
-
-
-def evaluate_math_r(tree: Tree) -> Value:
-    """ Evaluate """
-    if isinstance(tree, Tree):
-        left = tree.left
-        x = evaluate_integer_r(tree.right)
+        left = expr.left
+        x = expr.right
         if left == neg:
-            return Value(-x)
-        if left == inc:
-            return Value(x + 1)
-        if left == dec:
-            return Value(x - 1)
-        if isinstance(left, Tree):
-            left2 = left.left
-            y = evaluate_integer_r(left.right)
-            if left2 == add:
-                return Value(y + x)
-            if left2 == mul:
-                return Value(y * x)
-            if left2 == div:
-                return Value(y // x if y * x > 0 else (y + (-y % x)) // x)
-            if left2 == lt:
-                return t if y < x else f
-            if left2 == eq:
-                return t if y == x else f
-    raise ValueError(f"bad math {tree}")
-
-
-def evaluate_tree_r(tree: Tree) -> Expr:
-    """ Evaluate a tree, recursive style """
-    if isinstance(tree, Tree):
-        if tree.value is not None:
-            return tree.value
-
-        left = evaluate_r(tree.left)
-        x = tree.right
+            return Value(-eval_int(x))
         if left == i:
             return x
         if left == nil:
@@ -104,21 +81,29 @@ def evaluate_tree_r(tree: Tree) -> Expr:
             return Tree(x, t)
         if left == cdr:
             return Tree(x, f)
-        if left in UNARY_MATH:
-            return evaluate_math_r(tree)
+
         if isinstance(left, Tree):
-            left2 = evaluate_r(left.left)
+            left2 = left.left
             y = left.right
             if left2 == t:
                 return y
             if left2 == f:
                 return x
             if left2 == cons:
-                return evaluate_cons_r(y, x)
-            if left2 in BINARY_MATH:
-                return evaluate_math_r(tree)
+                return Tree(Tree(cons, evaluate(y)), evaluate(x))
+            if left2 == add:
+                return Value(eval_int(y) + eval_int(x))
+            if left2 == mul:
+                return Value(eval_int(y) * eval_int(x))
+            if left2 == div:
+                y, x = eval_int(y), eval_int(x)  # type: ignore
+                return Value(y // x if y * x > 0 else (y + (-y % x)) // x)  # type: ignore
+            if left2 == lt:
+                return t if eval_int(y) < eval_int(x)else f
+            if left2 == eq:
+                return t if eval_int(y) == eval_int(x) else f
             if isinstance(left2, Tree):
-                left3 = evaluate_r(left2.left)
+                left3 = left2.left
                 z = left2.right
                 if left3 == s:
                     return Tree(Tree(z, x), Tree(y, x))
@@ -128,38 +113,22 @@ def evaluate_tree_r(tree: Tree) -> Expr:
                     return Tree(z, Tree(y, x))
                 if left3 == cons:
                     return Tree(Tree(x, z), y)
-                return tree
-            return tree
-        return tree
-    raise ValueError(f"bad tree {tree}")
+    return expr
 
 
-def evaluate_cons_r(a: Expr, b: Expr) -> Expr:
-    """ Evaluate a cons, recursive style """
-    eval_a = evaluate_r(a)
-    eval_b = evaluate_r(b)
-    pair = evaluate_r(Tree(cons, eval_a))
-    # Manually set value to prevent infinite loop
-    res = Tree(pair, eval_b)
-    res.value = res
-    return res
+
+def eval_int(expr: Expr) -> int:
+    """ Evaluate an expression to an int """
+    value = evaluate(expr)
+    if isinstance(value, Value):
+        return int(value)
+    raise ValueError(f"failed to convert to int {expr} -> {value}")
 
 
 if __name__ == "__main__":
     import sys
 
     from expr import parse, unparse
-
-    # TODO: remove
-    for line in open('../galaxy.txt').readlines():
-        name, _, *tokens = line.strip().split()
-        try:
-            evaluate(parse(' '.join(tokens)))
-        except RecursionError:
-            print("Recursion error", name)
-        except ValueError as e:
-            print("Value error", name, e)
-
 
     if len(sys.argv) == 2:
         print(unparse(evaluate(parse(sys.argv[1]))))

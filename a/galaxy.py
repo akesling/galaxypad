@@ -25,9 +25,11 @@ import sdl2.ext
 sys.setrecursionlimit(10000)
 
 # Set rendering parameters
-WIDTH = 512  # How much space to render (centers on 0)
-HEIGHT = 512  # How much space to render (centers on 0)
-BIG = 2  # How many render pixels per game pixes (bigger is easier)
+# WIDTH = 512  # How much space to render (centers on 0)
+# HEIGHT = 512  # How much space to render (centers on 0)
+WIDTH=320
+HEIGHT=240
+BIG = 3  # How many render pixels per game pixes (bigger is easier)
 
 # Colors from https://ethanschoonover.com/solarized/
 C03 = 0xFF002B36  # base03
@@ -435,15 +437,15 @@ if __name__ == "__main__":
         (9, -3),
         (-4, 10),
         (1, 4),
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
-        # (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
+        (0, 1),  # Uncomment to skip galaxy screen
     ]:
         state, images = interact(state, click)
 

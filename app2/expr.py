@@ -6,8 +6,10 @@ from typing import Iterable, List, Optional, Tuple, Union, Iterable, Generator
 
 
 class Expr:
-    parent: Optional["Expr"]
-    value: Optional["Expr"] = None
+    parents: List["Expr"]
+
+    def __init__(self):
+        self.parents = []
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -16,9 +18,9 @@ class Expr:
 class Value(Expr):
     name: str
 
-    def __init__(self, name: Union[int, str], parent: Optional[Expr] = None):
+    def __init__(self, name: Union[int, str]):
+        super().__init__()
         self.name = str(name)
-        self.parent = parent
 
     def __eq__(self, other) -> bool:
         return type(self) == type(other) and self.name == other.name
@@ -37,19 +39,18 @@ class Tree(Expr):
     left: Expr
     right: Expr
 
-    def __init__(self, left: Expr, right: Expr, parent: Optional[Expr] = None):
-        left.parent = self
-        right.parent = self
+    def __init__(self, left: Expr, right: Expr):
+        super().__init__()
         self.left = left
         self.right = right
-        self.parent = parent
-        self.value = None
+        left.parents.append(self)
+        right.parents.append(self)
 
     def __eq__(self, other) -> bool:
         if type(self) == type(other):
             for s, o in zip_longest(nlr(self), nlr(other)):
-                if isinstance(s, Value) and isinstance(o, Value) and s != o:
-                    return False
+                if isinstance(s, Value) and isinstance(o, Value) and s == o:
+                    continue
                 if isinstance(s, Tree) and isinstance(o, Tree):
                     continue
                 return False
@@ -95,10 +96,10 @@ def parse_tokens(tokens: Iterable[str]) -> Expr:
         if stack:
             if stack[-1].left == null:
                 stack[-1].left = expr
-                expr.parent = stack[-1]
+                expr.parents.append(stack[-1])
             elif stack[-1].right == null:
                 stack[-1].right = expr
-                expr.parent = stack[-1]
+                expr.parents.append(stack[-1])
         if isinstance(expr, Tree) and expr.right == null:
             stack.append(expr)
         while stack and stack[-1].right != null:
@@ -112,8 +113,12 @@ def parse_tokens(tokens: Iterable[str]) -> Expr:
     assert not any(n == null for n in nlr(expr)), f"Unparse null {expr}"
     for n in nlr(expr):
         if isinstance(n, Tree):
-            assert n.left.parent is n, f"Mismatched tree {n}!={n.left.parent}"
-            assert n.right.parent is n, f"Mismatched tree {n}!={n.right.parent}"
+            assert any(
+                p is n for p in n.left.parents
+            ), f"Mismatched tree {n}!={n.left.parents}"
+            assert any(
+                p is n for p in n.right.parents
+            ), f"Mismatched tree {n}!={n.right.parents}"
     return expr
 
 

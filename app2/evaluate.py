@@ -44,7 +44,8 @@ def trampoline(call: Callable):
     # http://blog.moertel.com/posts/2013-06-12-recursion-to-iteration-4-trampolines.html
     while callable(call):
         call = call()
-    return call
+    return lambda: call
+
 
 # def evaluate(orig: Expr) -> Expr:
 #     """ Fully evaluate an expression, returning resulting expression """
@@ -55,7 +56,7 @@ def trampoline(call: Callable):
 #             orig.value = res
 #             return res
 #         expr = res
-            
+
 
 def evaluate(expr: Expr) -> Expr:
     """ Evaluate an expression, returning evaluated expression """
@@ -71,16 +72,30 @@ def evaluate_c(orig: Expr, call: Callable) -> Callable:
     logging.debug(f"evaluate_c {unparse(orig)}")
     if isinstance(orig, Expr):
         if orig.value is not None:
-            return call(orig.value)
-        def expr(expr):
-            def res(res):
-                if expr == res:
-                    orig.value = res
-                    return cal(orig)
-                return lambda: evaluate_c(expr, res)
-            return lambda: evaluate_c(expr, res)
-        return lambda: evaluate_c(orig, expr)
-    raise ValueError(f"bad expr {expr}")
+            logging.debug(f"DONE evaluated {unparse(orig)} -> {unparse(orig.value)}")
+            return lambda: call(orig.value)
+
+        def expr_fn(expr):
+            return lambda: evaluate_compare_c(orig, expr, call)
+
+        return lambda: evaluate_try_c(orig, expr_fn)
+    raise ValueError(f"bad orig {orig}")
+
+
+def evaluate_compare_c(orig: Expr, expr: Expr, call: Callable) -> Callable:
+    """ Evaluate an expression until convergence, continuation passing style """
+    logging.debug(f"evaluate_compare_c {unparse(orig)},{unparse(expr)}")
+    if isinstance(orig, Expr) and isinstance(expr, Expr):
+
+        def evaluation_fn(evaluation):
+            if expr == evaluation:
+                logging.debug(f"COMPARE success {unparse(expr)}")
+                expr.value = evaluation
+                return lambda: call(evaluation)
+            return lambda: evaluate_compare_c(expr, evaluation, call)
+
+        return lambda: evaluate_try_c(expr, evaluation_fn)
+    raise ValueError(f"bad compare {orig},{expr}")
 
 
 def evaluate_integer_c(expr: Expr, call: Callable) -> Callable:
@@ -89,10 +104,10 @@ def evaluate_integer_c(expr: Expr, call: Callable) -> Callable:
 
     def integer(integer):
         if isinstance(integer, Value):
-            return call(int(integer))
+            return lambda: call(int(integer))
         raise ValueError(f"bad integer {integer}")
 
-    return evaluate_c(expr, integer)
+    return lambda: evaluate_c(expr, integer)
 
 
 def evaluate_math_c(tree: Tree, call: Callable) -> Callable:
@@ -103,113 +118,131 @@ def evaluate_math_c(tree: Tree, call: Callable) -> Callable:
 
         def x(x):
             if left == neg:
-                return call(Value(-x))
+                return lambda: call(Value(-x))
             if left == inc:
-                return call(Value(x + 1))
+                return lambda: call(Value(x + 1))
             if left == dec:
-                return call(Value(x - 1))
+                return lambda: call(Value(x - 1))
             if isinstance(left, Tree):
                 left2 = left.left
 
                 def y(y):
                     if left2 == add:
-                        return call(Value(y + x))
+                        return lambda: call(Value(y + x))
                     if left2 == mul:
-                        return call(Value(y * x))
+                        return lambda: call(Value(y * x))
                     if left2 == div:
-                        return call(Value(y // x if y * x > 0 else (y + (-y % x)) // x))
+                        return lambda: call(Value(y // x if y * x > 0 else (y + (-y % x)) // x))
                     if left2 == lt:
-                        return call(t if y < x else f)
+                        return lambda: call(t if y < x else f)
                     if left2 == eq:
-                        return call(t if y == x else f)
+                        return lambda: call(t if y == x else f)
                     raise ValueError(f"bad binary math {tree}")
 
-                return evaluate_integer_c(left.right, y)
+                return lambda: evaluate_integer_c(left.right, y)
             raise ValueError(f"bad unary math {tree}")
 
-        return evaluate_integer_c(tree.right, x)
+        return lambda: evaluate_integer_c(tree.right, x)
     raise ValueError(f"bad math {tree}")
 
 
-def evaluate_try_c(expr: Tree, call: Callable) -> Callable:
+def evaluate_try_c(expr: Expr, call: Callable) -> Callable:
     """ Try to evaluate an expression, continuation passing style """
     logging.debug(f"evaluate_try_c {unparse(expr)}")
     if isinstance(expr, Expr) and expr.value is not None:
-        return call(expr.value)
-    if isinstance(expr, Value) and expr.name in functions:
-        return call(functions[expr.name])
+        logging.debug(f"Evaluated already {unparse(expr)} -> {unparse(expr.value)}")
+        return lambda: call(expr.value)
+    if isinstance(expr, Value):
+        if expr.name in functions:
+            logging.debug(f"REPLACE {expr.name},{unparse(functions[expr.name])}")
+            return lambda: call(functions[expr.name])  # type: ignore
+        logging.debug(f"BARE VALUE {unparse(expr)}")
+        return lambda: call(expr)
     if isinstance(expr, Tree):
 
         def left(left):
+            logging.debug(f" eval try left {unparse(left)}")
             x = expr.right
             if left == i:
-                return call(x)
+                return lambda: call(x)
             if left == nil:
-                return call(t)
+                return lambda: call(t)
             if left == isnil:
-                return call(Tree(x, Tree(t, Tree(t, f))))
+                return lambda: call(Tree(x, Tree(t, Tree(t, f))))
             if left == car:
-                return call(Tree(x, t))
+                return lambda: call(Tree(x, t))
             if left == cdr:
-                return call(Tree(x, f))
+                return lambda: call(Tree(x, f))
             if left in UNARY_MATH:
-                return evaluate_math_c(expr, call)
+                return lambda: evaluate_math_c(expr, call)
             if isinstance(left, Tree):
+                logging.debug("left is instance of tree")
 
                 def left2(left2):
                     y = left.right
                     if left2 == t:
-                        return call(y)
+                        return lambda: call(y)
                     if left2 == f:
-                        return call(x)
+                        return lambda: call(x)
                     if left2 == cons:
-                        return evaluate_cons_c(y, x, call)
+                        return lambda: evaluate_cons_c(y, x, call)
                     if left2 in BINARY_MATH:
-                        return evaluate_math_c(expr, call)
+                        return lambda: evaluate_math_c(expr, call)
                     if isinstance(left2, Tree):
 
                         def left3(left3):
                             z = left2.right
                             if left3 == s:
-                                return call(Tree(Tree(z, x), Tree(y, x)))
+                                return lambda: call(Tree(Tree(z, x), Tree(y, x)))
                             if left3 == c:
-                                return call(Tree(Tree(x, x), y))
+                                logging.debug(f"C COMBINATOR (removed) z-> {unparse(z)}")
+                                logging.debug(f"C COMBINATOR y-> {unparse(y)}")
+                                logging.debug(f"C COMBINATOR x-> {unparse(x)}")
+                                logging.debug(f"C COMBINATOR -> {unparse(Tree(Tree(x, x), y))}")
+                                return lambda: call(Tree(Tree(x, x), y))
                             if left3 == b:
-                                return call(Tree(z, Tree(y, x)))
+                                logging.debug(f"B COMBINATOR z-> {unparse(z)}")
+                                logging.debug(f"B COMBINATOR y-> {unparse(y)}")
+                                logging.debug(f"B COMBINATOR x-> {unparse(x)}")
+                                logging.debug(f"B COMBINATOR -> {unparse(Tree(z, Tree(y, x)))}")
+                                return lambda: call(Tree(z, Tree(y, x)))
                             if left3 == cons:
-                                return call(Tree(Tree(x, z), y))
-                            return call(expr)
+                                return lambda: call(Tree(Tree(x, z), y))
+                            return lambda: call(expr)
 
-                        return evaluate_c(left2.left, left3)
-                    return call(expr)
+                        return lambda: evaluate_c(left2.left, left3)
+                    return lambda: call(expr)
 
-                return evaluate_c(left.left, left2)
-            return call(expr)
+                return lambda: evaluate_c(left.left, left2)
+            logging.debug(f" left try found no match {unparse(expr)}")
+            return lambda: call(expr)
 
-        return evaluate_c(expr.left, left)
+        return lambda: evaluate_c(expr.left, left)  # type: ignore
     if isinstance(expr, Expr):
-        return call(expr)
+        return lambda: call(expr)
     raise ValueError(f"bad try expr {expr}")
 
 
-def evaluate_cons_c(a: Expr, b: Expr, call: Callable) -> Callable:
+def evaluate_cons_c(y: Expr, x: Expr, call: Callable) -> Callable:
     """ Evaluate a cons, continuation passing style """
-    logging.debug(f"evaluate_cons_c {unparse(a)} {unparse(b)}")
+    logging.debug(f"evaluate_cons_c {unparse(y)} {unparse(x)}")
 
-    def eval_a(eval_a):
-        def eval_b(eval_b):
+    def eval_y(eval_y):
+        def eval_x(eval_x):
             def pair(pair):
                 # Manually set value to prevent infinite loop
-                res = Tree(pair, eval_b)
+                res = Tree(pair, eval_x)
                 res.value = res
-                logging.debug(f'evaluated pair {unparse(a)},{unparse(b)} -> {unparse(res)}')
-                return call(res)
+                logging.debug(
+                    f"evaluated pair {unparse(y)},{unparse(x)} -> {unparse(res)}"
+                )
+                return lambda: call(res)
 
-            return evaluate_c(Tree(cons, eval_a), pair)
+            return lambda: evaluate_c(Tree(cons, eval_y), pair)
 
-        return evaluate_c(b, eval_b)
+        return lambda: evaluate_c(x, eval_x)
 
-    return evaluate_c(a, eval_a)
+    return lambda: evaluate_c(y, eval_y)
 
 
 if __name__ == "__main__":
@@ -218,11 +251,11 @@ if __name__ == "__main__":
     from expr import parse, unparse
 
     # TODO: remove
-    state = nil
-    event = Tree(Tree(cons, Value(0)), Value(0))
+    # state = nil
+    # event = Tree(Tree(cons, Value(0)), Value(0))
     # res = evaluate(Tree(Tree(Value(":1338"), state), event))
     # print(unparse(res))
-
+    # evaluate(parse("ap inc 0"))
     if len(sys.argv) == 2:
         print(unparse(evaluate(parse(sys.argv[1]))))
     else:
