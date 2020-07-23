@@ -462,11 +462,258 @@ fn eval_iterative(
     let mut current_expr = expr;
     loop {
         let mut stack: Vec<ExprRef> = vec![current_expr.clone()];
-        while stack[0].borrow().evaluated().is_none() {
+        let mut maybe_result: Option<ExprRef> = None;
+        while !stack.is_empty() {
             let next_to_evaluate = stack.pop().unwrap();
-            stack.push(try_eval(next_to_evaluate, functions, constants)?);
+            if let Some(x) = next_to_evaluate.borrow().evaluated() {
+                continue;
+//                return Ok(x);
+            }
+
+            if let Some(name) = next_to_evaluate.borrow().name().as_ref() {
+                if let Some(f) = functions.get(name.to_owned()) {
+//                    return Ok(f.clone());
+                    continue;
+                }
+            } else {
+                let func = if let Some(evaluated) = next_to_evaluate.borrow().func().unwrap().borrow().evaluated() {
+                    evaluated
+                } else {
+                    // stack.push(next_to_evaluate.clone());
+                    stack.push(next_to_evaluate.borrow()
+                        .func()
+                        .ok_or_else(|| "func expected on expr of try_eval")?);
+                    continue;
+                };
+                let x = next_to_evaluate
+                    .borrow()
+                    .arg()
+                    .ok_or_else(|| "arg expected on expr of try_eval")?;
+                if let Some(name) = func.clone().borrow().name().as_ref() {
+                    match *name {
+                        "neg" => {
+//                            return Ok(Atom::new(-as_num(eval(x, functions, constants)?)?));
+                            let x = if let Some(evaluated) = x.borrow().evaluated() {
+                                evaluated
+                            } else {
+                                stack.push(next_to_evaluate.clone());
+                                stack.push(x.clone());
+                                continue;
+                            };
+                            continue;
+                        }
+                        "i" => {
+                            continue;
+//                            return Ok(x);
+                        }
+                        "nil" => {
+                            continue;
+//                            return Ok(constants.t.clone());
+                        }
+                        "isnil" => {
+                            continue;
+//                            return Ok(Ap::new(
+//                                x,
+//                                Ap::new(
+//                                    constants.t.clone(),
+//                                    Ap::new(constants.t.clone(), constants.f.clone()),
+//                                ),
+//                            ));
+                        }
+                        "car" => {
+                            continue;
+//                            return Ok(Ap::new(x, constants.t.clone()));
+                        }
+                        "cdr" => {
+                            continue;
+//                            return Ok(Ap::new(x, constants.f.clone()));
+                        }
+                        _ => (),
+                    }
+                } else {
+                    let func2 = if let Some(evaluated) = func.borrow().func().unwrap().borrow().evaluated() {
+                        evaluated
+                    } else {
+                        // stack.push(next_to_evaluate.clone());
+                        stack.push(next_to_evaluate.borrow()
+                            .func()
+                            .ok_or_else(|| "func expected on func of try_eval")?);
+                        continue;
+                    };
+                    let y = func
+                        .borrow()
+                        .arg()
+                        .ok_or_else(|| "arg expected on func of try_eval")?;
+                    if let Some(name) = func2.clone().borrow().name().as_ref() {
+                        match *name {
+                            "t" => {
+                                continue;
+//                                return Ok(y);
+                            }
+                            "f" => {
+                                continue;
+//                                return Ok(x);
+                            }
+                            "add" => {
+                                let x = if let Some(evaluated) = x.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(x.clone());
+                                    continue;
+                                };
+                                let y = if let Some(evaluated) = y.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(y.clone());
+                                    continue;
+                                };
+                                continue;
+//                                return Ok(Atom::new(
+//                                    as_num(eval(x, functions, constants)?)?
+//                                        + as_num(eval(y, functions, constants)?)?,
+//                                ));
+                            }
+                            "mul" => {
+                                let x = if let Some(evaluated) = x.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(x.clone());
+                                    continue;
+                                };
+                                let y = if let Some(evaluated) = y.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(y.clone());
+                                    continue;
+                                };
+                                continue;
+//                                return Ok(Atom::new(
+//                                    as_num(eval(x, functions, constants)?)?
+//                                        * as_num(eval(y, functions, constants)?)?,
+//                                ));
+                            }
+                            "div" => {
+                                let x = if let Some(evaluated) = x.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(x.clone());
+                                    continue;
+                                };
+                                let y = if let Some(evaluated) = y.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(y.clone());
+                                    continue;
+                                };
+                                continue;
+//                                return Ok(Atom::new(
+//                                    as_num(eval(y, functions, constants)?)?
+//                                        / as_num(eval(x, functions, constants)?)?,
+//                                ));
+                            }
+                            "eq" => {
+                                let x = if let Some(evaluated) = x.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(x.clone());
+                                    continue;
+                                };
+                                let y = if let Some(evaluated) = y.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(y.clone());
+                                    continue;
+                                };
+                                continue;
+//                                let are_equal = as_num(eval(x, functions, constants)?)?
+//                                    == as_num(eval(y, functions, constants)?)?;
+//                                return Ok(if are_equal {
+//                                    constants.t.clone()
+//                                } else {
+//                                    constants.f.clone()
+//                                });
+                            }
+                            "lt" => {
+                                let x = if let Some(evaluated) = x.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(x.clone());
+                                    continue;
+                                };
+                                let y = if let Some(evaluated) = y.borrow().evaluated() {
+                                    evaluated
+                                } else {
+                                    stack.push(next_to_evaluate.clone());
+                                    stack.push(y.clone());
+                                    continue;
+                                };
+                                continue;
+//                                let is_less_than = as_num(eval(y, functions, constants)?)?
+//                                    < as_num(eval(x, functions, constants)?)?;
+//                                return Ok(if is_less_than {
+//                                    constants.t.clone()
+//                                } else {
+//                                    constants.f.clone()
+//                                });
+                            }
+                            "cons" => {
+                                continue;
+//                                return Ok(eval_cons(y, x, functions, constants)?);
+                            }
+                            _ => (),
+                        }
+                    } else {
+                        let func3 = if let Some(evaluated) = func2.borrow().func().unwrap().borrow().evaluated() {
+                            evaluated
+                        } else {
+                            stack.push(next_to_evaluate.borrow()
+                                .func()
+                                .ok_or_else(|| "func expected on func2 of try_eval")?);
+                            continue;
+                        };
+//                        let z = func2
+//                            .borrow()
+//                            .arg()
+//                            .ok_or_else(|| "arg expected on func2 of try_eval")?;
+                        if let Some(name) = func3.clone().borrow().name().as_ref() {
+                            match *name {
+                                "s" => {
+                                    continue;
+//                                    return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x)));
+                                },
+                                "c" => {
+                                    continue;
+//                                    return Ok(Ap::new(Ap::new(z, x), y));
+                                },
+                                "b" => {
+                                    continue;
+//                                    return Ok(Ap::new(z, Ap::new(y, x)));
+                                }
+                                "cons" => {
+                                    continue;
+//                                    return Ok(Ap::new(Ap::new(x, z), y));
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+                }
+            }
+
+            println!("Evaluating {:?}", next_to_evaluate);
+            let _ = eval(next_to_evaluate, functions, constants)?;
         }
-        let result = stack[0].borrow().evaluated().unwrap();
+
+        let result = try_eval(current_expr.clone(), functions, constants)?;
         if ptr::eq(current_expr.as_ref(), result.as_ref()) || result.borrow().equals(current_expr) {
             initial_expr.borrow_mut().set_evaluated(result.clone())?;
             return Ok(result);
