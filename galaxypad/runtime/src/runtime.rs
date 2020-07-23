@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use maplit::hashset;
+use maplit::{hashset, hashmap};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -196,43 +196,60 @@ impl Expr for Ap {
 
 #[derive(Default)]
 pub struct Point {
-    x: u64,
-    y: u64,
+    pub x: u64,
+    pub y: u64,
 }
 
-/// Takes a vector of tokens and recursively consumes the tail of the token vector
-fn deserialize(tokens: Vec<&str>) -> Result<(ExprRef, Vec<&str>), String> {
-    let candidate_token = tokens[0];
+fn parse_token(candidate_token: &str, stack: &mut Vec<ExprRef>) -> Result<ExprRef, String> {
     if candidate_token == "ap" {
-        let (left, left_remainder) = deserialize(tokens[1..].to_vec())?;
-        let (right, right_remainder) = deserialize(left_remainder)?;
-        let ap_expr = Ap::new(left, right);
-        return Ok((ap_expr, right_remainder));
+        let left = stack.pop().ok_or_else(|| "Left operand for Ap was missing on stack")?;
+        let right = stack.pop().ok_or_else(|| "Right operand for Ap was missing on stack")?;
+        return Ok(Ap::new(left, right));
     }
 
     if OPERATOR_ATOMS.contains(candidate_token) {
-        return Ok((Atom::new(candidate_token), tokens[1..].to_vec()));
+        return Ok(Atom::new(candidate_token));
     }
 
     if let Ok(i) = candidate_token.parse::<i64>() {
-        return Ok((Atom::new(i), tokens[1..].to_vec()));
+        return Ok(Atom::new(i));
     }
 
     if candidate_token.starts_with(':') || candidate_token.starts_with('x') {
-        return Ok((Atom::new(candidate_token), tokens[1..].to_vec()));
+        return Ok(Atom::new(candidate_token));
     }
 
-    Err(format!(
-        "Could not deserialize \"{}\" with remainder {:?}",
-        candidate_token,
-        tokens[1..].to_vec()
-    ))
+    Err(format!("Could not parse \"{}\"", candidate_token))
+}
+
+/// Takes a vector of tokens and recursively consumes the tail of the token vector
+fn deserialize(tokens: &[&str]) -> Result<ExprRef, String> {
+    if tokens.is_empty() {
+        return Err("Attempt to deserialize the empty token stream failed".to_owned());
+    }
+
+    let mut cursor = tokens.len();
+    let mut stack: Box<Vec<ExprRef>> = Box::new(vec![]);
+    while cursor > 0 {
+        let expr = parse_token(tokens[cursor-1], &mut stack)?;
+        stack.push(expr);
+        cursor -= 1;
+    }
+
+    if stack.len() > 1 {
+        return Err(format!(
+            "Deserialization produced more than one root value {:?}",
+            stack,
+        ));
+    }
+
+    Ok(stack.pop().ok_or_else(|| "No value left on deserialization stack to return.")?)
 }
 
 /// Loads a function definition, which must be of the form:
 /// <name> = <body expr>
 fn load_function(line: &str) -> Result<(String, ExprRef), String> {
-    let left_and_right: Vec<&str> = line.split('=').filter(|s| !s.is_empty()).collect();
+    let left_and_right: Box<Vec<&str>> = Box::new(line.split('=').filter(|s| !s.is_empty()).collect());
     assert!(
         left_and_right.len() == 2,
         "Function line could not be split in two"
@@ -248,31 +265,39 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
     );
     let function_name = left_tokens[0].to_owned();
 
-    let right_tokens: Vec<&str> = left_and_right[1]
+    let right_tokens: Box<Vec<&str>> = Box::new(left_and_right[1]
         .split(' ')
         .filter(|s| !s.is_empty())
-        .collect();
+        .collect());
     assert!(!right_tokens.is_empty(), "Function body was of length zero");
-    let (function_body, remainder) = deserialize(right_tokens)?;
-    assert!(
-        remainder.is_empty(),
-        format!(
-            "Function body did not cleanly parse, tokens remained: {:?}",
-            remainder
-        )
-    );
-
-    Ok((function_name, function_body))
+    let function_body = deserialize(right_tokens.as_slice())?;
+    Ok((":foo".to_owned(), Atom::new("foo")))
+//    assert!(
+//        remainder.is_empty(),
+//        format!(
+//            "Function body did not cleanly parse, tokens remained: {:?}",
+//            remainder
+//        )
+//    );
+//
+//    Ok((function_name, function_body))
 }
 
 /// Opens the given filename and attempts to load each line as a function
 /// definition (pretty much just for galaxy.txt)
 fn load_function_definitions(script_contents: &str) -> Result<HashMap<String, ExprRef>, String> {
-    script_contents
-        .split('\n')
-        .filter(|s| !s.is_empty())
-        .map(|line| load_function(line))
-        .collect()
+    let mut functions: HashMap<String, ExprRef> = HashMap::new();
+    let lines = Box::new(script_contents.split('\n'));
+    for line in lines {
+        if line.is_empty() {
+            continue;
+        }
+        let (name, expr) = load_function(line)?;
+
+        functions.insert(name, expr);
+    }
+
+    Ok(functions)
 }
 
 fn interact(
@@ -682,6 +707,7 @@ fn iterate(
     functions: &HashMap<String, ExprRef>,
     render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
 ) -> ExprRef {
+    render_to_display(vec![vec![(0, 0), (1, 1), (2, 2)]]);
     let click = Ap::new(
         Ap::new(constants.cons.clone(), Atom::new(point.x)),
         Atom::new(point.y),
@@ -722,19 +748,25 @@ impl<'a> Callback<'a> {
 pub fn entry_point<'a>(
     request_click_from_user: &'a dyn Fn() -> Point,
     render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
-) -> Callback<'a> {
-    let galaxy_script = std::include_str!("../galaxy.txt");
+) -> Box<Callback<'a>> {
+    render_to_display(vec![vec![(0, 0), (1, 1), (2, 2)]]);
+    let galaxy_script = Box::new(std::include_str!("../galaxy.txt"));
+    render_to_display(vec![vec![(0, 2), (1, 1), (2, 2)]]);
     let constants = get_constants();
 
-    let mut callback = Callback {
+
+    render_to_display(vec![vec![(0, 3), (1, 1), (2, 2)]]);
+    let mut callback = Box::new(Callback {
         state: constants.nil.clone(),
         point: Point { x: 0, y: 0 },
         render_to_display,
         request_click_from_user,
-        functions: load_function_definitions(galaxy_script).unwrap(),
+        functions: load_function_definitions(&galaxy_script).unwrap(),
         constants,
-    };
+    });
+    render_to_display(vec![vec![(0, 5), (1, 1), (2, 2)]]);
     callback.call();
+    render_to_display(vec![vec![(0, 6), (1, 1), (2, 2)]]);
 
     callback
 }
@@ -753,13 +785,7 @@ mod tests {
 
     fn str_to_expr(text: &str) -> Result<ExprRef, String> {
         let tokens: Vec<&str> = text.split(' ').filter(|s| !s.is_empty()).collect();
-        let (expr, remainder) = deserialize(tokens)?;
-        if remainder.len() > 0 {
-            return Err(format!(
-                "Function body did not cleanly parse, tokens remained: {:?}",
-                remainder
-            ));
-        }
+        let expr = deserialize(tokens.as_slice())?;
         Ok(expr)
     }
 
