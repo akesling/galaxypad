@@ -298,7 +298,7 @@ fn interact(
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap::new(Ap::new(Atom::new(":galaxy"), state), event);
-    let res: ExprRef = eval(expr, functions, constants).unwrap();
+    let res: ExprRef = eval_iterative(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
@@ -446,6 +446,32 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         flattened.extend(get_list_items_from_expr(next)?);
 
         Ok(flattened)
+    }
+}
+
+fn eval_iterative(
+    expr: ExprRef,
+    functions: &HashMap<String, ExprRef>,
+    constants: &Constants,
+) -> Result<ExprRef, String> {
+    if let Some(x) = expr.borrow().evaluated() {
+        return Ok(x);
+    }
+
+    let initial_expr = expr.clone();
+    let mut current_expr = expr;
+    loop {
+        let mut stack: Vec<ExprRef> = vec![current_expr.clone()];
+        while stack[0].borrow().evaluated().is_none() {
+            let next_to_evaluate = stack.pop().unwrap();
+            stack.push(try_eval(next_to_evaluate, functions, constants)?);
+        }
+        let result = stack[0].borrow().evaluated().unwrap();
+        if ptr::eq(current_expr.as_ref(), result.as_ref()) || result.borrow().equals(current_expr) {
+            initial_expr.borrow_mut().set_evaluated(result.clone())?;
+            return Ok(result);
+        }
+        current_expr = result;
     }
 }
 
