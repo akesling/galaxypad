@@ -222,7 +222,6 @@ fn parse_token(candidate_token: &str, stack: &mut Vec<ExprRef>) -> Result<ExprRe
     Err(format!("Could not parse \"{}\"", candidate_token))
 }
 
-/// Takes a vector of tokens and recursively consumes the tail of the token vector
 fn deserialize(tokens: &[&str]) -> Result<ExprRef, String> {
     if tokens.is_empty() {
         return Err("Attempt to deserialize the empty token stream failed".to_owned());
@@ -271,22 +270,13 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
         .collect());
     assert!(!right_tokens.is_empty(), "Function body was of length zero");
     let function_body = deserialize(right_tokens.as_slice())?;
-    Ok((":foo".to_owned(), Atom::new("foo")))
-//    assert!(
-//        remainder.is_empty(),
-//        format!(
-//            "Function body did not cleanly parse, tokens remained: {:?}",
-//            remainder
-//        )
-//    );
-//
-//    Ok((function_name, function_body))
+
+    Ok((function_name, function_body))
 }
 
 /// Opens the given filename and attempts to load each line as a function
 /// definition (pretty much just for galaxy.txt)
-fn load_function_definitions(script_contents: &str) -> Result<HashMap<String, ExprRef>, String> {
-    let mut functions: HashMap<String, ExprRef> = HashMap::new();
+fn load_function_definitions(script_contents: &str, functions: &mut HashMap<String, ExprRef>) -> Result<(), String> {
     let lines = Box::new(script_contents.split('\n'));
     for line in lines {
         if line.is_empty() {
@@ -297,7 +287,7 @@ fn load_function_definitions(script_contents: &str) -> Result<HashMap<String, Ex
         functions.insert(name, expr);
     }
 
-    Ok(functions)
+    Ok(())
 }
 
 fn interact(
@@ -761,9 +751,11 @@ pub fn entry_point<'a>(
         point: Point { x: 0, y: 0 },
         render_to_display,
         request_click_from_user,
-        functions: load_function_definitions(&galaxy_script).unwrap(),
+        functions: HashMap::new(),
         constants,
     });
+    render_to_display(vec![vec![(0, 4), (1, 1), (2, 2)]]);
+    load_function_definitions(&galaxy_script, &mut callback.functions).unwrap();
     render_to_display(vec![vec![(0, 5), (1, 1), (2, 2)]]);
     callback.call();
     render_to_display(vec![vec![(0, 6), (1, 1), (2, 2)]]);
