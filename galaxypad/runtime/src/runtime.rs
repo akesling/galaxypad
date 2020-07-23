@@ -697,14 +697,17 @@ fn iterate(
     functions: &HashMap<String, ExprRef>,
     render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
 ) -> ExprRef {
-    render_to_display(vec![vec![(0, 0), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(1, 0)]]);
     let click = Ap::new(
         Ap::new(constants.cons.clone(), Atom::new(point.x)),
         Atom::new(point.y),
     );
+    render_to_display(vec![vec![(1, 1)]]);
 
     let (new_state, images) = interact(state, click, &functions, &constants);
+    render_to_display(vec![vec![(1, 2)]]);
     let image_lists = get_list_items_from_expr(images).unwrap();
+    render_to_display(vec![vec![(1, 3)]]);
     let mut points_lists: Vec<Vec<(i64, i64)>> = vec![];
     for point_list_expr in image_lists.iter() {
         points_lists.push(vectorize_points_expr(point_list_expr.clone()).unwrap());
@@ -739,13 +742,13 @@ pub fn entry_point<'a>(
     request_click_from_user: &'a dyn Fn() -> Point,
     render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
 ) -> Box<Callback<'a>> {
-    render_to_display(vec![vec![(0, 0), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(0, 0)]]);
     let galaxy_script = Box::new(std::include_str!("../galaxy.txt"));
-    render_to_display(vec![vec![(0, 2), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(0, 2)]]);
     let constants = get_constants();
 
 
-    render_to_display(vec![vec![(0, 3), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(0, 3)]]);
     let mut callback = Box::new(Callback {
         state: constants.nil.clone(),
         point: Point { x: 0, y: 0 },
@@ -754,11 +757,11 @@ pub fn entry_point<'a>(
         functions: HashMap::new(),
         constants,
     });
-    render_to_display(vec![vec![(0, 4), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(0, 4)]]);
     load_function_definitions(&galaxy_script, &mut callback.functions).unwrap();
-    render_to_display(vec![vec![(0, 5), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(0, 5)]]);
     callback.call();
-    render_to_display(vec![vec![(0, 6), (1, 1), (2, 2)]]);
+    render_to_display(vec![vec![(0, 6)]]);
 
     callback
 }

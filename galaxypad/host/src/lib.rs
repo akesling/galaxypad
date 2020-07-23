@@ -28,10 +28,25 @@ fn click_panic() -> Point {
     panic!("Click receipt is not yet implemented.");
 }
 
+pub fn recurse_stack(stack: &mut Vec<usize>, stack_depth: usize) {
+    for i in 0..100_000_000 {
+        stack.push(stack.len());
+        if i % 10_000_000 == 0 {
+            log(&format!("Stack size: {}", stack.len()));
+        }
+    }
+    log(&format!("Recursing at {}, stack depth: {}", stack.len(), stack_depth));
+    recurse_stack(stack, stack_depth + 1);
+}
+
+pub fn stack_fn_entry() {
+    let mut stack: Vec<usize> = vec![];
+    recurse_stack(&mut stack, 0);
+}
+
 #[wasm_bindgen]
-pub fn test_stack_size(stack_depth: i32) {
-    log(&format!("{}", stack_depth));
-    test_stack_size(stack_depth + 1);
+pub fn test_stack_size() {
+    stack_fn_entry();
 }
 
 #[wasm_bindgen]
