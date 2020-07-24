@@ -728,23 +728,25 @@ fn eval_iterative(
                         },
                         Expr::Ap(ref ap2) => {
                             let ap3_ref = ap2.func();
-                            next_to_evaluate = if let Some(name) = ap3_ref.borrow().name() {
-                                if name == "func2_thunk" {
-                                    let next =
-                                        Ap::new(Ap::new(args.pop().unwrap(), ap2.arg()), x.clone());
-                                    next
-                                } else {
-                                    next_to_evaluate
+                            next_to_evaluate = match *ap3_ref.borrow() {
+                                Expr::Atom(ref atom) => {
+                                    if atom.name == "func2_thunk" {
+                                        Ap::new(Ap::new(args.pop().unwrap(), ap2.arg()), x.clone())
+                                    } else {
+                                        next_to_evaluate
+                                    }
                                 }
-                            } else if let Some(evaluated) = ap3_ref.borrow().evaluated() {
-                                let next = Ap::new(Ap::new(evaluated, ap2.arg()), x.clone());
-                                next
-                            } else {
-                                let inner = Ap::new(Atom::new("func2_thunk"), ap2.arg());
-                                inner.borrow_mut().set_evaluated(inner.clone())?;
-                                stack.push(Ap::new(inner, x));
-                                stack.push(ap3_ref.clone());
-                                continue;
+                                Expr::Ap(ref ap3) => {
+                                    if let Some(evaluated) = ap3.evaluated() {
+                                        Ap::new(Ap::new(evaluated, ap2.arg()), x.clone())
+                                    } else {
+                                        let inner = Ap::new(Atom::new("func2_thunk"), ap2.arg());
+                                        inner.borrow_mut().set_evaluated(inner.clone())?;
+                                        stack.push(Ap::new(inner, x));
+                                        stack.push(ap3_ref.clone());
+                                        continue;
+                                    }
+                                }
                             };
                             let func2 = next_to_evaluate
                                 .borrow()
