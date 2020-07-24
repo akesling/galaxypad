@@ -520,27 +520,16 @@ fn eval_iterative(
     let mut current_expr = expr;
     loop {
         let mut stack: Vec<ExprRef> = vec![current_expr.clone()];
-        let mut result: Option<ExprRef> = None;
+        let result: Option<ExprRef>;
         let mut args: Vec<ExprRef> = vec![];
-        //println!("Evaluating current expr: {}", current_expr.borrow());
-        while !stack.is_empty() {
-            //            println!(
-            //                "Stack loop ({}): {:?}",
-            //                stack.len(),
-            //                stack
-            //                    .iter()
-            //                    .map(|expr| expr.borrow())
-            //                    .collect::<Vec<std::cell::Ref<dyn Expr>>>()
-            //            );
+        loop {
             let mut next_to_evaluate = stack.pop().unwrap();
             if stack.is_empty() && next_to_evaluate.borrow().evaluated().is_some() {
-                //println!("Setting result to {}", next_to_evaluate.clone().borrow());
-                result = Some(next_to_evaluate);
+                 result = Some(next_to_evaluate);
                 break;
             }
 
             while next_to_evaluate.borrow().evaluated().is_some() {
-                //println!("Pushing on the arg list: {:?}", next_to_evaluate.borrow());
                 args.push(next_to_evaluate);
                 next_to_evaluate = stack.pop().unwrap();
             }
@@ -558,10 +547,8 @@ fn eval_iterative(
                     .borrow()
                     .func()
                     .ok_or_else(|| "func expected on expr of try_eval")?;
-                //println!("Evaluating func1 {}", next_to_evaluate.borrow());
                 next_to_evaluate = if let Some(name) = pre_func.borrow().name() {
                     if name == "func_thunk" {
-                        //println!("Popping func for func_thunk");
                         let next = Ap::new(
                             args.pop().unwrap(),
                             next_to_evaluate
@@ -569,7 +556,6 @@ fn eval_iterative(
                                 .arg()
                                 .ok_or_else(|| "arg expected on func_thunk of try_eval")?,
                         );
-                        //println!("Updating next_to_evaluate to {:?}", next.borrow());
                         next
                     } else if let Some(f) = functions.get(name) {
                         stack.push(Ap::new(
@@ -615,7 +601,6 @@ fn eval_iterative(
                     .borrow()
                     .arg()
                     .ok_or_else(|| "arg expected on expr of try_eval")?;
-                //println!("Func, x are: {:?}, {:?}", func.borrow(), x.borrow());
                 let x_is_placeholder = if let Some(name) = x.borrow().name() {
                     name.starts_with('x')
                 } else {
@@ -770,10 +755,8 @@ fn eval_iterative(
                         .borrow()
                         .func()
                         .ok_or_else(|| "func expected on expr of try_eval")?;
-                    //println!("Evaluating func2 {}", next_to_evaluate.borrow());
                     next_to_evaluate = if let Some(name) = pre_func2.borrow().name() {
                         if name == "func2_thunk" {
-                            //println!("Popping func for func2_thunk");
                             let next = Ap::new(
                                 Ap::new(
                                     args.pop().unwrap(),
@@ -783,7 +766,6 @@ fn eval_iterative(
                                 ),
                                 x.clone(),
                             );
-                            //println!("Updating next_to_evaluate to {:?}", next.borrow());
                             next
                         } else {
                             next_to_evaluate
@@ -811,7 +793,6 @@ fn eval_iterative(
                         stack.push(pre_func2.clone());
                         continue;
                     };
-                    //println!("Still evaluating func2 {}", next_to_evaluate.borrow());
                     let func2 = next_to_evaluate
                         .borrow()
                         .func()
@@ -829,7 +810,6 @@ fn eval_iterative(
                         .clone()
                         .ok_or_else(|| "func expected on expr of try_eval")?;
                     if let Some(name) = func2.clone().borrow().name().as_ref() {
-                        //println!("func2 has name {}", name);
                         match *name {
                             "t" => {
                                 stack.push(y);
@@ -1052,7 +1032,6 @@ fn eval_iterative(
                             .borrow()
                             .func()
                             .ok_or_else(|| "func expected on expr of try_eval")?;
-                        //println!("Evaluating func3 {}", next_to_evaluate.borrow());
                         next_to_evaluate = if let Some(name) = pre_func3.borrow().name() {
                             if name == "func3_thunk" {
                                 Ap::new(
@@ -1117,7 +1096,6 @@ fn eval_iterative(
                 }
             }
 
-            //            println!("Evaluating {:?}", next_to_evaluate);
             let is_atom = next_to_evaluate.borrow().name().is_some();
             if is_atom {
                 next_to_evaluate
