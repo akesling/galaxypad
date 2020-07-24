@@ -576,15 +576,13 @@ fn eval_iterative(
                             }
                         }
                     };
-                    let func = ap1.func();
                     let x = ap1.arg();
                     let x_is_placeholder = if let Some(name) = x.borrow().name() {
                         name.starts_with('x')
                     } else {
                         false
                     };
-                    let to_match2 = func.clone();
-                    match *to_match2.clone().borrow() {
+                    match *ap2_ref.clone().borrow() {
                         Expr::Atom(ref atom) => match (*atom).name.as_str() {
                             "neg" => {
                                 if let Some(evaluated) = x.borrow().evaluated() {
@@ -729,43 +727,23 @@ fn eval_iterative(
                             _ => (),
                         },
                         Expr::Ap(ref ap2) => {
-                            let pre_func2 = ap2.func();
-                            next_to_evaluate = if let Some(name) = pre_func2.borrow().name() {
+                            let ap3_ref = ap2.func();
+                            next_to_evaluate = if let Some(name) = ap3_ref.borrow().name() {
                                 if name == "func2_thunk" {
-                                    let next = Ap::new(
-                                        Ap::new(
-                                            args.pop().unwrap(),
-                                            func.borrow().arg().ok_or_else(|| {
-                                                "arg expected on func_thunk2 of try_eval"
-                                            })?,
-                                        ),
-                                        x.clone(),
-                                    );
+                                    let next =
+                                        Ap::new(Ap::new(args.pop().unwrap(), ap2.arg()), x.clone());
                                     next
                                 } else {
                                     next_to_evaluate
                                 }
-                            } else if let Some(evaluated) = pre_func2.borrow().evaluated() {
-                                let next = Ap::new(
-                                    Ap::new(
-                                        evaluated,
-                                        func.borrow().arg().ok_or_else(|| {
-                                            "arg expected on func_thunk2 of try_eval"
-                                        })?,
-                                    ),
-                                    x.clone(),
-                                );
+                            } else if let Some(evaluated) = ap3_ref.borrow().evaluated() {
+                                let next = Ap::new(Ap::new(evaluated, ap2.arg()), x.clone());
                                 next
                             } else {
-                                let inner = Ap::new(
-                                    Atom::new("func2_thunk"),
-                                    func.borrow()
-                                        .arg()
-                                        .ok_or_else(|| "arg expected on func of try_eval")?,
-                                );
+                                let inner = Ap::new(Atom::new("func2_thunk"), ap2.arg());
                                 inner.borrow_mut().set_evaluated(inner.clone())?;
                                 stack.push(Ap::new(inner, x));
-                                stack.push(pre_func2.clone());
+                                stack.push(ap3_ref.clone());
                                 continue;
                             };
                             let func2 = next_to_evaluate
@@ -1035,7 +1013,7 @@ fn eval_iterative(
                                     let inner_most = Ap::new(Atom::new("func3_thunk"), z.clone());
                                     inner_most.borrow_mut().set_evaluated(inner_most.clone())?;
                                     stack.push(Ap::new(Ap::new(inner_most, y), x));
-                                    stack.push(pre_func2);
+                                    stack.push(ap3_ref);
                                     continue;
                                 };
                                 let func3 = func2
