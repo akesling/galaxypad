@@ -618,6 +618,30 @@ fn eval_iterative(
                             stack.push(x);
                             continue;
                         }
+                        "s" => {
+                            let s = Atom::new("s");
+                            s.borrow_mut().set_evaluated(s.clone())?;
+                            let res = Ap::new(s, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
+                        "c" => {
+                            let c = Atom::new("c");
+                            c.borrow_mut().set_evaluated(c.clone())?;
+                            let res = Ap::new(c, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
+                        "b" => {
+                            let b = Atom::new("b");
+                            b.borrow_mut().set_evaluated(b.clone())?;
+                            let res = Ap::new(b, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
                         "t" => {
                             let t = Atom::new("t");
                             t.borrow_mut().set_evaluated(t.clone())?;
@@ -878,6 +902,30 @@ fn eval_iterative(
                                     Ap::new(constants.cons.clone(), args.pop().unwrap()),
                                     args.pop().unwrap(),
                                 );
+                                res.borrow_mut().set_evaluated(res.clone())?;
+                                stack.push(res);
+                                continue;
+                            }
+                            "s" => {
+                                let inner = Ap::new(Atom::new("s"), y);
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
+                                let res = Ap::new(inner, x);
+                                res.borrow_mut().set_evaluated(res.clone())?;
+                                stack.push(res);
+                                continue;
+                            }
+                            "c" => {
+                                let inner = Ap::new(Atom::new("c"), y);
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
+                                let res = Ap::new(inner, x);
+                                res.borrow_mut().set_evaluated(res.clone())?;
+                                stack.push(res);
+                                continue;
+                            }
+                            "b" => {
+                                let inner = Ap::new(Atom::new("b"), y);
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
+                                let res = Ap::new(inner, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
