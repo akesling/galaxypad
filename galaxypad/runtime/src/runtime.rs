@@ -63,6 +63,20 @@ enum Expr {
 }
 
 impl Expr {
+    fn is_atom(&self) -> bool {
+        match *self {
+            Expr::Atom(_) => true,
+            Expr::Ap(_) => false,
+        }
+    }
+
+    fn is_ap(&self) -> bool {
+        match *self {
+            Expr::Atom(_) => false,
+            Expr::Ap(_) => true,
+        }
+    }
+
     fn name(&self) -> Option<&str> {
         match *self {
             Expr::Atom(ref atom) => Some(&atom.name),
@@ -535,10 +549,9 @@ fn eval_iterative(
                 next_to_evaluate = stack.pop().unwrap();
             }
 
-            let is_atom = next_to_evaluate.borrow().name().is_some();
-            if is_atom {
-                if let Some(name) = next_to_evaluate.borrow().name().as_ref() {
-                    if let Some(f) = functions.get(name.to_owned()) {
+            if next_to_evaluate.borrow().is_atom() {
+                if let Expr::Atom(ref atom) = *next_to_evaluate.borrow() {
+                    if let Some(f) = functions.get(&atom.name) {
                         stack.push(f.clone());
                         continue;
                     }
@@ -1091,11 +1104,11 @@ fn eval_iterative(
                 }
             }
 
-            let is_atom = next_to_evaluate.borrow().name().is_some();
-            if is_atom {
-                next_to_evaluate
-                    .borrow_mut()
-                    .set_evaluated(next_to_evaluate.clone())?;
+            match *next_to_evaluate.borrow_mut() {
+                Expr::Atom(ref mut atom) => {
+                    atom.set_evaluated(next_to_evaluate.clone())?;
+                }
+                _ => (),
             }
             stack.push(next_to_evaluate);
         }
