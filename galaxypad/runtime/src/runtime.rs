@@ -637,6 +637,14 @@ fn eval_iterative(
                             stack.push(res);
                             continue;
                         }
+                        "cons" => {
+                            let cons = Atom::new("cons");
+                            cons.borrow_mut().set_evaluated(cons.clone())?;
+                            let res = Ap::new(cons, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
                         "cdr" => {
                             let res = Ap::new(x, constants.f.clone());
                             if x_is_placeholder {
@@ -779,18 +787,22 @@ fn eval_iterative(
                                 continue;
                             }
                             "cons" => {
-                                stack.push(Ap::new(
-                                    Ap::new(Atom::new("cons_thunk"), constants.nil.clone()),
+                                let inner = Ap::new(Atom::new("cons_thunk"), constants.nil.clone());
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
+                                let res = Ap::new(
+                                    inner,
                                     constants.nil.clone(),
-                                ));
+                                );
+                                stack.push(res);
                                 stack.push(x);
                                 stack.push(y);
                                 continue;
                             }
                             "cons_thunk" => {
+                                let arg2 = args.pop().unwrap();
+                                let arg1 = args.pop().unwrap();
                                 let res = Ap::new(
-                                    Ap::new(constants.cons.clone(), args.pop().unwrap()),
-                                    args.pop().unwrap().clone(),
+                                    Ap::new(constants.cons.clone(), arg1), arg2,
                                 );
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
