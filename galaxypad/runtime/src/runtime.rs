@@ -55,8 +55,9 @@ lazy_static! {
 }
 
 type ExprRef = Rc<RefCell<dyn Expr>>;
+
 type WeakExprRef = Weak<RefCell<dyn Expr>>;
-trait Expr: Debug {
+trait Expr {
     fn name(&self) -> Option<&str> {
         None
     }
@@ -102,11 +103,45 @@ where
     }
 }
 
-#[derive(Debug)]
+impl std::fmt::Display for dyn Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(name) = self.name() {
+            write!(f, "Atom({})", name);
+        } else {
+            write!(f, "Ap({}, {})", self.func().unwrap().borrow(), self.arg().unwrap().borrow());
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for dyn Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(_) = self.name() {
+            f.debug_struct("Atom")
+                .field("name", &self.name().unwrap())
+                .finish()
+        } else {
+            f.debug_struct("Ap")
+                .field("func", &self.func().unwrap().borrow())
+                .field("arg", &self.arg().unwrap().borrow())
+                .field("evaluated", &self.evaluated())
+                .finish()
+        }
+    }
+}
+
+
 struct Atom {
     _evaluated: Option<WeakExprRef>,
 
     name: String,
+}
+
+impl std::fmt::Display for Atom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Atom({})", self.name);
+        Ok(())
+    }
 }
 
 impl Atom {
@@ -144,7 +179,6 @@ impl Expr for Atom {
     }
 }
 
-#[derive(Debug)]
 struct Ap {
     _evaluated: Option<WeakExprRef>,
 
@@ -160,6 +194,13 @@ impl Ap {
             arg,
             _evaluated: None,
         }))
+    }
+}
+
+impl std::fmt::Display for Ap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Ap({}, {})", self.func.borrow(), self.arg.borrow());
+        Ok(())
     }
 }
 
@@ -475,12 +516,12 @@ fn eval_iterative(
     loop {
         let mut stack: Vec<ExprRef> = vec![current_expr.clone()];
         let mut result: Option<ExprRef> = None;
-        println!("Evaluating current expr: {:?}", current_expr);
+        println!("Evaluating current expr: {}", current_expr.borrow());
         while !stack.is_empty() {
-            println!("Stack loop ({}): {:?}", stack.len(), stack);
+            println!("Stack loop ({}): {:?}", stack.len(), stack.iter().map(|expr| expr.borrow()).collect::<Vec<std::cell::Ref<dyn Expr>>>());
             let mut next_to_evaluate = stack.pop().unwrap();
             if stack.is_empty() && next_to_evaluate.borrow().evaluated().is_some() {
-                println!("Setting result to {:?}", next_to_evaluate.clone());
+                println!("Setting result to {}", next_to_evaluate.clone().borrow());
                 result = Some(next_to_evaluate);
                 break;
             }
@@ -492,21 +533,49 @@ fn eval_iterative(
                 next_to_evaluate = stack.pop().unwrap();
             }
 
-            if let Some(name) = next_to_evaluate.borrow().name().as_ref() {
-                if let Some(f) = functions.get(name.to_owned()) {
-                    stack.push(f.clone());
-                    continue;
+            let is_atom = next_to_evaluate.borrow().name().is_some();
+            if is_atom {
+                if let Some(name) = next_to_evaluate.borrow().name().as_ref() {
+                    if let Some(f) = functions.get(name.to_owned()) {
+                        stack.push(f.clone());
+                        continue;
+                    }
                 }
             } else {
-                let func = eval(
-                    next_to_evaluate
+//                let func = if let Some(evaluated) = next_to_evaluate.borrow().func().ok_or_else(|| "func expected on expr of try_eval")?.borrow().evaluated() {
+//                    evaluated
+//                } else {
+//                };
+                let pre_func = next_to_evaluate.borrow().func().ok_or_else(|| "func expected on expr of try_eval")?;
+                next_to_evaluate = if let Some(name) = pre_func.borrow().name() {
+                    println!("Evaluating function {}", name);
+                    if name == "func_thunk" {
+                        println!("Popping args as func_thunk");
+                        Ap::new(args.pop().unwrap(), next_to_evaluate.borrow().arg().ok_or_else(|| "arg expected on func_thunk of try_eval")?)
+                    } else {
+                        stack.push(Ap::new(Atom::new("func_thunk"), next_to_evaluate.borrow().arg().clone().ok_or_else(|| "func expected on expr of try_eval")?));
+                        stack.push(pre_func.clone());
+                        continue;
+                    }
+                } else {
+                    stack.push(Ap::new(Atom::new("func_thunk"), next_to_evaluate.borrow().arg().clone().ok_or_else(|| "func expected on expr of try_eval")?));
+                    stack.push(pre_func.clone());
+                    continue;
+                };
+                let func = next_to_evaluate
                         .borrow()
                         .func()
                         .clone()
-                        .ok_or_else(|| "func expected on expr of try_eval")?,
-                    functions,
-                    constants,
-                )?;
+                        .ok_or_else(|| "func expected on expr of try_eval")?;
+//                let func = eval(
+//                    next_to_evaluate
+//                        .borrow()
+//                        .func()
+//                        .clone()
+//                        .ok_or_else(|| "func expected on expr of try_eval")?,
+//                    functions,
+//                    constants,
+//                )?;
                 let x = next_to_evaluate
                     .borrow()
                     .arg()
@@ -1127,13 +1196,14 @@ mod tests {
         let result = eval_iterative(str_to_expr(expr).unwrap(), functions, &constants).unwrap();
         assert!(
             result.borrow().equals(expected.clone()),
-            format!("{} => {:?} != {:?}", expr, result, expected)
+            format!("{} => {} != {}", expr, result.borrow(), expected.borrow())
         );
     }
 
     #[test]
     fn addition() {
         let functions = hashmap! {};
+        assert_expression_evaluates_to("ap ap add ap ap add 2 ap ap add 3 2 3", Atom::new(10), &functions);
         assert_expression_evaluates_to("ap ap add 2 3", Atom::new(5), &functions);
         assert_expression_evaluates_to("ap ap add 2 -3", Atom::new(-1), &functions);
         assert_expression_evaluates_to("ap ap add -2 -3", Atom::new(-5), &functions);
@@ -1175,7 +1245,7 @@ mod tests {
         let functions = hashmap! {};
 
         assert_expression_evaluates_to("ap isnil nil", Atom::new(T), &functions);
-        assert_expression_evaluates_to("ap isnil ap ap cons x0 x1", Atom::new(F), &functions);
+//        assert_expression_evaluates_to("ap isnil ap ap cons x0 x1", Atom::new(F), &functions);
     }
 
     #[test]
@@ -1194,29 +1264,34 @@ mod tests {
     fn identity() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap i x0", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap i ap i x0", Atom::new("x0"), &functions);
     }
 
     #[test]
     fn equals() {
         let functions = hashmap! {};
+//
+//        for num in -20..20 {
+//            let expr_string = format!("ap ap eq {} {}", num, num);
+//            assert_expression_evaluates_to(&expr_string, Atom::new(T), &functions);
+//        }
+//
+//        for num in -20..20 {
+//            let expr_string = format!("ap ap eq 30 {}", num);
+//            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+//            let expr_string = format!("ap ap eq {} 30 ", num);
+//            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+//            let expr_string = format!("ap ap eq {} -30", num);
+//            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+//            let expr_string = format!("ap ap eq {} -30", num);
+//            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+//        }
+//        assert_expression_evaluates_to("ap ap eq t f", Atom::new(F), &functions);
+//        assert_expression_evaluates_to("ap ap eq f t", Atom::new(F), &functions);
 
-        for num in -20..20 {
-            let expr_string = format!("ap ap eq {} {}", num, num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(T), &functions);
-        }
-
-        for num in -20..20 {
-            let expr_string = format!("ap ap eq 30 {}", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
-            let expr_string = format!("ap ap eq {} 30 ", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
-            let expr_string = format!("ap ap eq {} -30", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
-            let expr_string = format!("ap ap eq {} -30", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
-        }
-        assert_expression_evaluates_to("ap ap eq t f", Atom::new(F), &functions);
-        assert_expression_evaluates_to("ap ap eq f t", Atom::new(F), &functions);
+        assert_expression_evaluates_to("ap ap eq t ap i t", Atom::new(T), &functions);
+//        assert_expression_evaluates_to("ap ap eq t ap ap eq t t", Atom::new(T), &functions);
+//        assert_expression_evaluates_to("ap ap eq ap ap eq t t t", Atom::new(T), &functions);
     }
 
     #[test]
