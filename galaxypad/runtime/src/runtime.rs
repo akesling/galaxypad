@@ -615,6 +615,14 @@ fn eval_iterative(
                             stack.push(res);
                             continue;
                         }
+                        "add" => {
+                            let add = Atom::new("add");
+                            add.borrow_mut().set_evaluated(add.clone())?;
+                            let res = Ap::new(add, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
                         "nil" => {
                             stack.push(constants.t.clone());
                             continue;
@@ -700,8 +708,10 @@ fn eval_iterative(
                                 continue;
                             }
                             "add" => {
+                                let inner = Ap::new(Atom::new("add_thunk"), constants.nil.clone());
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
                                 stack.push(Ap::new(
-                                    Ap::new(Atom::new("add_thunk"), constants.nil.clone()),
+                                    inner,
                                     constants.nil.clone(),
                                 ));
                                 stack.push(x.clone());
