@@ -1033,7 +1033,6 @@ fn eval_iterative(
             stack.push(next_to_evaluate);
         }
 
-        //        let result = try_eval(current_expr.clone(), functions, constants)?;
         if let Some(res) = result {
             if ptr::eq(current_expr.as_ref(), res.as_ref()) || res.borrow().equals(current_expr) {
                 initial_expr.borrow_mut().set_evaluated(res.clone())?;
@@ -1401,8 +1400,23 @@ mod tests {
     }
 
     #[test]
+    fn application_order_preserved() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap mul 2 ap ap add 3 4",
+            Atom::new(14),
+            &functions,
+        );
+    }
+
+    #[test]
     fn addition() {
         let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap add ap ap add 2 2 3",
+            Atom::new(7),
+            &functions,
+        );
         assert_expression_evaluates_to(
             "ap ap add ap ap add 2 ap ap add 3 2 3",
             Atom::new(10),
@@ -1460,8 +1474,16 @@ mod tests {
 
     #[test]
     fn true_combinator() {
-        let functions = hashmap! {};
+        let functions = build_test_functions(
+            ":inc = ap ap c add 1
+            :dec = ap ap c add -1",
+        ).unwrap();
         assert_expression_evaluates_to("ap ap t x0 x1", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap ap t 1 5", Atom::new("1"), &functions);
+        assert_expression_evaluates_to("ap ap t t i", Atom::new("t"), &functions);
+        assert_expression_evaluates_to("ap ap t t ap :inc 5", Atom::new("t"), &functions);
+        assert_expression_evaluates_to("ap ap t ap :inc 5 t", Atom::new("6"), &functions);
     }
 
     #[test]
@@ -1475,6 +1497,7 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap i x0", Atom::new("x0"), &functions);
         assert_expression_evaluates_to("ap i ap i x0", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap i i", Atom::new("i"), &functions);
     }
 
     #[test]
@@ -1535,6 +1558,16 @@ mod tests {
             ),
             &functions,
         );
+        assert_expression_evaluates_to(
+            "ap ap ap s mul ap add 1 6",
+            Atom::new(42),
+            &functions,
+        );
+        assert_expression_evaluates_to(
+            "ap ap ap s add ap add 1 1",
+            Atom::new(3),
+            &functions,
+        );
     }
 
     #[test]
@@ -1545,11 +1578,24 @@ mod tests {
             Ap::new(Ap::new(Atom::new("x0"), Atom::new("x2")), Atom::new("x1")),
             &functions,
         );
+        assert_expression_evaluates_to(
+            "ap ap ap c add 1 2",
+            Atom::new(3),
+            &functions,
+        );
     }
 
     #[test]
     fn b_combinator() {
-        let functions = hashmap! {};
+        let functions = build_test_functions(
+            ":inc = ap ap c add 1
+            :dec = ap ap c add -1",
+        ).unwrap();
+        assert_expression_evaluates_to(
+            "ap ap ap b :inc :dec 0",
+            Atom::new(0),
+            &functions,
+        );
         assert_expression_evaluates_to(
             "ap ap ap b x0 x1 x2",
             Ap::new(Atom::new("x0"), Ap::new(Atom::new("x1"), Atom::new("x2"))),
