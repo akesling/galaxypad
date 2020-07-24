@@ -571,6 +571,17 @@ fn eval_iterative(
                         );
                         println!("Updating next_to_evaluate to {:?}", next.borrow());
                         next
+                    } else if let Some(f) = functions.get(name) {
+                        stack.push(Ap::new(
+                            Atom::new("func_thunk"),
+                            next_to_evaluate
+                                .borrow()
+                                .arg()
+                                .clone()
+                                .ok_or_else(|| "func expected on expr of try_eval")?,
+                        ));
+                        stack.push(f.clone());
+                        continue;
                     } else {
                         next_to_evaluate
                     }
