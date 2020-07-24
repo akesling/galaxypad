@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use maplit::{hashset, hashmap};
+use maplit::{hashmap, hashset};
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -202,8 +202,12 @@ pub struct Point {
 
 fn parse_token(candidate_token: &str, stack: &mut Vec<ExprRef>) -> Result<ExprRef, String> {
     if candidate_token == "ap" {
-        let left = stack.pop().ok_or_else(|| "Left operand for Ap was missing on stack")?;
-        let right = stack.pop().ok_or_else(|| "Right operand for Ap was missing on stack")?;
+        let left = stack
+            .pop()
+            .ok_or_else(|| "Left operand for Ap was missing on stack")?;
+        let right = stack
+            .pop()
+            .ok_or_else(|| "Right operand for Ap was missing on stack")?;
         return Ok(Ap::new(left, right));
     }
 
@@ -230,7 +234,7 @@ fn deserialize(tokens: &[&str]) -> Result<ExprRef, String> {
     let mut cursor = tokens.len();
     let mut stack: Box<Vec<ExprRef>> = Box::new(vec![]);
     while cursor > 0 {
-        let expr = parse_token(tokens[cursor-1], &mut stack)?;
+        let expr = parse_token(tokens[cursor - 1], &mut stack)?;
         stack.push(expr);
         cursor -= 1;
     }
@@ -242,13 +246,16 @@ fn deserialize(tokens: &[&str]) -> Result<ExprRef, String> {
         ));
     }
 
-    Ok(stack.pop().ok_or_else(|| "No value left on deserialization stack to return.")?)
+    Ok(stack
+        .pop()
+        .ok_or_else(|| "No value left on deserialization stack to return.")?)
 }
 
 /// Loads a function definition, which must be of the form:
 /// <name> = <body expr>
 fn load_function(line: &str) -> Result<(String, ExprRef), String> {
-    let left_and_right: Box<Vec<&str>> = Box::new(line.split('=').filter(|s| !s.is_empty()).collect());
+    let left_and_right: Box<Vec<&str>> =
+        Box::new(line.split('=').filter(|s| !s.is_empty()).collect());
     assert!(
         left_and_right.len() == 2,
         "Function line could not be split in two"
@@ -264,10 +271,12 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
     );
     let function_name = left_tokens[0].to_owned();
 
-    let right_tokens: Box<Vec<&str>> = Box::new(left_and_right[1]
-        .split(' ')
-        .filter(|s| !s.is_empty())
-        .collect());
+    let right_tokens: Box<Vec<&str>> = Box::new(
+        left_and_right[1]
+            .split(' ')
+            .filter(|s| !s.is_empty())
+            .collect(),
+    );
     assert!(!right_tokens.is_empty(), "Function body was of length zero");
     let function_body = deserialize(right_tokens.as_slice())?;
 
@@ -276,7 +285,10 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
 
 /// Opens the given filename and attempts to load each line as a function
 /// definition (pretty much just for galaxy.txt)
-fn load_function_definitions(script_contents: &str, functions: &mut HashMap<String, ExprRef>) -> Result<(), String> {
+fn load_function_definitions(
+    script_contents: &str,
+    functions: &mut HashMap<String, ExprRef>,
+) -> Result<(), String> {
     let lines = Box::new(script_contents.split('\n'));
     for line in lines {
         if line.is_empty() {
@@ -479,10 +491,6 @@ fn eval_iterative(
                 args.push(next_to_evaluate);
                 next_to_evaluate = stack.pop().unwrap();
             }
-//            if let Some(x) = next_to_evaluate.borrow().evaluated() {
-//                continue;
-////                return Ok(x);
-//            }
 
             if let Some(name) = next_to_evaluate.borrow().name().as_ref() {
                 if let Some(f) = functions.get(name.to_owned()) {
@@ -490,33 +498,42 @@ fn eval_iterative(
                     continue;
                 }
             } else {
-                let func = eval(next_to_evaluate.borrow()
-                        .func().clone()
-                        .ok_or_else(|| "func expected on expr of try_eval")?, functions, constants)?;
+                let func = eval(
+                    next_to_evaluate
+                        .borrow()
+                        .func()
+                        .clone()
+                        .ok_or_else(|| "func expected on expr of try_eval")?,
+                    functions,
+                    constants,
+                )?;
                 let x = next_to_evaluate
                     .borrow()
                     .arg()
                     .ok_or_else(|| "arg expected on expr of try_eval")?;
+                let x_is_placeholder = if let Some(name) = x.borrow().name() {
+                    name.starts_with('x')
+                } else {
+                    false
+                };
                 if let Some(name) = func.clone().borrow().name().as_ref() {
                     match *name {
                         "neg" => {
-                            let x = if let Some(evaluated) = x.borrow().evaluated() {
-                                evaluated
-                            } else {
-                                stack.push(next_to_evaluate.clone());
-                                stack.push(x.clone());
-                                continue;
-                            };
-                            stack.push(Atom::new(-as_num(x)?));
-                            continue
+                            stack.push(Ap::new(Atom::new("neg_thunk"), constants.nil.clone()));
+                            stack.push(x.clone());
+                            continue;
+                        }
+                        "neg_thunk" => {
+                            stack.push(Atom::new(-as_num(args[0].clone())?));
+                            continue;
                         }
                         "i" => {
                             stack.push(x);
-                            continue
+                            continue;
                         }
                         "nil" => {
                             stack.push(constants.t.clone());
-                            continue
+                            continue;
                         }
                         "isnil" => {
                             stack.push(Ap::new(
@@ -526,22 +543,35 @@ fn eval_iterative(
                                     Ap::new(constants.t.clone(), constants.f.clone()),
                                 ),
                             ));
-                            continue
+                            continue;
                         }
                         "car" => {
-                            stack.push(Ap::new(x, constants.t.clone()));
-                            continue
+                            let res = Ap::new(x, constants.t.clone());
+                            if x_is_placeholder {
+                                res.borrow_mut().set_evaluated(res.clone())?;
+                            }
+                            stack.push(res);
+                            continue;
                         }
                         "cdr" => {
-                            stack.push(Ap::new(x, constants.f.clone()));
-                            continue
+                            let res = Ap::new(x, constants.f.clone());
+                            if x_is_placeholder {
+                                res.borrow_mut().set_evaluated(res.clone())?;
+                            }
+                            stack.push(res);
+                            continue;
                         }
                         _ => (),
                     }
                 } else {
-                    let func2 = eval(func.borrow()
-                            .func().clone()
-                            .ok_or_else(|| "func expected on expr of try_eval")?, functions, constants)?;
+                    let func2 = eval(
+                        func.borrow()
+                            .func()
+                            .clone()
+                            .ok_or_else(|| "func expected on expr of try_eval")?,
+                        functions,
+                        constants,
+                    )?;
                     let y = func
                         .borrow()
                         .arg()
@@ -550,56 +580,72 @@ fn eval_iterative(
                         match *name {
                             "t" => {
                                 stack.push(y);
-                                continue
+                                continue;
                             }
                             "f" => {
                                 stack.push(x);
-                                continue
+                                continue;
                             }
                             "add" => {
-                                stack.push(Ap::new(Ap::new(Atom::new("add_thunk"), constants.nil.clone()), constants.nil.clone()));
+                                stack.push(Ap::new(
+                                    Ap::new(Atom::new("add_thunk"), constants.nil.clone()),
+                                    constants.nil.clone(),
+                                ));
                                 stack.push(x.clone());
                                 stack.push(y.clone());
                                 continue;
                             }
                             "add_thunk" => {
-                                let res = Atom::new(as_num(args[0].clone())? + as_num(args[1].clone())?);
+                                let res =
+                                    Atom::new(as_num(args[0].clone())? + as_num(args[1].clone())?);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
                             "mul" => {
-                                stack.push(Ap::new(Ap::new(Atom::new("mul_thunk"), constants.nil.clone()), constants.nil.clone()));
+                                stack.push(Ap::new(
+                                    Ap::new(Atom::new("mul_thunk"), constants.nil.clone()),
+                                    constants.nil.clone(),
+                                ));
                                 stack.push(x.clone());
                                 stack.push(y.clone());
                                 continue;
                             }
                             "mul_thunk" => {
-                                let res = Atom::new(as_num(args[0].clone())? * as_num(args[1].clone())?);
+                                let res =
+                                    Atom::new(as_num(args[0].clone())? * as_num(args[1].clone())?);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
                             "div" => {
-                                stack.push(Ap::new(Ap::new(Atom::new("div_thunk"), constants.nil.clone()), constants.nil.clone()));
+                                stack.push(Ap::new(
+                                    Ap::new(Atom::new("div_thunk"), constants.nil.clone()),
+                                    constants.nil.clone(),
+                                ));
                                 stack.push(x.clone());
                                 stack.push(y.clone());
                                 continue;
                             }
                             "div_thunk" => {
-                                let res = Atom::new(as_num(args[0].clone())? / as_num(args[1].clone())?);
+                                let res =
+                                    Atom::new(as_num(args[0].clone())? / as_num(args[1].clone())?);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
                             "eq" => {
-                                stack.push(Ap::new(Ap::new(Atom::new("eq_thunk"), constants.nil.clone()), constants.nil.clone()));
+                                stack.push(Ap::new(
+                                    Ap::new(Atom::new("eq_thunk"), constants.nil.clone()),
+                                    constants.nil.clone(),
+                                ));
                                 stack.push(x.clone());
                                 stack.push(y.clone());
                                 continue;
                             }
                             "eq_thunk" => {
-                                let are_equal = as_num(args[0].clone())? == as_num(args[1].clone())?;
+                                let are_equal =
+                                    as_num(args[0].clone())? == as_num(args[1].clone())?;
                                 stack.push(if are_equal {
                                     constants.t.clone()
                                 } else {
@@ -608,7 +654,10 @@ fn eval_iterative(
                                 continue;
                             }
                             "lt" => {
-                                stack.push(Ap::new(Ap::new(Atom::new("lt_thunk"), constants.nil.clone()), constants.nil.clone()));
+                                stack.push(Ap::new(
+                                    Ap::new(Atom::new("lt_thunk"), constants.nil.clone()),
+                                    constants.nil.clone(),
+                                ));
                                 stack.push(x.clone());
                                 stack.push(y.clone());
                                 continue;
@@ -623,11 +672,14 @@ fn eval_iterative(
                                 continue;
                             }
                             "cons" => {
-                                stack.push(Ap::new(Ap::new(Atom::new("cons_thunk"), constants.nil.clone()), constants.nil.clone()));
+                                stack.push(Ap::new(
+                                    Ap::new(Atom::new("cons_thunk"), constants.nil.clone()),
+                                    constants.nil.clone(),
+                                ));
                                 stack.push(x);
                                 stack.push(y);
                                 continue;
-                            },
+                            }
                             "cons_thunk" => {
                                 let res = Ap::new(
                                     Ap::new(constants.cons.clone(), args[0].clone()),
@@ -635,35 +687,62 @@ fn eval_iterative(
                                 );
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
-                                continue
-                            },
+                                continue;
+                            }
                             _ => (),
                         }
                     } else {
-                        let func3 = eval(func2.borrow()
-                            .func().clone()
-                            .ok_or_else(|| "func expected on expr of try_eval")?, functions, constants)?;
+                        let func3 = eval(
+                            func2
+                                .borrow()
+                                .func()
+                                .clone()
+                                .ok_or_else(|| "func expected on func2 of try_eval")?,
+                            functions,
+                            constants,
+                        )?;
                         let z = func2
                             .borrow()
                             .arg()
                             .ok_or_else(|| "arg expected on func2 of try_eval")?;
+                        let z_is_placeholder = if let Some(name) = z.borrow().name() {
+                            name.starts_with('x')
+                        } else {
+                            false
+                        };
                         if let Some(name) = func3.clone().borrow().name().as_ref() {
                             match *name {
                                 "s" => {
-                                    stack.push(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x)));
-                                    continue
-                                },
+                                    let res = Ap::new(Ap::new(z, x.clone()), Ap::new(y, x));
+                                    if z_is_placeholder {
+                                        res.borrow_mut().set_evaluated(res.clone())?;
+                                    }
+                                    stack.push(res);
+                                    continue;
+                                }
                                 "c" => {
-                                    stack.push(Ap::new(Ap::new(z, x), y));
-                                    continue
-                                },
+                                    let res = Ap::new(Ap::new(z, x), y);
+                                    if z_is_placeholder {
+                                        res.borrow_mut().set_evaluated(res.clone())?;
+                                    }
+                                    stack.push(res);
+                                    continue;
+                                }
                                 "b" => {
-                                    stack.push(Ap::new(z, Ap::new(y, x)));
-                                    continue
+                                    let res = Ap::new(z, Ap::new(y, x));
+                                    if z_is_placeholder {
+                                        res.borrow_mut().set_evaluated(res.clone())?;
+                                    }
+                                    stack.push(res);
+                                    continue;
                                 }
                                 "cons" => {
-                                    stack.push(Ap::new(Ap::new(x, z), y));
-                                    continue
+                                    let res = Ap::new(Ap::new(x, z), y);
+                                    if x_is_placeholder {
+                                        res.borrow_mut().set_evaluated(res.clone())?;
+                                    }
+                                    stack.push(res);
+                                    continue;
                                 }
                                 _ => (),
                             }
@@ -672,10 +751,12 @@ fn eval_iterative(
                 }
             }
 
-//            println!("Evaluating {:?}", next_to_evaluate);
+            //            println!("Evaluating {:?}", next_to_evaluate);
             let is_atom = next_to_evaluate.borrow().name().is_some();
             if is_atom {
-                next_to_evaluate.borrow_mut().set_evaluated(next_to_evaluate.clone())?;
+                next_to_evaluate
+                    .borrow_mut()
+                    .set_evaluated(next_to_evaluate.clone())?;
             }
             stack.push(next_to_evaluate);
             while !args.is_empty() {
@@ -683,7 +764,7 @@ fn eval_iterative(
             }
         }
 
-//        let result = try_eval(current_expr.clone(), functions, constants)?;
+        //        let result = try_eval(current_expr.clone(), functions, constants)?;
         if let Some(res) = result {
             if ptr::eq(current_expr.as_ref(), res.as_ref()) || res.borrow().equals(current_expr) {
                 initial_expr.borrow_mut().set_evaluated(res.clone())?;
@@ -994,7 +1075,6 @@ pub fn entry_point<'a>(
     render_to_display(vec![vec![(0, 2)]]);
     let constants = get_constants();
 
-
     render_to_display(vec![vec![(0, 3)]]);
     let mut callback = Box::new(Callback {
         state: constants.nil.clone(),
@@ -1068,6 +1148,16 @@ mod tests {
     fn division() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap ap div -9 4", Atom::new(-2), &functions);
+    }
+
+    #[test]
+    fn cons_pairing() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to(
+            "ap ap cons x0 x1",
+            Ap::new(Ap::new(Atom::new("cons"), Atom::new("x0")), Atom::new("x1")),
+            &functions,
+        );
     }
 
     #[test]
