@@ -615,10 +615,34 @@ fn eval_iterative(
                             stack.push(res);
                             continue;
                         }
+                        "lt" => {
+                            let lt = Atom::new("lt");
+                            lt.borrow_mut().set_evaluated(lt.clone())?;
+                            let res = Ap::new(lt, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
                         "add" => {
                             let add = Atom::new("add");
                             add.borrow_mut().set_evaluated(add.clone())?;
                             let res = Ap::new(add, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
+                        "mul" => {
+                            let mul = Atom::new("mul");
+                            mul.borrow_mut().set_evaluated(mul.clone())?;
+                            let res = Ap::new(mul, x);
+                            res.borrow_mut().set_evaluated(res.clone())?;
+                            stack.push(res);
+                            continue;
+                        }
+                        "div" => {
+                            let div = Atom::new("div");
+                            div.borrow_mut().set_evaluated(div.clone())?;
+                            let res = Ap::new(div, x);
                             res.borrow_mut().set_evaluated(res.clone())?;
                             stack.push(res);
                             continue;
@@ -677,14 +701,16 @@ fn eval_iterative(
                     next_to_evaluate = if let Some(name) = pre_func2.borrow().name() {
                         if name == "func2_thunk" {
                             println!("Popping func for func2_thunk");
-                            let next = Ap::new(Ap::new(args.pop().unwrap(), pre_func2.borrow().arg().ok_or_else(|| "arg expected on func_thunk of try_eval")?), x.clone());
+                            let next = Ap::new(Ap::new(args.pop().unwrap(), func.borrow().arg().ok_or_else(|| "arg expected on func_thunk2 of try_eval")?), x.clone());
                             println!("Updating next_to_evaluate to {:?}", next.borrow());
                             next
                         } else {
                             next_to_evaluate
                         }
                     } else {
-                        stack.push(Ap::new(Ap::new(Atom::new("func2_thunk"), func.borrow().arg().ok_or_else(|| "arg expected on func of try_eval")?), x));
+                        let inner = Ap::new(Atom::new("func2_thunk"), func.borrow().arg().ok_or_else(|| "arg expected on func of try_eval")?);
+                        inner.borrow_mut().set_evaluated(inner.clone())?;
+                        stack.push(Ap::new(inner, x));
                         stack.push(pre_func2.clone());
                         continue;
                     };
@@ -726,8 +752,10 @@ fn eval_iterative(
                                 continue;
                             }
                             "mul" => {
+                                let inner = Ap::new(Atom::new("mul_thunk"), constants.nil.clone());
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
                                 stack.push(Ap::new(
-                                    Ap::new(Atom::new("mul_thunk"), constants.nil.clone()),
+                                    inner,
                                     constants.nil.clone(),
                                 ));
                                 stack.push(x.clone());
@@ -742,12 +770,14 @@ fn eval_iterative(
                                 continue;
                             }
                             "div" => {
+                                let inner = Ap::new(Atom::new("div_thunk"), constants.nil.clone());
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
                                 stack.push(Ap::new(
-                                    Ap::new(Atom::new("div_thunk"), constants.nil.clone()),
+                                    inner,
                                     constants.nil.clone(),
                                 ));
-                                stack.push(x.clone());
                                 stack.push(y.clone());
+                                stack.push(x.clone());
                                 continue;
                             }
                             "div_thunk" => {
@@ -779,12 +809,14 @@ fn eval_iterative(
                                 continue;
                             }
                             "lt" => {
+                                let inner = Ap::new(Atom::new("lt_thunk"), constants.nil.clone());
+                                inner.borrow_mut().set_evaluated(inner.clone())?;
                                 stack.push(Ap::new(
-                                    Ap::new(Atom::new("lt_thunk"), constants.nil.clone()),
+                                    inner,
                                     constants.nil.clone(),
                                 ));
-                                stack.push(x.clone());
                                 stack.push(y.clone());
+                                stack.push(x.clone());
                                 continue;
                             }
                             "lt_thunk" => {
@@ -804,15 +836,13 @@ fn eval_iterative(
                                     constants.nil.clone(),
                                 );
                                 stack.push(res);
-                                stack.push(x);
                                 stack.push(y);
+                                stack.push(x);
                                 continue;
                             }
                             "cons_thunk" => {
-                                let arg2 = args.pop().unwrap();
-                                let arg1 = args.pop().unwrap();
                                 let res = Ap::new(
-                                    Ap::new(constants.cons.clone(), arg1), arg2,
+                                    Ap::new(constants.cons.clone(), args.pop().unwrap()), args.pop().unwrap(),
                                 );
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
@@ -1275,6 +1305,12 @@ mod tests {
     fn division() {
         let functions = hashmap! {};
         assert_expression_evaluates_to("ap ap div -9 4", Atom::new(-2), &functions);
+    }
+
+    #[test]
+    fn multiplication() {
+        let functions = hashmap! {};
+        assert_expression_evaluates_to("ap ap mul 10 2", Atom::new(20), &functions);
     }
 
     #[test]
