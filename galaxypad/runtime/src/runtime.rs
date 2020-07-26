@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
-use maplit::hashmap;
+use maplit::{hashmap, hashset};
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ptr;
 use std::rc::{Rc, Weak};
@@ -14,7 +14,7 @@ struct Constants {
     nil: ExprRef,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 enum Name {
     Placeholder(String),
     Int(i64),
@@ -22,7 +22,9 @@ enum Name {
     // Bookkeeping
     Thunk1,
     Thunk2,
-    FuncThunk,
+    FuncThunk1,
+    FuncThunk2,
+    FuncThunk3,
 
     // Operators
     Add,
@@ -45,6 +47,30 @@ enum Name {
 }
 
 lazy_static! {
+    static ref ONE_ARG_OPERATORS: HashSet<Name> = hashset!{
+         Name::I,
+         Name::Neg,
+         Name::Car,
+         Name::Cdr,
+         Name::Nil,
+         Name::Isnil,
+    };
+    static ref TWO_ARG_OPERATORS: HashSet<Name> = hashset!{
+         Name::Add,
+         Name::T,
+         Name::F,
+         Name::Mul,
+         Name::Div,
+         Name::Eq,
+         Name::Lt,
+         Name::Cons,
+    };
+    static ref THREE_ARG_OPERATORS: HashSet<Name> = hashset!{
+         Name::S,
+         Name::C,
+         Name::B,
+         Name::Cons,
+    };
     static ref OPERATOR_ATOMS: HashMap<&'static str, Name> = hashmap!{
         "add" => Name::Add,
         //"inc",
@@ -587,46 +613,43 @@ fn eval_iterative(
                     if let Some(f) = functions.get(name) {
                         stack.push(f.clone());
                         continue;
+                    } else if name.starts_with('x') {
+                        let res = Atom::new(Name::Placeholder(name.clone()));
+                        res.borrow_mut().set_evaluated(res.clone())?;
+                        stack.push(res);
+                        continue;
+                    } else {
+                        return Err(format!(
+                            "Unexpected placeholder symbol encountered {} in expression {}",
+                            name,
+                            next_to_evaluate.borrow()
+                        ));
                     }
                 }
                 Expr::Ap(ref ap1) => {
-                    if ap1.func().borrow().evaluated().is_none() {
-                        match *ap1.func().borrow() {
-                            Expr::Atom(Atom {
-                                name: Name::Placeholder(ref name),
-                                _evaluated: _,
-                            }) => {
-                                if let Some(f) = functions.get(name) {
-                                    stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
-                                    stack.push(f.clone());
-                                    continue;
-                                }
-                            }
-                            Expr::Ap(_) => {
-                                stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
-                                stack.push(ap1.func());
-                                continue;
-                            }
-                            _ => (),
-                        }
-                    }
-
-                    next_to_evaluate = match *ap1.func().borrow() {
-                        Expr::Atom(ref atom) if atom.name == Name::FuncThunk => {
-                            Ap::new(args.pop().unwrap(), ap1.arg())
-                        }
-                        _ => next_to_evaluate,
-                    };
-
+                    // println!("Evaluating ap1 {:?}", ap1);
                     let x = ap1.arg();
-                    let x_is_placeholder = if let Some(Name::Placeholder(name)) = x.borrow().name()
-                    {
-                        name.starts_with('x')
-                    } else {
-                        false
-                    };
                     match *ap1.func().clone().borrow() {
                         Expr::Atom(ref atom) => match (*atom).name {
+                            Name::Placeholder(ref name) => {
+                                if let Some(f) = functions.get(name) {
+                                    stack.push(Ap::new(Atom::new(Name::FuncThunk1), ap1.arg()));
+                                    stack.push(f.clone());
+                                    continue;
+                                } else if name.starts_with('x') {
+                                    let res =
+                                        Ap::new(Atom::new(Name::Placeholder(name.clone())), x);
+                                    res.borrow_mut().set_evaluated(res.clone())?;
+                                    stack.push(res);
+                                    continue;
+                                } else {
+                                    return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
+                                }
+                            }
+                            Name::FuncThunk1 => {
+                                stack.push(Ap::new(args.pop().unwrap(), x));
+                                continue;
+                            }
                             Name::Neg => {
                                 if let Some(evaluated) = x.borrow().evaluated() {
                                     let res = Atom::new(Name::Int(-as_num(evaluated)?));
@@ -643,87 +666,8 @@ fn eval_iterative(
                                 continue;
                             }
                             Name::I => {
+                                // println!("Evaluating identity on {:?}", x.borrow());
                                 stack.push(x);
-                                continue;
-                            }
-                            Name::S => {
-                                let s = Atom::new(Name::S);
-                                s.borrow_mut().set_evaluated(s.clone())?;
-                                let res = Ap::new(s, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::C => {
-                                let c = Atom::new(Name::C);
-                                c.borrow_mut().set_evaluated(c.clone())?;
-                                let res = Ap::new(c, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::B => {
-                                let b = Atom::new(Name::B);
-                                b.borrow_mut().set_evaluated(b.clone())?;
-                                let res = Ap::new(b, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::T => {
-                                let t = Atom::new(Name::T);
-                                t.borrow_mut().set_evaluated(t.clone())?;
-                                let res = Ap::new(t, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::F => {
-                                let t = Atom::new(Name::F);
-                                t.borrow_mut().set_evaluated(t.clone())?;
-                                let res = Ap::new(t, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::Eq => {
-                                let eq = Atom::new(Name::Eq);
-                                eq.borrow_mut().set_evaluated(eq.clone())?;
-                                let res = Ap::new(eq, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::Lt => {
-                                let lt = Atom::new(Name::Lt);
-                                lt.borrow_mut().set_evaluated(lt.clone())?;
-                                let res = Ap::new(lt, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::Add => {
-                                let add = Atom::new(Name::Add);
-                                add.borrow_mut().set_evaluated(add.clone())?;
-                                let res = Ap::new(add, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::Mul => {
-                                let mul = Atom::new(Name::Mul);
-                                mul.borrow_mut().set_evaluated(mul.clone())?;
-                                let res = Ap::new(mul, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::Div => {
-                                let div = Atom::new(Name::Div);
-                                div.borrow_mut().set_evaluated(div.clone())?;
-                                let res = Ap::new(div, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
                                 continue;
                             }
                             Name::Nil => {
@@ -741,42 +685,47 @@ fn eval_iterative(
                                 continue;
                             }
                             Name::Car => {
-                                let res = Ap::new(x, constants.t.clone());
-                                if x_is_placeholder {
-                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                }
-                                stack.push(res);
-                                continue;
-                            }
-                            Name::Cons => {
-                                let cons = Atom::new(Name::Cons);
-                                cons.borrow_mut().set_evaluated(cons.clone())?;
-                                let res = Ap::new(cons, x);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
+                                stack.push(Ap::new(x, constants.t.clone()));
                                 continue;
                             }
                             Name::Cdr => {
-                                let res = Ap::new(x, constants.f.clone());
-                                if x_is_placeholder {
-                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                }
-                                stack.push(res);
+                                stack.push(Ap::new(x, constants.f.clone()));
                                 continue;
                             }
                             _ => (),
                         },
                         Expr::Ap(ref ap2) => {
-                            if ap2.func().borrow().evaluated().is_none() {
-                                stack.push(Atom::new(Name::Thunk2));
-                                stack.push(ap2.func());
-                                stack.push(x);
-                                stack.push(ap2.arg());
-                                continue;
-                            }
+                            // println!("Evaluating ap2 {:?}", ap2);
                             let y = ap2.arg();
                             match *ap2.func().clone().borrow() {
                                 Expr::Atom(ref atom) => match atom.name {
+                                    Name::Placeholder(ref name) => {
+                                        if let Some(f) = functions.get(name) {
+                                            stack.push(Ap::new(
+                                                Ap::new(Atom::new(Name::FuncThunk2), y),
+                                                x,
+                                            ));
+                                            stack.push(f.clone());
+                                            continue;
+                                        } else if name.starts_with('x') {
+                                            let res = Ap::new(
+                                                Ap::new(
+                                                    Atom::new(Name::Placeholder(name.clone())),
+                                                    y,
+                                                ),
+                                                x,
+                                            );
+                                            res.borrow_mut().set_evaluated(res.clone())?;
+                                            stack.push(res);
+                                            continue;
+                                        } else {
+                                            return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
+                                        }
+                                    }
+                                    Name::FuncThunk2 => {
+                                        stack.push(Ap::new(Ap::new(args.pop().unwrap(), y), x));
+                                        continue;
+                                    }
                                     Name::T => {
                                         stack.push(y);
                                         continue;
@@ -910,76 +859,98 @@ fn eval_iterative(
                                         stack.push(x);
                                         continue;
                                     }
-                                    Name::S => {
-                                        let inner = Ap::new(Atom::new(Name::S), y);
-                                        inner.borrow_mut().set_evaluated(inner.clone())?;
-                                        let res = Ap::new(inner, x);
-                                        res.borrow_mut().set_evaluated(res.clone())?;
-                                        stack.push(res);
-                                        continue;
+                                    _ => {
+                                        if !TWO_ARG_OPERATORS.contains(&atom.name) && !THREE_ARG_OPERATORS.contains(&atom.name) {
+                                            // None of the two-arg operators matched, try
+                                            // unwrapping the outermost ap to evaluate.
+                                            stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
+                                            stack.push(
+                                                next_to_evaluate.borrow().func().unwrap(),
+                                            );
+                                            continue;
+                                        }
                                     }
-                                    Name::C => {
-                                        let inner = Ap::new(Atom::new(Name::C), y);
-                                        inner.borrow_mut().set_evaluated(inner.clone())?;
-                                        let res = Ap::new(inner, x);
-                                        res.borrow_mut().set_evaluated(res.clone())?;
-                                        stack.push(res);
-                                        continue;
-                                    }
-                                    Name::B => {
-                                        let inner = Ap::new(Atom::new(Name::B), y);
-                                        inner.borrow_mut().set_evaluated(inner.clone())?;
-                                        let res = Ap::new(inner, x);
-                                        res.borrow_mut().set_evaluated(res.clone())?;
-                                        stack.push(res);
-                                        continue;
-                                    }
-                                    _ => (),
                                 },
                                 Expr::Ap(ref ap3) => {
+                                    // println!("Evaluating ap3 {:?}", ap3);
                                     let z = ap3.arg();
-                                    let z_is_placeholder =
-                                        if let Some(Name::Placeholder(name)) = z.borrow().name() {
-                                            name.starts_with('x')
-                                        } else {
-                                            false
-                                        };
-                                    if let Expr::Atom(ref atom) = *ap3.func().clone().borrow() {
-                                        match atom.name {
-                                            Name::S => {
-                                                let res =
-                                                    Ap::new(Ap::new(z, x.clone()), Ap::new(y, x));
-                                                if z_is_placeholder {
+                                    match *ap3.func().clone().borrow() {
+                                        Expr::Atom(ref atom) => match atom.name {
+                                            Name::Placeholder(ref name) => {
+                                                // println!("Found ap3 placeholder {}", name);
+                                                if let Some(f) = functions.get(name) {
+                                                    stack.push(Ap::new(
+                                                        Ap::new(
+                                                            Ap::new(Atom::new(Name::FuncThunk3), z),
+                                                            y,
+                                                        ),
+                                                        x,
+                                                    ));
+                                                    stack.push(f.clone());
+                                                    continue;
+                                                } else if name.starts_with('x') {
+                                                    let res = Ap::new(
+                                                        Ap::new(
+                                                            Ap::new(
+                                                                Atom::new(Name::Placeholder(
+                                                                    name.clone(),
+                                                                )),
+                                                                z,
+                                                            ),
+                                                            y,
+                                                        ),
+                                                        x,
+                                                    );
                                                     res.borrow_mut().set_evaluated(res.clone())?;
+                                                    stack.push(res);
+                                                    continue;
+                                                } else {
+                                                    return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
                                                 }
-                                                stack.push(res);
+                                            }
+                                            Name::FuncThunk3 => {
+                                                stack.push(Ap::new(
+                                                    Ap::new(Ap::new(args.pop().unwrap(), z), y),
+                                                    x,
+                                                ));
+                                                continue;
+                                            }
+                                            Name::S => {
+                                                stack.push(Ap::new(
+                                                    Ap::new(z, x.clone()),
+                                                    Ap::new(y, x),
+                                                ));
                                                 continue;
                                             }
                                             Name::C => {
-                                                let res = Ap::new(Ap::new(z, x), y);
-                                                if z_is_placeholder {
-                                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                                }
-                                                stack.push(res);
+                                                stack.push(Ap::new(Ap::new(z, x), y));
                                                 continue;
                                             }
                                             Name::B => {
-                                                let res = Ap::new(z, Ap::new(y, x));
-                                                if z_is_placeholder {
-                                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                                }
-                                                stack.push(res);
+                                                stack.push(Ap::new(z, Ap::new(y, x)));
                                                 continue;
                                             }
                                             Name::Cons => {
-                                                let res = Ap::new(Ap::new(x, z), y);
-                                                if x_is_placeholder {
-                                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                                }
-                                                stack.push(res);
+                                                // println!("Processing ap3 cons");
+                                                stack.push(Ap::new(Ap::new(x, z), y));
                                                 continue;
                                             }
-                                            _ => (),
+                                            _ => {
+                                                // None of the three-arg combinators matched, try
+                                                // unwrapping the outermost ap to evaluate.
+                                                stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
+                                                stack.push(
+                                                    next_to_evaluate.borrow().func().unwrap(),
+                                                );
+                                                continue;
+                                            }
+                                        },
+                                        _ => {
+                                            // More than three ap's are applied, try unwrapping the
+                                            // outermost ap to evaluate.
+                                            stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
+                                            stack.push(next_to_evaluate.borrow().func().unwrap());
+                                            continue;
                                         }
                                     }
                                 }
@@ -990,9 +961,9 @@ fn eval_iterative(
                 _ => (),
             }
 
-            if let Expr::Atom(ref mut atom) = *next_to_evaluate.borrow_mut() {
-                atom.set_evaluated(next_to_evaluate.clone())?;
-            }
+            next_to_evaluate
+                .borrow_mut()
+                .set_evaluated(next_to_evaluate.clone())?;
             stack.push(next_to_evaluate);
         }
 
