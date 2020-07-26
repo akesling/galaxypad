@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
-use maplit::hashset;
+use maplit::hashmap;
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ptr;
 use std::rc::{Rc, Weak};
@@ -14,33 +14,58 @@ struct Constants {
     nil: ExprRef,
 }
 
-const T: &str = "t";
-const F: &str = "f";
-const CONS: &str = "cons";
-const NIL: &str = "nil";
+#[derive(Debug, PartialEq, Clone)]
+enum Name {
+    Placeholder(String),
+    Int(i64),
+
+    // Bookkeeping
+    Thunk1,
+    Thunk2,
+    FuncThunk,
+
+    // Operators
+    Add,
+    I,
+    T,
+    F,
+    Mul,
+    Div,
+    Eq,
+    Lt,
+    Neg,
+    S,
+    C,
+    B,
+    Cons,
+    Car,
+    Cdr,
+    Nil,
+    Isnil,
+}
 
 lazy_static! {
-    static ref OPERATOR_ATOMS: HashSet<&'static str> = hashset!{
-        "add",
+    static ref OPERATOR_ATOMS: HashMap<&'static str, Name> = hashmap!{
+        "add" => Name::Add,
         //"inc",
         //"dec",
-        "i",
-        "t",
-        "f",
-        "mul",
-        "div",
-        "eq",
-        "lt",
-        "neg",
-        "s",
-        "c",
-        "b",
+        "i" => Name::I,
+        "t" => Name::T,
+        "f" => Name::F,
+        "mul" => Name::Mul,
+        "div" => Name::Div,
+        "eq" => Name::Eq,
+        "lt" => Name::Lt,
+        "neg" => Name::Neg,
+        "s" => Name::S,
+        "c" => Name::C,
+        "b" => Name::B,
         //"pwr2",
-        "cons",
-        "car",
-        "cdr",
-        "nil",
-        "isnil",
+        "cons" => Name::Cons,
+        "car" => Name::Car,
+        "cdr" => Name::Cdr,
+        "nil" => Name::Nil,
+        "isnil" => Name::Isnil,
         //"vec",
         //"if0",
         //"send",
@@ -79,7 +104,7 @@ impl Expr {
         }
     }
 
-    fn name(&self) -> Option<&str> {
+    fn name(&self) -> Option<&Name> {
         match *self {
             Expr::Atom(ref atom) => Some(&atom.name),
             Expr::Ap(_) => None,
@@ -126,7 +151,7 @@ impl Expr {
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(match *self {
-            Expr::Atom(ref atom) => write!(f, "Atom({})", atom.name)?,
+            Expr::Atom(ref atom) => write!(f, "Atom({:?})", atom.name)?,
             Expr::Ap(ref ap) => write!(f, "Ap({}, {})", ap.func.borrow(), ap.arg.borrow())?,
         })
     }
@@ -153,21 +178,21 @@ impl Debug for Expr {
 struct Atom {
     _evaluated: Option<WeakExprRef>,
 
-    name: String,
+    name: Name,
 }
 
 impl std::fmt::Display for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Atom({})", self.name)?;
+        write!(f, "Atom({:?})", self.name)?;
         Ok(())
     }
 }
 
 impl Atom {
     #[allow(clippy::new_ret_no_self)]
-    fn new<T: std::string::ToString>(name: T) -> ExprRef {
+    fn new(name: Name) -> ExprRef {
         Rc::new(RefCell::new(Expr::Atom(Atom {
-            name: name.to_string(),
+            name: name,
             _evaluated: None,
         })))
     }
@@ -186,7 +211,7 @@ impl Atom {
 
     fn equals(&self, other: ExprRef) -> bool {
         match other.borrow().name() {
-            Some(name) => self.name == name,
+            Some(name) => self.name == *name,
             None => false,
         }
     }
@@ -275,19 +300,19 @@ fn parse_token(candidate_token: &str, stack: &mut Vec<ExprRef>) -> Result<ExprRe
         return Ok(Ap::new(left, right));
     }
 
-    if OPERATOR_ATOMS.contains(candidate_token) {
-        return Ok(Atom::new(candidate_token));
+    if let Some(token_name) = OPERATOR_ATOMS.get(candidate_token) {
+        return Ok(Atom::new(token_name.clone()));
     }
 
     if let Ok(i) = candidate_token.parse::<i64>() {
-        return Ok(Atom::new(i));
+        return Ok(Atom::new(Name::Int(i)));
     }
 
     if candidate_token.starts_with(':') || candidate_token.starts_with('x') {
-        return Ok(Atom::new(candidate_token));
+        return Ok(Atom::new(Name::Placeholder(candidate_token.to_string())));
     }
 
-    Err(format!("Could not parse \"{}\"", candidate_token))
+    Err(format!("Could not parse '{}'", candidate_token))
 }
 
 fn deserialize(tokens: &[&str]) -> Result<ExprRef, String> {
@@ -373,7 +398,7 @@ fn interact(
     constants: &Constants,
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
-    let expr: ExprRef = Ap::new(Ap::new(Atom::new(":galaxy"), state), event);
+    let expr: ExprRef = Ap::new(Ap::new(Atom::new(Name::Placeholder(":galaxy".to_string())), state), event);
     let res: ExprRef = eval_iterative(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
@@ -396,31 +421,20 @@ fn send_to_alien_proxy(_expr: ExprRef) -> ExprRef {
 }
 
 fn as_num(expr: ExprRef) -> Result<i64, String> {
-    if let Some(name) = expr.borrow().name().as_ref() {
-        return Ok(parse_number(name)?);
+    if let Some(name) = expr.borrow().name() {
+        return match *name {
+            Name::Int(i) => Ok(i),
+            Name::T => Ok(1),
+            Name::F => Ok(0),
+            _ => Err(format!("Not a number: {:?}", expr))
+        }
     }
     Err(format!("Not a number: {:?}", expr))
 }
 
-fn parse_number(name: &str) -> Result<i64, String> {
-    if let Ok(i) = name.parse::<i64>() {
-        return Ok(i);
-    }
-
-    if name == "t" {
-        return Ok(1);
-    }
-
-    if name == "f" {
-        return Ok(0);
-    }
-
-    Err(format!("Failed to parse {} as a number", name))
-}
-
 fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
     if let Some(name) = points_expr.borrow().name().as_ref() {
-        return Err(format!("First item in pair was atom({}) not Ap", name));
+        return Err(format!("First item in pair was atom({:?}) not Ap", name));
     }
 
     let second = points_expr
@@ -429,7 +443,7 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         .ok_or_else(|| "func expected on points_expr of flatten_point")?;
     if let Some(name) = second.borrow().name().as_ref() {
         return Err(format!(
-            "Second item in list was non-nil atom({}) not Ap",
+            "Second item in list was non-nil atom({:?}) not Ap",
             name
         ));
     }
@@ -438,10 +452,10 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         .borrow()
         .func()
         .ok_or_else(|| "func expected on second of flatten_point")?;
-    if let Some(name) = cons.borrow().name().as_ref() {
-        if name != &"cons" {
+    if let Some(name) = cons.borrow().name() {
+        if *name != Name::Cons {
             return Err(format!(
-                "Cons-place item in list was atom({}) not cons",
+                "Cons-place item in list was atom({:?}) not cons",
                 name
             ));
         }
@@ -465,13 +479,13 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
-    if let Some(name) = expr.borrow().name().as_ref() {
-        if name == &NIL {
+    if let Some(name) = expr.borrow().name() {
+        if name == &Name::Nil {
             return Ok(vec![expr.clone()]);
         }
 
         return Err(format!(
-            "First item in list was non-nil atom({}) not Ap",
+            "First item in list was non-nil atom({:?}) not Ap",
             name
         ));
     }
@@ -480,9 +494,9 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         .borrow()
         .func()
         .ok_or_else(|| "func expected on func of get_list_items_from_expr")?;
-    if let Some(name) = second.borrow().name().as_ref() {
+    if let Some(name) = second.borrow().name() {
         return Err(format!(
-            "Second item in list was non-nil atom({}) not Ap",
+            "Second item in list was non-nil atom({:?}) not Ap",
             name
         ));
     }
@@ -491,10 +505,10 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         .borrow()
         .func()
         .ok_or_else(|| "func expected on second of get_list_items_from_expr")?;
-    if let Some(name) = cons.borrow().name().as_ref() {
-        if name != &"cons" {
+    if let Some(name) = cons.borrow().name() {
+        if name != &Name::Cons {
             return Err(format!(
-                "Cons-place item in list was atom({}) not cons",
+                "Cons-place item in list was atom({:?}) not cons",
                 name
             ));
         }
@@ -509,12 +523,12 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
         .borrow()
         .arg()
         .ok_or_else(|| "arg expected on expr of get_list_items_from_expr")?;
-    if let Some(name) = next.clone().borrow().name().as_ref() {
-        if name == &"nil" {
+    if let Some(name) = next.clone().borrow().name() {
+        if name == &Name::Nil {
             Ok(flattened)
         } else {
             Err(format!(
-                "get_list_items_from_expr somehow got a non-nil end node in a list {}",
+                "get_list_items_from_expr somehow got a non-nil end node in a list {:?}",
                 name
             ))
         }
@@ -554,12 +568,9 @@ fn eval_iterative(
 
             next_to_evaluate = match *next_to_evaluate.clone().borrow() {
                 Expr::Atom(ref atom) => {
-                    match atom.name.as_str() {
-                        "thunk1" => Ap::new(args.pop().unwrap(), args.pop().unwrap()),
-                        "thunk2" => {
-                            let evaluated_thunk2 = Ap::new(Ap::new(args.pop().unwrap(), args.pop().unwrap()), args.pop().unwrap());
-                            evaluated_thunk2
-                        },
+                    match atom.name {
+                        Name::Thunk1 => Ap::new(args.pop().unwrap(), args.pop().unwrap()),
+                        Name::Thunk2 => Ap::new(Ap::new(args.pop().unwrap(), args.pop().unwrap()), args.pop().unwrap()),
                         _ => next_to_evaluate,
                     }
                 },
@@ -568,23 +579,37 @@ fn eval_iterative(
 
             match *next_to_evaluate.clone().borrow() {
                 Expr::Atom(ref atom) => {
-                    if let Some(f) = functions.get(&atom.name) {
-                        stack.push(f.clone());
-                        continue;
+                    if let Name::Placeholder(ref name) = atom.name {
+                        if let Some(f) = functions.get(name) {
+                            stack.push(f.clone());
+                            continue;
+                        }
                     }
                 }
                 Expr::Ap(ref ap1) => {
+//                    if ap1.func().borrow().evaluated().is_none() {
+//                        stack.push(Atom::new(Name::Thunk1));
+//                        stack.push(ap1.func());
+//                        stack.push(ap1.arg());
+//                        continue
+//                    }
+//                    let x = ap1.arg();
+//                            match *ap2.func().clone().borrow() {
                     let ap1_func_ref = ap1.func();
                     next_to_evaluate = match *ap1_func_ref.borrow() {
                         Expr::Atom(ref atom) => {
-                            if atom.name == "func_thunk" {
+                            if atom.name == Name::FuncThunk {
                                 let next = Ap::new(args.pop().unwrap(), ap1.arg());
                                 next
-                            } else if let Some(f) = functions.get(&atom.name) {
-                                stack.push(Ap::new(Atom::new("func_thunk"), ap1.arg()));
-                                stack.push(f.clone());
-                                continue;
                             } else {
+                                if let Name::Placeholder(ref name) = atom.name {
+                                    if let Some(f) = functions.get(name) {
+                                        stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
+                                        stack.push(f.clone());
+                                        continue;
+                                    }
+                                }
+
                                 next_to_evaluate
                             }
                         }
@@ -593,124 +618,124 @@ fn eval_iterative(
                                 let next = Ap::new(evaluated, ap1.arg());
                                 next
                             } else {
-                                stack.push(Ap::new(Atom::new("func_thunk"), ap1.arg()));
+                                stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
                                 stack.push(ap1_func_ref.clone());
                                 continue;
                             }
                         }
                     };
                     let x = ap1.arg();
-                    let x_is_placeholder = if let Some(name) = x.borrow().name() {
+                    let x_is_placeholder = if let Some(Name::Placeholder(name)) = x.borrow().name() {
                         name.starts_with('x')
                     } else {
                         false
                     };
                     match *ap1_func_ref.clone().borrow() {
-                        Expr::Atom(ref atom) => match (*atom).name.as_str() {
-                            "neg" => {
+                        Expr::Atom(ref atom) => match (*atom).name {
+                            Name::Neg => {
                                 if let Some(evaluated) = x.borrow().evaluated() {
-                                    let res = Atom::new(-as_num(evaluated)?);
+                                    let res = Atom::new(Name::Int(-as_num(evaluated)?));
                                     res.borrow_mut().set_evaluated(res.clone())?;
                                     stack.push(res);
                                     continue;
                                 }
 
-                                let neg = Atom::new("neg");
+                                let neg = Atom::new(Name::Neg);
                                 neg.borrow_mut().set_evaluated(neg.clone())?;
-                                stack.push(Atom::new("thunk1"));
+                                stack.push(Atom::new(Name::Thunk1));
                                 stack.push(neg);
                                 stack.push(x);
                                 continue;
                             }
-                            "i" => {
+                            Name::I => {
                                 stack.push(x);
                                 continue;
                             }
-                            "s" => {
-                                let s = Atom::new("s");
+                            Name::S => {
+                                let s = Atom::new(Name::S);
                                 s.borrow_mut().set_evaluated(s.clone())?;
                                 let res = Ap::new(s, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "c" => {
-                                let c = Atom::new("c");
+                            Name::C => {
+                                let c = Atom::new(Name::C);
                                 c.borrow_mut().set_evaluated(c.clone())?;
                                 let res = Ap::new(c, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "b" => {
-                                let b = Atom::new("b");
+                            Name::B => {
+                                let b = Atom::new(Name::B);
                                 b.borrow_mut().set_evaluated(b.clone())?;
                                 let res = Ap::new(b, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "t" => {
-                                let t = Atom::new("t");
+                            Name::T => {
+                                let t = Atom::new(Name::T);
                                 t.borrow_mut().set_evaluated(t.clone())?;
                                 let res = Ap::new(t, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "f" => {
-                                let t = Atom::new("f");
+                            Name::F => {
+                                let t = Atom::new(Name::F);
                                 t.borrow_mut().set_evaluated(t.clone())?;
                                 let res = Ap::new(t, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "eq" => {
-                                let eq = Atom::new("eq");
+                            Name::Eq => {
+                                let eq = Atom::new(Name::Eq);
                                 eq.borrow_mut().set_evaluated(eq.clone())?;
                                 let res = Ap::new(eq, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "lt" => {
-                                let lt = Atom::new("lt");
+                            Name::Lt => {
+                                let lt = Atom::new(Name::Lt);
                                 lt.borrow_mut().set_evaluated(lt.clone())?;
                                 let res = Ap::new(lt, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "add" => {
-                                let add = Atom::new("add");
+                            Name::Add => {
+                                let add = Atom::new(Name::Add);
                                 add.borrow_mut().set_evaluated(add.clone())?;
                                 let res = Ap::new(add, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "mul" => {
-                                let mul = Atom::new("mul");
+                            Name::Mul => {
+                                let mul = Atom::new(Name::Mul);
                                 mul.borrow_mut().set_evaluated(mul.clone())?;
                                 let res = Ap::new(mul, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "div" => {
-                                let div = Atom::new("div");
+                            Name::Div => {
+                                let div = Atom::new(Name::Div);
                                 div.borrow_mut().set_evaluated(div.clone())?;
                                 let res = Ap::new(div, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "nil" => {
+                            Name::Nil => {
                                 stack.push(constants.t.clone());
                                 continue;
                             }
-                            "isnil" => {
+                            Name::Isnil => {
                                 stack.push(Ap::new(
                                     x,
                                     Ap::new(
@@ -720,7 +745,7 @@ fn eval_iterative(
                                 ));
                                 continue;
                             }
-                            "car" => {
+                            Name::Car => {
                                 let res = Ap::new(x, constants.t.clone());
                                 if x_is_placeholder {
                                     res.borrow_mut().set_evaluated(res.clone())?;
@@ -728,15 +753,15 @@ fn eval_iterative(
                                 stack.push(res);
                                 continue;
                             }
-                            "cons" => {
-                                let cons = Atom::new("cons");
+                            Name::Cons => {
+                                let cons = Atom::new(Name::Cons);
                                 cons.borrow_mut().set_evaluated(cons.clone())?;
                                 let res = Ap::new(cons, x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
                             }
-                            "cdr" => {
+                            Name::Cdr => {
                                 let res = Ap::new(x, constants.f.clone());
                                 if x_is_placeholder {
                                     res.borrow_mut().set_evaluated(res.clone())?;
@@ -748,28 +773,28 @@ fn eval_iterative(
                         },
                         Expr::Ap(ref ap2) => {
                             if ap2.func().borrow().evaluated().is_none() {
-                                stack.push(Atom::new("thunk2"));
+                                stack.push(Atom::new(Name::Thunk2));
                                 stack.push(ap2.func());
                                 stack.push(x);
                                 stack.push(ap2.arg());
-                                continue
+                                continue;
                             }
                             let y = ap2.arg();
                             match *ap2.func().clone().borrow() {
-                                Expr::Atom(ref atom) => match atom.name.as_str() {
-                                    "t" => {
+                                Expr::Atom(ref atom) => match atom.name {
+                                    Name::T => {
                                         stack.push(y);
                                         continue;
                                     }
-                                    "f" => {
+                                    Name::F => {
                                         stack.push(x);
                                         continue;
                                     }
-                                    "add" => {
+                                    Name::Add => {
                                         if let Some(x_evaluated) = x.borrow().evaluated() {
                                             if let Some(y_evaluated) = y.borrow().evaluated() {
                                                 let res = Atom::new(
-                                                    as_num(y_evaluated)? + as_num(x_evaluated)?,
+                                                    Name::Int(as_num(y_evaluated)? + as_num(x_evaluated)?)
                                                 );
                                                 res.borrow_mut().set_evaluated(res.clone())?;
                                                 stack.push(res);
@@ -777,19 +802,19 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let add = Atom::new("add");
+                                        let add = Atom::new(Name::Add);
                                         add.borrow_mut().set_evaluated(add.clone())?;
-                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(Atom::new(Name::Thunk2));
                                         stack.push(add);
                                         stack.push(x);
                                         stack.push(y);
                                         continue;
                                     }
-                                    "mul" => {
+                                    Name::Mul => {
                                         if let Some(x_evaluated) = x.borrow().evaluated() {
                                             if let Some(y_evaluated) = y.borrow().evaluated() {
                                                 let res = Atom::new(
-                                                    as_num(y_evaluated)? * as_num(x_evaluated)?,
+                                                    Name::Int(as_num(y_evaluated)? * as_num(x_evaluated)?),
                                                 );
                                                 res.borrow_mut().set_evaluated(res.clone())?;
                                                 stack.push(res);
@@ -797,19 +822,19 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let mul = Atom::new("mul");
+                                        let mul = Atom::new(Name::Mul);
                                         mul.borrow_mut().set_evaluated(mul.clone())?;
-                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(Atom::new(Name::Thunk2));
                                         stack.push(mul);
                                         stack.push(x);
                                         stack.push(y);
                                         continue;
                                     }
-                                    "div" => {
+                                    Name::Div => {
                                         if let Some(x_evaluated) = x.borrow().evaluated() {
                                             if let Some(y_evaluated) = y.borrow().evaluated() {
                                                 let res = Atom::new(
-                                                    as_num(y_evaluated)? / as_num(x_evaluated)?,
+                                                    Name::Int(as_num(y_evaluated)? / as_num(x_evaluated)?),
                                                 );
                                                 res.borrow_mut().set_evaluated(res.clone())?;
                                                 stack.push(res);
@@ -817,15 +842,15 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let div = Atom::new("div");
+                                        let div = Atom::new(Name::Div);
                                         div.borrow_mut().set_evaluated(div.clone())?;
-                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(Atom::new(Name::Thunk2));
                                         stack.push(div);
                                         stack.push(y);
                                         stack.push(x);
                                         continue;
                                     }
-                                    "eq" => {
+                                    Name::Eq => {
                                         if let Some(x_evaluated) = x.borrow().evaluated() {
                                             if let Some(y_evaluated) = y.borrow().evaluated() {
                                                 let are_equal =
@@ -839,15 +864,15 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let eq = Atom::new("eq");
+                                        let eq = Atom::new(Name::Eq);
                                         eq.borrow_mut().set_evaluated(eq.clone())?;
-                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(Atom::new(Name::Thunk2));
                                         stack.push(eq);
                                         stack.push(y);
                                         stack.push(x);
                                         continue;
                                     }
-                                    "lt" => {
+                                    Name::Lt => {
                                         if let Some(x_evaluated) = x.borrow().evaluated() {
                                             if let Some(y_evaluated) = y.borrow().evaluated() {
                                                 let is_less_than =
@@ -861,15 +886,15 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let lt = Atom::new("lt");
+                                        let lt = Atom::new(Name::Lt);
                                         lt.borrow_mut().set_evaluated(lt.clone())?;
-                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(Atom::new(Name::Thunk2));
                                         stack.push(lt);
                                         stack.push(y);
                                         stack.push(x);
                                         continue;
                                     }
-                                    "cons" => {
+                                    Name::Cons => {
                                         if let Some(x_evaluated) = x.borrow().evaluated() {
                                             if let Some(y_evaluated) = y.borrow().evaluated() {
                                                 let inner = Ap::new(constants.cons.clone(), y_evaluated);
@@ -884,32 +909,32 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let cons = Atom::new("cons");
+                                        let cons = Atom::new(Name::Cons);
                                         cons.borrow_mut().set_evaluated(cons.clone())?;
-                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(Atom::new(Name::Thunk2));
                                         stack.push(cons);
                                         stack.push(y);
                                         stack.push(x);
                                         continue;
                                     }
-                                    "s" => {
-                                        let inner = Ap::new(Atom::new("s"), y);
+                                    Name::S => {
+                                        let inner = Ap::new(Atom::new(Name::S), y);
                                         inner.borrow_mut().set_evaluated(inner.clone())?;
                                         let res = Ap::new(inner, x);
                                         res.borrow_mut().set_evaluated(res.clone())?;
                                         stack.push(res);
                                         continue;
                                     }
-                                    "c" => {
-                                        let inner = Ap::new(Atom::new("c"), y);
+                                    Name::C => {
+                                        let inner = Ap::new(Atom::new(Name::C), y);
                                         inner.borrow_mut().set_evaluated(inner.clone())?;
                                         let res = Ap::new(inner, x);
                                         res.borrow_mut().set_evaluated(res.clone())?;
                                         stack.push(res);
                                         continue;
                                     }
-                                    "b" => {
-                                        let inner = Ap::new(Atom::new("b"), y);
+                                    Name::B => {
+                                        let inner = Ap::new(Atom::new(Name::B), y);
                                         inner.borrow_mut().set_evaluated(inner.clone())?;
                                         let res = Ap::new(inner, x);
                                         res.borrow_mut().set_evaluated(res.clone())?;
@@ -920,14 +945,14 @@ fn eval_iterative(
                                 },
                                 Expr::Ap(ref ap3) => {
                                     let z = ap3.arg();
-                                    let z_is_placeholder = if let Some(name) = z.borrow().name() {
+                                    let z_is_placeholder = if let Some(Name::Placeholder(name)) = z.borrow().name() {
                                         name.starts_with('x')
                                     } else {
                                         false
                                     };
                                     match *ap3.func().clone().borrow() {
-                                        Expr::Atom(ref atom) => match atom.name.as_str() {
-                                            "s" => {
+                                        Expr::Atom(ref atom) => match atom.name {
+                                            Name::S => {
                                                 let res =
                                                     Ap::new(Ap::new(z, x.clone()), Ap::new(y, x));
                                                 if z_is_placeholder {
@@ -936,7 +961,7 @@ fn eval_iterative(
                                                 stack.push(res);
                                                 continue;
                                             }
-                                            "c" => {
+                                            Name::C => {
                                                 let res = Ap::new(Ap::new(z, x), y);
                                                 if z_is_placeholder {
                                                     res.borrow_mut().set_evaluated(res.clone())?;
@@ -944,7 +969,7 @@ fn eval_iterative(
                                                 stack.push(res);
                                                 continue;
                                             }
-                                            "b" => {
+                                            Name::B => {
                                                 let res = Ap::new(z, Ap::new(y, x));
                                                 if z_is_placeholder {
                                                     res.borrow_mut().set_evaluated(res.clone())?;
@@ -952,7 +977,7 @@ fn eval_iterative(
                                                 stack.push(res);
                                                 continue;
                                             }
-                                            "cons" => {
+                                            Name::Cons => {
                                                 let res = Ap::new(Ap::new(x, z), y);
                                                 if x_is_placeholder {
                                                     res.borrow_mut().set_evaluated(res.clone())?;
@@ -1022,8 +1047,8 @@ fn _try_eval(
         return Ok(x);
     }
 
-    if let Some(name) = expr.borrow().name().as_ref() {
-        if let Some(f) = functions.get(name.to_owned()) {
+    if let Some(Name::Placeholder(name)) = expr.borrow().name() {
+        if let Some(f) = functions.get(name) {
             return Ok(f.clone());
         }
     } else {
@@ -1040,16 +1065,16 @@ fn _try_eval(
             .ok_or_else(|| "arg expected on expr of try_eval")?;
         if let Some(name) = func.clone().borrow().name().as_ref() {
             match *name {
-                "neg" => {
-                    return Ok(Atom::new(-as_num(_eval(x, functions, constants)?)?));
+                Name::Neg => {
+                    return Ok(Atom::new(Name::Int(-as_num(_eval(x, functions, constants)?)?)));
                 }
-                "i" => {
+                Name::I => {
                     return Ok(x);
                 }
-                "nil" => {
+                Name::Nil => {
                     return Ok(constants.t.clone());
                 }
-                "isnil" => {
+                Name::Isnil => {
                     return Ok(Ap::new(
                         x,
                         Ap::new(
@@ -1058,10 +1083,10 @@ fn _try_eval(
                         ),
                     ));
                 }
-                "car" => {
+                Name::Car => {
                     return Ok(Ap::new(x, constants.t.clone()));
                 }
-                "cdr" => {
+                Name::Cdr => {
                     return Ok(Ap::new(x, constants.f.clone()));
                 }
                 _ => (),
@@ -1080,31 +1105,31 @@ fn _try_eval(
                 .ok_or_else(|| "arg expected on func of try_eval")?;
             if let Some(name) = func2.clone().borrow().name().as_ref() {
                 match *name {
-                    "t" => {
+                    Name::T => {
                         return Ok(y);
                     }
-                    "f" => {
+                    Name::F => {
                         return Ok(x);
                     }
-                    "add" => {
-                        return Ok(Atom::new(
+                    Name::Add => {
+                        return Ok(Atom::new(Name::Int(
                             as_num(_eval(x, functions, constants)?)?
-                                + as_num(_eval(y, functions, constants)?)?,
+                                + as_num(_eval(y, functions, constants)?)?),
                         ));
                     }
-                    "mul" => {
-                        return Ok(Atom::new(
+                    Name::Mul => {
+                        return Ok(Atom::new(Name::Int(
                             as_num(_eval(x, functions, constants)?)?
                                 * as_num(_eval(y, functions, constants)?)?,
-                        ));
+                        )));
                     }
-                    "div" => {
-                        return Ok(Atom::new(
+                    Name::Div => {
+                        return Ok(Atom::new(Name::Int(
                             as_num(_eval(y, functions, constants)?)?
-                                / as_num(_eval(x, functions, constants)?)?,
+                                / as_num(_eval(x, functions, constants)?)?),
                         ));
                     }
-                    "eq" => {
+                    Name::Eq => {
                         let are_equal = as_num(_eval(x, functions, constants)?)?
                             == as_num(_eval(y, functions, constants)?)?;
                         return Ok(if are_equal {
@@ -1113,7 +1138,7 @@ fn _try_eval(
                             constants.f.clone()
                         });
                     }
-                    "lt" => {
+                    Name::Lt => {
                         let is_less_than = as_num(_eval(y, functions, constants)?)?
                             < as_num(_eval(x, functions, constants)?)?;
                         return Ok(if is_less_than {
@@ -1122,7 +1147,7 @@ fn _try_eval(
                             constants.f.clone()
                         });
                     }
-                    "cons" => {
+                    Name::Cons => {
                         return Ok(_eval_cons(y, x, functions, constants)?);
                     }
                     _ => (),
@@ -1142,10 +1167,10 @@ fn _try_eval(
                     .ok_or_else(|| "arg expected on func2 of try_eval")?;
                 if let Some(name) = func3.clone().borrow().name().as_ref() {
                     match *name {
-                        "s" => return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x))),
-                        "c" => return Ok(Ap::new(Ap::new(z, x), y)),
-                        "b" => return Ok(Ap::new(z, Ap::new(y, x))),
-                        "cons" => return Ok(Ap::new(Ap::new(x, z), y)),
+                        Name::S => return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x))),
+                        Name::C => return Ok(Ap::new(Ap::new(z, x), y)),
+                        Name::B => return Ok(Ap::new(z, Ap::new(y, x))),
+                        Name::Cons => return Ok(Ap::new(Ap::new(x, z), y)),
                         _ => (),
                     }
                 }
@@ -1176,7 +1201,7 @@ fn vectorize_points_expr(list_of_points_expr: ExprRef) -> Result<Vec<(i64, i64)>
 
     let pairs: Vec<ExprRef> = get_list_items_from_expr(list_of_points_expr)?;
     for expr in pairs.into_iter() {
-        if !expr.borrow().equals(Atom::new(NIL)) {
+        if !expr.borrow().equals(Atom::new(Name::Nil)) {
             result.push(flatten_point(expr)?);
         }
     }
@@ -1228,10 +1253,10 @@ fn request_click_from_user() -> Point {
 
 fn get_constants() -> Constants {
     Constants {
-        t: Atom::new(T),
-        f: Atom::new(F),
-        cons: Atom::new(CONS),
-        nil: Atom::new(NIL),
+        t: Atom::new(Name::T),
+        f: Atom::new(Name::F),
+        cons: Atom::new(Name::Cons),
+        nil: Atom::new(Name::Nil),
     }
 }
 
@@ -1244,8 +1269,8 @@ fn iterate(
 ) -> ExprRef {
     render_to_display(vec![vec![(1, 0)]]);
     let click = Ap::new(
-        Ap::new(constants.cons.clone(), Atom::new(point.x)),
-        Atom::new(point.y),
+        Ap::new(constants.cons.clone(), Atom::new(Name::Int(point.x as i64))),
+        Atom::new(Name::Int(point.y as i64)),
     );
     render_to_display(vec![vec![(1, 1)]]);
 
@@ -1353,38 +1378,38 @@ mod tests {
     #[test]
     fn application_order_preserved() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap ap mul 2 ap ap add 3 4", Atom::new(14), &functions);
+        assert_expression_evaluates_to("ap ap mul 2 ap ap add 3 4", Atom::new(Name::Int(14)), &functions);
     }
 
     #[test]
     fn addition() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap ap add ap ap add 2 2 3", Atom::new(7), &functions);
+        assert_expression_evaluates_to("ap ap add ap ap add 2 2 3", Atom::new(Name::Int(7)), &functions);
         assert_expression_evaluates_to(
             "ap ap add ap ap add 2 ap ap add 3 2 3",
-            Atom::new(10),
+            Atom::new(Name::Int(10)),
             &functions,
         );
-        assert_expression_evaluates_to("ap ap add 2 3", Atom::new(5), &functions);
-        assert_expression_evaluates_to("ap ap add 2 -3", Atom::new(-1), &functions);
-        assert_expression_evaluates_to("ap ap add -2 -3", Atom::new(-5), &functions);
-        assert_expression_evaluates_to("ap ap add -2 3", Atom::new(1), &functions);
-        assert_expression_evaluates_to("ap ap add -2 0", Atom::new(-2), &functions);
-        assert_expression_evaluates_to("ap ap add 2 0", Atom::new(2), &functions);
-        assert_expression_evaluates_to("ap ap add 0 -2", Atom::new(-2), &functions);
-        assert_expression_evaluates_to("ap ap add 0 2", Atom::new(2), &functions);
+        assert_expression_evaluates_to("ap ap add 2 3", Atom::new(Name::Int(5)), &functions);
+        assert_expression_evaluates_to("ap ap add 2 -3", Atom::new(Name::Int(-1)), &functions);
+        assert_expression_evaluates_to("ap ap add -2 -3", Atom::new(Name::Int(-5)), &functions);
+        assert_expression_evaluates_to("ap ap add -2 3", Atom::new(Name::Int(1)), &functions);
+        assert_expression_evaluates_to("ap ap add -2 0", Atom::new(Name::Int(-2)), &functions);
+        assert_expression_evaluates_to("ap ap add 2 0", Atom::new(Name::Int(2)), &functions);
+        assert_expression_evaluates_to("ap ap add 0 -2", Atom::new(Name::Int(-2)), &functions);
+        assert_expression_evaluates_to("ap ap add 0 2", Atom::new(Name::Int(2)), &functions);
     }
 
     #[test]
     fn division() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap ap div -9 4", Atom::new(-2), &functions);
+        assert_expression_evaluates_to("ap ap div -9 4", Atom::new(Name::Int(-2)), &functions);
     }
 
     #[test]
     fn multiplication() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap ap mul 10 2", Atom::new(20), &functions);
+        assert_expression_evaluates_to("ap ap mul 10 2", Atom::new(Name::Int(20)), &functions);
     }
 
     #[test]
@@ -1392,7 +1417,7 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap cons x0 x1",
-            Ap::new(Ap::new(Atom::new("cons"), Atom::new("x0")), Atom::new("x1")),
+            Ap::new(Ap::new(Atom::new(Name::Cons), Atom::new(Name::Placeholder("x0".to_owned()))), Atom::new(Name::Placeholder("x1".to_owned()))),
             &functions,
         );
     }
@@ -1402,12 +1427,12 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap ap cons x0 x1 x2",
-            Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1")),
+            Ap::new(Ap::new(Atom::new(Name::Placeholder("x2".to_owned())), Atom::new(Name::Placeholder("x0".to_owned()))), Atom::new(Name::Placeholder("x1".to_owned()))),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap ap ap ap cons x0 x1 cons x2",
-            Ap::new(Ap::new(Atom::new("x2"), Atom::new("x0")), Atom::new("x1")),
+            Ap::new(Ap::new(Atom::new(Name::Placeholder("x2".to_owned())), Atom::new(Name::Placeholder("x0".to_owned()))), Atom::new(Name::Placeholder("x1".to_owned()))),
             &functions,
         );
     }
@@ -1416,8 +1441,8 @@ mod tests {
     fn isnil() {
         let functions = hashmap! {};
 
-        assert_expression_evaluates_to("ap isnil nil", Atom::new(T), &functions);
-        assert_expression_evaluates_to("ap isnil ap ap cons x0 x1", Atom::new(F), &functions);
+        assert_expression_evaluates_to("ap isnil nil", Atom::new(Name::T), &functions);
+        assert_expression_evaluates_to("ap isnil ap ap cons x0 x1", Atom::new(Name::F), &functions);
     }
 
     #[test]
@@ -1427,26 +1452,26 @@ mod tests {
             :dec = ap ap c add -1",
         )
         .unwrap();
-        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new("x0"), &functions);
-        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new("x0"), &functions);
-        assert_expression_evaluates_to("ap ap t 1 5", Atom::new("1"), &functions);
-        assert_expression_evaluates_to("ap ap t t i", Atom::new("t"), &functions);
-        assert_expression_evaluates_to("ap ap t t ap :inc 5", Atom::new("t"), &functions);
-        assert_expression_evaluates_to("ap ap t ap :inc 5 t", Atom::new("6"), &functions);
+        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
+        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
+        assert_expression_evaluates_to("ap ap t 1 5", Atom::new(Name::Int(1)), &functions);
+        assert_expression_evaluates_to("ap ap t t i", Atom::new(Name::T), &functions);
+        assert_expression_evaluates_to("ap ap t t ap :inc 5", Atom::new(Name::T), &functions);
+        assert_expression_evaluates_to("ap ap t ap :inc 5 t", Atom::new(Name::Int(6)), &functions);
     }
 
     #[test]
     fn false_combinator() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap ap f x0 x1", Atom::new("x1"), &functions);
+        assert_expression_evaluates_to("ap ap f x0 x1", Atom::new(Name::Placeholder("x1".to_owned())), &functions);
     }
 
     #[test]
     fn identity() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap i x0", Atom::new("x0"), &functions);
-        assert_expression_evaluates_to("ap i ap i x0", Atom::new("x0"), &functions);
-        assert_expression_evaluates_to("ap i i", Atom::new("i"), &functions);
+        assert_expression_evaluates_to("ap i x0", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
+        assert_expression_evaluates_to("ap i ap i x0", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
+        assert_expression_evaluates_to("ap i i", Atom::new(Name::I), &functions);
     }
 
     #[test]
@@ -1455,25 +1480,25 @@ mod tests {
 
         for num in -20..20 {
             let expr_string = format!("ap ap eq {} {}", num, num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(T), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::T), &functions);
         }
 
         for num in -20..20 {
             let expr_string = format!("ap ap eq 30 {}", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::F), &functions);
             let expr_string = format!("ap ap eq {} 30 ", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::F), &functions);
             let expr_string = format!("ap ap eq {} -30", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::F), &functions);
             let expr_string = format!("ap ap eq {} -30", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(F), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::F), &functions);
         }
-        assert_expression_evaluates_to("ap ap eq t f", Atom::new(F), &functions);
-        assert_expression_evaluates_to("ap ap eq f t", Atom::new(F), &functions);
+        assert_expression_evaluates_to("ap ap eq t f", Atom::new(Name::F), &functions);
+        assert_expression_evaluates_to("ap ap eq f t", Atom::new(Name::F), &functions);
 
-        assert_expression_evaluates_to("ap ap eq t ap i t", Atom::new(T), &functions);
-        assert_expression_evaluates_to("ap ap eq t ap ap eq t t", Atom::new(T), &functions);
-        assert_expression_evaluates_to("ap ap eq ap ap eq t t t", Atom::new(T), &functions);
+        assert_expression_evaluates_to("ap ap eq t ap i t", Atom::new(Name::T), &functions);
+        assert_expression_evaluates_to("ap ap eq t ap ap eq t t", Atom::new(Name::T), &functions);
+        assert_expression_evaluates_to("ap ap eq ap ap eq t t t", Atom::new(Name::T), &functions);
     }
 
     #[test]
@@ -1482,7 +1507,7 @@ mod tests {
 
         for num in -20..20 {
             let expr_string = format!("ap ap lt {} {}", num - 1, num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(T), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::T), &functions);
         }
     }
 
@@ -1492,7 +1517,7 @@ mod tests {
 
         for num in -20..20 {
             let expr_string = format!("ap neg {}", num);
-            assert_expression_evaluates_to(&expr_string, Atom::new(-num), &functions);
+            assert_expression_evaluates_to(&expr_string, Atom::new(Name::Int(-num)), &functions);
         }
     }
 
@@ -1502,13 +1527,13 @@ mod tests {
         assert_expression_evaluates_to(
             "ap ap ap s x0 x1 x2",
             Ap::new(
-                Ap::new(Atom::new("x0"), Atom::new("x2")),
-                Ap::new(Atom::new("x1"), Atom::new("x2")),
+                Ap::new(Atom::new(Name::Placeholder("x0".to_owned())), Atom::new(Name::Placeholder("x2".to_owned()))),
+                Ap::new(Atom::new(Name::Placeholder("x1".to_owned())), Atom::new(Name::Placeholder("x2".to_owned()))),
             ),
             &functions,
         );
-        assert_expression_evaluates_to("ap ap ap s mul ap add 1 6", Atom::new(42), &functions);
-        assert_expression_evaluates_to("ap ap ap s add ap add 1 1", Atom::new(3), &functions);
+        assert_expression_evaluates_to("ap ap ap s mul ap add 1 6", Atom::new(Name::Int(42)), &functions);
+        assert_expression_evaluates_to("ap ap ap s add ap add 1 1", Atom::new(Name::Int(3)), &functions);
     }
 
     #[test]
@@ -1516,10 +1541,10 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap ap c x0 x1 x2",
-            Ap::new(Ap::new(Atom::new("x0"), Atom::new("x2")), Atom::new("x1")),
+            Ap::new(Ap::new(Atom::new(Name::Placeholder("x0".to_owned())), Atom::new(Name::Placeholder("x2".to_owned()))), Atom::new(Name::Placeholder("x1".to_owned()))),
             &functions,
         );
-        assert_expression_evaluates_to("ap ap ap c add 1 2", Atom::new(3), &functions);
+        assert_expression_evaluates_to("ap ap ap c add 1 2", Atom::new(Name::Int(3)), &functions);
     }
 
     #[test]
@@ -1529,10 +1554,10 @@ mod tests {
             :dec = ap ap c add -1",
         )
         .unwrap();
-        assert_expression_evaluates_to("ap ap ap b :inc :dec 0", Atom::new(0), &functions);
+        assert_expression_evaluates_to("ap ap ap b :inc :dec 0", Atom::new(Name::Int(0)), &functions);
         assert_expression_evaluates_to(
             "ap ap ap b x0 x1 x2",
-            Ap::new(Atom::new("x0"), Ap::new(Atom::new("x1"), Atom::new("x2"))),
+            Ap::new(Atom::new(Name::Placeholder("x0".to_owned())), Ap::new(Atom::new(Name::Placeholder("x1".to_owned())), Atom::new(Name::Placeholder("x2".to_owned())))),
             &functions,
         );
     }
@@ -1540,10 +1565,10 @@ mod tests {
     #[test]
     fn car() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap car ap ap cons x0 x1", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap car ap ap cons x0 x1", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
         assert_expression_evaluates_to(
             "ap car x0",
-            Ap::new(Atom::new("x0"), Atom::new(T)),
+            Ap::new(Atom::new(Name::Placeholder("x0".to_owned())), Atom::new(Name::T)),
             &functions,
         );
     }
@@ -1551,10 +1576,10 @@ mod tests {
     #[test]
     fn cdr() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap cdr ap ap cons x0 x2", Atom::new("x2"), &functions);
+        assert_expression_evaluates_to("ap cdr ap ap cons x0 x2", Atom::new(Name::Placeholder("x2".to_owned())), &functions);
         assert_expression_evaluates_to(
             "ap cdr x0",
-            Ap::new(Atom::new("x0"), Atom::new(F)),
+            Ap::new(Atom::new(Name::Placeholder("x0".to_owned())), Atom::new(Name::F)),
             &functions,
         );
     }
@@ -1562,7 +1587,7 @@ mod tests {
     #[test]
     fn nil() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to("ap nil x0", Atom::new(T), &functions);
+        assert_expression_evaluates_to("ap nil x0", Atom::new(Name::T), &functions);
     }
 
     #[test]
@@ -1573,7 +1598,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_expression_evaluates_to("ap :2000 x0", Atom::new("x0"), &functions);
-        assert_expression_evaluates_to("ap :1000 x0", Atom::new("x0"), &functions);
+        assert_expression_evaluates_to("ap :2000 x0", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
+        assert_expression_evaluates_to("ap :1000 x0", Atom::new(Name::Placeholder("x0".to_owned())), &functions);
     }
 }
