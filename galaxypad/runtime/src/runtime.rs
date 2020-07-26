@@ -542,6 +542,17 @@ fn eval_iterative(
                 next_to_evaluate = stack.pop().unwrap();
             }
 
+            next_to_evaluate = match *next_to_evaluate.clone().borrow() {
+                Expr::Atom(ref atom) => {
+                    match atom.name.as_str() {
+                        "thunk1" => Ap::new(args.pop().unwrap(), args.pop().unwrap()),
+                        "thunk2" => Ap::new(Ap::new(args.pop().unwrap(), args.pop().unwrap()), args.pop().unwrap()),
+                        _ => next_to_evaluate,
+                    }
+                },
+                _ => next_to_evaluate,
+            };
+
             match *next_to_evaluate.clone().borrow() {
                 Expr::Atom(ref atom) => {
                     if let Some(f) = functions.get(&atom.name) {
@@ -591,14 +602,11 @@ fn eval_iterative(
                                     continue;
                                 }
 
-                                stack.push(Ap::new(Atom::new("neg_thunk"), constants.nil.clone()));
-                                stack.push(x.clone());
-                                continue;
-                            }
-                            "neg_thunk" => {
-                                let res = Atom::new(-as_num(args.pop().unwrap())?);
-                                res.borrow_mut().set_evaluated(res.clone())?;
-                                stack.push(res);
+                                let neg = Atom::new("neg");
+                                neg.borrow_mut().set_evaluated(neg.clone())?;
+                                stack.push(Atom::new("thunk1"));
+                                stack.push(neg);
+                                stack.push(x);
                                 continue;
                             }
                             "i" => {
@@ -783,21 +791,12 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let inner =
-                                            Ap::new(Atom::new("add_thunk"), constants.nil.clone());
-                                        inner.borrow_mut().set_evaluated(inner.clone())?;
-                                        stack.push(Ap::new(inner, constants.nil.clone()));
+                                        let add = Atom::new("add");
+                                        add.borrow_mut().set_evaluated(add.clone())?;
+                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(add);
                                         stack.push(x);
                                         stack.push(y);
-                                        continue;
-                                    }
-                                    "add_thunk" => {
-                                        let res = Atom::new(
-                                            as_num(args.pop().unwrap())?
-                                                + as_num(args.pop().unwrap())?,
-                                        );
-                                        res.borrow_mut().set_evaluated(res.clone())?;
-                                        stack.push(res);
                                         continue;
                                     }
                                     "mul" => {
@@ -812,21 +811,12 @@ fn eval_iterative(
                                             }
                                         }
 
-                                        let inner =
-                                            Ap::new(Atom::new("mul_thunk"), constants.nil.clone());
-                                        inner.borrow_mut().set_evaluated(inner.clone())?;
-                                        stack.push(Ap::new(inner, constants.nil.clone()));
+                                        let mul = Atom::new("mul");
+                                        mul.borrow_mut().set_evaluated(mul.clone())?;
+                                        stack.push(Atom::new("thunk2"));
+                                        stack.push(mul);
                                         stack.push(x);
                                         stack.push(y);
-                                        continue;
-                                    }
-                                    "mul_thunk" => {
-                                        let res = Atom::new(
-                                            as_num(args.pop().unwrap())?
-                                                * as_num(args.pop().unwrap())?,
-                                        );
-                                        res.borrow_mut().set_evaluated(res.clone())?;
-                                        stack.push(res);
                                         continue;
                                     }
                                     "div" => {
