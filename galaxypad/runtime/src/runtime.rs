@@ -582,7 +582,10 @@ fn eval_iterative(
             };
 
             match *next_to_evaluate.clone().borrow() {
-                Expr::Atom(Atom { name: Name::Placeholder(ref name), _evaluated: _}) => {
+                Expr::Atom(Atom {
+                    name: Name::Placeholder(ref name),
+                    _evaluated: _,
+                }) => {
                     if let Some(f) = functions.get(name) {
                         stack.push(f.clone());
                         continue;
@@ -592,30 +595,29 @@ fn eval_iterative(
                     let ap1_func_ref = ap1.func();
                     if ap1_func_ref.borrow().evaluated().is_none() {
                         match *ap1_func_ref.borrow() {
-                            Expr::Atom(Atom { name: Name::Placeholder(ref name), _evaluated: _}) => {
+                            Expr::Atom(Atom {
+                                name: Name::Placeholder(ref name),
+                                _evaluated: _,
+                            }) => {
                                 if let Some(f) = functions.get(name) {
                                     stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
                                     stack.push(f.clone());
                                     continue;
                                 }
-                            },
+                            }
                             Expr::Ap(_) => {
                                 stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
                                 stack.push(ap1.func());
-                                continue
+                                continue;
                             }
                             _ => (),
                         }
                     }
 
                     next_to_evaluate = match *ap1_func_ref.borrow() {
-                        Expr::Atom(ref atom) => {
-                            if atom.name == Name::FuncThunk {
-                                Ap::new(args.pop().unwrap(), ap1.arg())
-                            } else {
-                                next_to_evaluate
-                            }
-                        },
+                        Expr::Atom(ref atom) if atom.name == Name::FuncThunk => {
+                            Ap::new(args.pop().unwrap(), ap1.arg())
+                        }
                         _ => next_to_evaluate,
                     };
 
@@ -993,9 +995,7 @@ fn eval_iterative(
             }
 
             match *next_to_evaluate.borrow_mut() {
-                Expr::Atom(ref mut atom) => {
-                    atom.set_evaluated(next_to_evaluate.clone())?;
-                }
+                Expr::Atom(ref mut atom) => atom.set_evaluated(next_to_evaluate.clone())?,
                 _ => (),
             }
             stack.push(next_to_evaluate);
