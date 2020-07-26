@@ -592,9 +592,8 @@ fn eval_iterative(
                     }
                 }
                 Expr::Ap(ref ap1) => {
-                    let ap1_func_ref = ap1.func();
-                    if ap1_func_ref.borrow().evaluated().is_none() {
-                        match *ap1_func_ref.borrow() {
+                    if ap1.func().borrow().evaluated().is_none() {
+                        match *ap1.func().borrow() {
                             Expr::Atom(Atom {
                                 name: Name::Placeholder(ref name),
                                 _evaluated: _,
@@ -614,7 +613,7 @@ fn eval_iterative(
                         }
                     }
 
-                    next_to_evaluate = match *ap1_func_ref.borrow() {
+                    next_to_evaluate = match *ap1.func().borrow() {
                         Expr::Atom(ref atom) if atom.name == Name::FuncThunk => {
                             Ap::new(args.pop().unwrap(), ap1.arg())
                         }
@@ -628,7 +627,7 @@ fn eval_iterative(
                     } else {
                         false
                     };
-                    match *ap1_func_ref.clone().borrow() {
+                    match *ap1.func().clone().borrow() {
                         Expr::Atom(ref atom) => match (*atom).name {
                             Name::Neg => {
                                 if let Some(evaluated) = x.borrow().evaluated() {
