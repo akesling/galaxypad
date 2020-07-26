@@ -20,11 +20,12 @@ pub fn greet() {
     log("Hello, host!");
 }
 
-fn print_names(points: Vec<Vec<(i64, i64)>>) {
+fn print_images(points: Vec<Vec<(i64, i64)>>) {
     log(&format!("{:?}", points));
 }
 
 fn click_panic() -> Point {
+    log("Click receipt is not yet implemented.");
     panic!("Click receipt is not yet implemented.");
 }
 
@@ -51,5 +52,5 @@ pub fn test_stack_size() {
 
 #[wasm_bindgen]
 pub fn start_galaxy_pad() {
-    let callback = entry_point(&click_panic, &print_names);
+    let callback = entry_point(&click_panic, &print_images);
 }
