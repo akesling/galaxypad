@@ -150,28 +150,28 @@ impl Expr {
 
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(match *self {
-            Expr::Atom(ref atom) => write!(f, "Atom({:?})", atom.name)?,
-            Expr::Ap(ref ap) => write!(f, "Ap({}, {})", ap.func.borrow(), ap.arg.borrow())?,
-        })
+        match *self {
+            Expr::Atom(ref atom) => write!(f, "Atom({:?})", atom.name),
+            Expr::Ap(ref ap) => write!(f, "Ap({}, {})", ap.func.borrow(), ap.arg.borrow()),
+        }
     }
 }
 
 impl Debug for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(match *self {
+        match *self {
             Expr::Atom(ref atom) => f
                 .debug_struct("Atom")
                 .field("name", &atom.name)
                 .field("evaluated", &atom.evaluated().is_some())
-                .finish()?,
+                .finish(),
             Expr::Ap(ref ap) => f
                 .debug_struct("Ap")
                 .field("func", &ap.func().borrow())
                 .field("arg", &ap.arg().borrow())
                 .field("evaluated", &ap.evaluated().is_some())
-                .finish()?,
-        })
+                .finish(),
+        }
     }
 }
 
@@ -192,7 +192,7 @@ impl Atom {
     #[allow(clippy::new_ret_no_self)]
     fn new(name: Name) -> ExprRef {
         Rc::new(RefCell::new(Expr::Atom(Atom {
-            name: name,
+            name,
             _evaluated: None,
         })))
     }
@@ -464,21 +464,19 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
         }
     }
 
-    Ok((
-        as_num(
-            points_expr
-                .borrow()
-                .arg()
-                .ok_or_else(|| "arg expected on points_expr of flatten_point")?,
-        )?,
-        as_num(
-            second
-                .clone()
-                .borrow()
-                .arg()
-                .ok_or_else(|| "arg expected on second of flatten_point")?,
-        )?,
-    ))
+    let first_num = as_num(
+        points_expr
+            .borrow()
+            .arg()
+            .ok_or_else(|| "arg expected on points_expr of flatten_point")?,
+    )?;
+    let second_num = as_num(
+        second
+            .borrow()
+            .arg()
+            .ok_or_else(|| "arg expected on second of flatten_point")?,
+    )?;
+    Ok((first_num, second_num))
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
@@ -946,8 +944,8 @@ fn eval_iterative(
                                         } else {
                                             false
                                         };
-                                    match *ap3.func().clone().borrow() {
-                                        Expr::Atom(ref atom) => match atom.name {
+                                    if let Expr::Atom(ref atom) = *ap3.func().clone().borrow() {
+                                        match atom.name {
                                             Name::S => {
                                                 let res =
                                                     Ap::new(Ap::new(z, x.clone()), Ap::new(y, x));
@@ -982,8 +980,7 @@ fn eval_iterative(
                                                 continue;
                                             }
                                             _ => (),
-                                        },
-                                        _ => (),
+                                        }
                                     }
                                 }
                             }
@@ -993,9 +990,8 @@ fn eval_iterative(
                 _ => (),
             }
 
-            match *next_to_evaluate.borrow_mut() {
-                Expr::Atom(ref mut atom) => atom.set_evaluated(next_to_evaluate.clone())?,
-                _ => (),
+            if let Expr::Atom(ref mut atom) = *next_to_evaluate.borrow_mut() {
+                atom.set_evaluated(next_to_evaluate.clone())?;
             }
             stack.push(next_to_evaluate);
         }
@@ -1033,6 +1029,7 @@ fn _eval(
     }
 }
 
+#[allow(clippy::all)]
 fn _try_eval(
     expr: ExprRef,
     functions: &HashMap<String, ExprRef>,
