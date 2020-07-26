@@ -582,52 +582,43 @@ fn eval_iterative(
             };
 
             match *next_to_evaluate.clone().borrow() {
-                Expr::Atom(ref atom) => {
-                    if let Name::Placeholder(ref name) = atom.name {
-                        if let Some(f) = functions.get(name) {
-                            stack.push(f.clone());
-                            continue;
-                        }
+                Expr::Atom(Atom { name: Name::Placeholder(ref name), _evaluated: _}) => {
+                    if let Some(f) = functions.get(name) {
+                        stack.push(f.clone());
+                        continue;
                     }
                 }
                 Expr::Ap(ref ap1) => {
-                    //                    if ap1.func().borrow().evaluated().is_none() {
-                    //                        stack.push(Atom::new(Name::Thunk1));
-                    //                        stack.push(ap1.func());
-                    //                        stack.push(ap1.arg());
-                    //                        continue
-                    //                    }
-                    //                    let x = ap1.arg();
-                    //                            match *ap2.func().clone().borrow() {
                     let ap1_func_ref = ap1.func();
+                    if ap1_func_ref.borrow().evaluated().is_none() {
+                        match *ap1_func_ref.borrow() {
+                            Expr::Atom(Atom { name: Name::Placeholder(ref name), _evaluated: _}) => {
+                                if let Some(f) = functions.get(name) {
+                                    stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
+                                    stack.push(f.clone());
+                                    continue;
+                                }
+                            },
+                            Expr::Ap(_) => {
+                                stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
+                                stack.push(ap1.func());
+                                continue
+                            }
+                            _ => (),
+                        }
+                    }
+
                     next_to_evaluate = match *ap1_func_ref.borrow() {
                         Expr::Atom(ref atom) => {
                             if atom.name == Name::FuncThunk {
-                                let next = Ap::new(args.pop().unwrap(), ap1.arg());
-                                next
+                                Ap::new(args.pop().unwrap(), ap1.arg())
                             } else {
-                                if let Name::Placeholder(ref name) = atom.name {
-                                    if let Some(f) = functions.get(name) {
-                                        stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
-                                        stack.push(f.clone());
-                                        continue;
-                                    }
-                                }
-
                                 next_to_evaluate
                             }
-                        }
-                        Expr::Ap(ref ap2) => {
-                            if let Some(evaluated) = ap2.evaluated() {
-                                let next = Ap::new(evaluated, ap1.arg());
-                                next
-                            } else {
-                                stack.push(Ap::new(Atom::new(Name::FuncThunk), ap1.arg()));
-                                stack.push(ap1_func_ref.clone());
-                                continue;
-                            }
-                        }
+                        },
+                        _ => next_to_evaluate,
                     };
+
                     let x = ap1.arg();
                     let x_is_placeholder = if let Some(Name::Placeholder(name)) = x.borrow().name()
                     {
@@ -998,6 +989,7 @@ fn eval_iterative(
                         }
                     }
                 }
+                _ => (),
             }
 
             match *next_to_evaluate.borrow_mut() {
