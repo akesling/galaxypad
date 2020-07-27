@@ -10,7 +10,10 @@ module.exports = {
         filename: 'index.js',
     },
     plugins: [
-        new HtmlWebpackPlugin(),
+        new HtmlWebpackPlugin({
+            title: "Galaxy Pad",
+            template: "./index.html",
+        }),
         new WasmPackPlugin({
             crateDirectory: path.resolve(__dirname, "."),
             forceMode: "production",

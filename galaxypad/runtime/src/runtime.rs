@@ -1238,18 +1238,19 @@ fn iterate(
     constants: &Constants,
     functions: &HashMap<String, ExprRef>,
     render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
+    describe_progress: &dyn Fn(&str),
 ) -> ExprRef {
-    render_to_display(vec![vec![(1, 0)]]);
+    describe_progress("Iterating");
     let click = Ap::new(
         Ap::new(constants.cons.clone(), Atom::new(Name::Int(point.x as i64))),
         Atom::new(Name::Int(point.y as i64)),
     );
-    render_to_display(vec![vec![(1, 1)]]);
+    describe_progress("Click inflated");
 
     let (new_state, images) = interact(state, click, &functions, &constants);
-    render_to_display(vec![vec![(1, 2)]]);
+    describe_progress("Interact executed");
     let image_lists = get_list_items_from_expr(images).unwrap();
-    render_to_display(vec![vec![(1, 3)]]);
+    describe_progress("Image lists parsed");
     let mut points_lists: Vec<Vec<(i64, i64)>> = vec![];
     for point_list_expr in image_lists.iter() {
         points_lists.push(vectorize_points_expr(point_list_expr.clone()).unwrap());
@@ -1265,6 +1266,7 @@ pub struct Callback<'a> {
     functions: HashMap<String, ExprRef>,
     render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
     request_click_from_user: &'a dyn Fn() -> Point,
+    describe_progress: &'a dyn Fn(&str),
     constants: Constants,
 }
 impl<'a> Callback<'a> {
@@ -1275,6 +1277,7 @@ impl<'a> Callback<'a> {
             &self.constants,
             &self.functions,
             self.render_to_display,
+            self.describe_progress,
         );
         self.point = (self.request_click_from_user)();
     }
@@ -1283,33 +1286,35 @@ impl<'a> Callback<'a> {
 pub fn entry_point<'a>(
     request_click_from_user: &'a dyn Fn() -> Point,
     render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
+    describe_progress: &'a dyn Fn(&str),
 ) -> Box<Callback<'a>> {
-    render_to_display(vec![vec![(0, 0)]]);
+    describe_progress("Entered entrypoint");
     let galaxy_script = Box::new(std::include_str!("../galaxy.txt"));
-    render_to_display(vec![vec![(0, 2)]]);
+    describe_progress("Loaded galaxy script");
     let constants = get_constants();
+    describe_progress("Loaded constants");
 
-    render_to_display(vec![vec![(0, 3)]]);
     let mut callback = Box::new(Callback {
         state: constants.nil.clone(),
         point: Point { x: 0, y: 0 },
         render_to_display,
         request_click_from_user,
+        describe_progress,
         functions: HashMap::new(),
         constants,
     });
-    render_to_display(vec![vec![(0, 4)]]);
+    describe_progress("Initialized callback");
     load_function_definitions(&galaxy_script, &mut callback.functions).unwrap();
-    render_to_display(vec![vec![(0, 5)]]);
+    describe_progress("Parsed functions from galaxy script");
     callback.call();
-    render_to_display(vec![vec![(0, 6)]]);
+    describe_progress("Executed first iteration");
 
     callback
 }
 
 #[allow(dead_code)]
 fn main() {
-    let mut callback = entry_point(&request_click_from_user, &print_images);
+    let mut callback = entry_point(&request_click_from_user, &print_images, &|d| println!("{}", d));
     loop {
         callback.call();
     }

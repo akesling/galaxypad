@@ -13,6 +13,8 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 extern {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
+
+    fn render_image(image: Box<[i64]>);
 }
 
 #[wasm_bindgen]
@@ -22,6 +24,16 @@ pub fn greet() {
 
 fn print_images(points: Vec<Vec<(i64, i64)>>) {
     log(&format!("{:?}", points));
+}
+
+fn render_images(images: Vec<Vec<(i64, i64)>>, renderer: &js_sys::Function) {
+    log(&format!("Rust rendering {:?}", images));
+    for points in images.iter() {
+        let this = JsValue::null();
+        let ps_for_js: Vec<Vec<i64>> = points.iter().map(|p| vec![p.0, p.1]).collect();
+        let x = JsValue::from_serde(&points).unwrap();
+        let _ = renderer.call1(&this, &x);
+    }
 }
 
 fn click_panic() -> Point {
@@ -51,6 +63,6 @@ pub fn test_stack_size() {
 }
 
 #[wasm_bindgen]
-pub fn start_galaxy_pad() {
-    let callback = entry_point(&click_panic, &print_images);
+pub fn start_galaxy_pad(renderer: &js_sys::Function) {
+    let callback = entry_point(&click_panic, &|images| render_images(images, renderer), &log);
 }
