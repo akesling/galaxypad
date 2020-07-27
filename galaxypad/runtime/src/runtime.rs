@@ -1010,137 +1010,144 @@ fn _try_eval(
         return Ok(x);
     }
 
-    if let Some(Name::Placeholder(name)) = expr.borrow().name() {
-        if let Some(f) = functions.get(name) {
-            return Ok(f.clone());
-        }
-    } else {
-        let func = _eval(
-            expr.borrow()
-                .func()
-                .ok_or_else(|| "func expected on expr of try_eval")?,
-            functions,
-            constants,
-        )?;
-        let x = expr
-            .borrow()
-            .arg()
-            .ok_or_else(|| "arg expected on expr of try_eval")?;
-        if let Some(name) = func.clone().borrow().name().as_ref() {
-            match *name {
-                Name::Neg => {
-                    return Ok(Atom::new(Name::Int(-as_num(_eval(
-                        x, functions, constants,
-                    )?)?)));
-                }
-                Name::I => {
-                    return Ok(x);
-                }
-                Name::Nil => {
-                    return Ok(constants.t.clone());
-                }
-                Name::Isnil => {
-                    return Ok(Ap::new(
-                        x,
-                        Ap::new(
-                            constants.t.clone(),
-                            Ap::new(constants.t.clone(), constants.f.clone()),
-                        ),
-                    ));
-                }
-                Name::Car => {
-                    return Ok(Ap::new(x, constants.t.clone()));
-                }
-                Name::Cdr => {
-                    return Ok(Ap::new(x, constants.f.clone()));
-                }
-                _ => (),
+    match *expr.borrow() {
+        Expr::Atom(Atom {
+            name: Name::Placeholder(ref name),
+            _evaluated: _,
+        }) => {
+            if let Some(f) = functions.get(name) {
+                return Ok(f.clone());
             }
-        } else {
-            let func2 = _eval(
-                func.borrow()
+        }
+        Expr::Ap(_) => {
+            let func = _eval(
+                expr.borrow()
                     .func()
-                    .ok_or_else(|| "func expected on func of try_eval")?,
+                    .ok_or_else(|| "func expected on expr of try_eval")?,
                 functions,
                 constants,
             )?;
-            let y = func
+            let x = expr
                 .borrow()
                 .arg()
-                .ok_or_else(|| "arg expected on func of try_eval")?;
-            if let Some(name) = func2.clone().borrow().name().as_ref() {
-                match *name {
-                    Name::T => {
-                        return Ok(y);
+                .ok_or_else(|| "arg expected on expr of try_eval")?;
+            if let Some(name) = func.clone().borrow().name() {
+                match name {
+                    Name::Neg => {
+                        return Ok(Atom::new(Name::Int(-as_num(_eval(
+                            x, functions, constants,
+                        )?)?)));
                     }
-                    Name::F => {
+                    Name::I => {
                         return Ok(x);
                     }
-                    Name::Add => {
-                        return Ok(Atom::new(Name::Int(
-                            as_num(_eval(x, functions, constants)?)?
-                                + as_num(_eval(y, functions, constants)?)?,
-                        )));
+                    Name::Nil => {
+                        return Ok(constants.t.clone());
                     }
-                    Name::Mul => {
-                        return Ok(Atom::new(Name::Int(
-                            as_num(_eval(x, functions, constants)?)?
-                                * as_num(_eval(y, functions, constants)?)?,
-                        )));
+                    Name::Isnil => {
+                        return Ok(Ap::new(
+                            x,
+                            Ap::new(
+                                constants.t.clone(),
+                                Ap::new(constants.t.clone(), constants.f.clone()),
+                            ),
+                        ));
                     }
-                    Name::Div => {
-                        return Ok(Atom::new(Name::Int(
-                            as_num(_eval(y, functions, constants)?)?
-                                / as_num(_eval(x, functions, constants)?)?,
-                        )));
+                    Name::Car => {
+                        return Ok(Ap::new(x, constants.t.clone()));
                     }
-                    Name::Eq => {
-                        let are_equal = as_num(_eval(x, functions, constants)?)?
-                            == as_num(_eval(y, functions, constants)?)?;
-                        return Ok(if are_equal {
-                            constants.t.clone()
-                        } else {
-                            constants.f.clone()
-                        });
-                    }
-                    Name::Lt => {
-                        let is_less_than = as_num(_eval(y, functions, constants)?)?
-                            < as_num(_eval(x, functions, constants)?)?;
-                        return Ok(if is_less_than {
-                            constants.t.clone()
-                        } else {
-                            constants.f.clone()
-                        });
-                    }
-                    Name::Cons => {
-                        return Ok(_eval_cons(y, x, functions, constants)?);
+                    Name::Cdr => {
+                        return Ok(Ap::new(x, constants.f.clone()));
                     }
                     _ => (),
                 }
             } else {
-                let func3 = _eval(
-                    func2
-                        .borrow()
+                let func2 = _eval(
+                    func.borrow()
                         .func()
-                        .ok_or_else(|| "func expected on func2 of try_eval")?,
+                        .ok_or_else(|| "func expected on func of try_eval")?,
                     functions,
                     constants,
                 )?;
-                let z = func2
+                let y = func
                     .borrow()
                     .arg()
-                    .ok_or_else(|| "arg expected on func2 of try_eval")?;
-                if let Some(name) = func3.clone().borrow().name().as_ref() {
-                    match *name {
-                        Name::S => return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x))),
-                        Name::C => return Ok(Ap::new(Ap::new(z, x), y)),
-                        Name::B => return Ok(Ap::new(z, Ap::new(y, x))),
-                        Name::Cons => return Ok(Ap::new(Ap::new(x, z), y)),
+                    .ok_or_else(|| "arg expected on func of try_eval")?;
+                if let Some(name) = func2.clone().borrow().name() {
+                    match name {
+                        Name::T => {
+                            return Ok(y);
+                        }
+                        Name::F => {
+                            return Ok(x);
+                        }
+                        Name::Add => {
+                            return Ok(Atom::new(Name::Int(
+                                as_num(_eval(x, functions, constants)?)?
+                                    + as_num(_eval(y, functions, constants)?)?,
+                            )));
+                        }
+                        Name::Mul => {
+                            return Ok(Atom::new(Name::Int(
+                                as_num(_eval(x, functions, constants)?)?
+                                    * as_num(_eval(y, functions, constants)?)?,
+                            )));
+                        }
+                        Name::Div => {
+                            return Ok(Atom::new(Name::Int(
+                                as_num(_eval(y, functions, constants)?)?
+                                    / as_num(_eval(x, functions, constants)?)?,
+                            )));
+                        }
+                        Name::Eq => {
+                            let are_equal = as_num(_eval(x, functions, constants)?)?
+                                == as_num(_eval(y, functions, constants)?)?;
+                            return Ok(if are_equal {
+                                constants.t.clone()
+                            } else {
+                                constants.f.clone()
+                            });
+                        }
+                        Name::Lt => {
+                            let is_less_than = as_num(_eval(y, functions, constants)?)?
+                                < as_num(_eval(x, functions, constants)?)?;
+                            return Ok(if is_less_than {
+                                constants.t.clone()
+                            } else {
+                                constants.f.clone()
+                            });
+                        }
+                        Name::Cons => {
+                            return Ok(_eval_cons(y, x, functions, constants)?);
+                        }
                         _ => (),
+                    }
+                } else {
+                    let func3 = _eval(
+                        func2
+                            .borrow()
+                            .func()
+                            .ok_or_else(|| "func expected on func2 of try_eval")?,
+                        functions,
+                        constants,
+                    )?;
+                    let z = func2
+                        .borrow()
+                        .arg()
+                        .ok_or_else(|| "arg expected on func2 of try_eval")?;
+                    if let Some(name) = func3.clone().borrow().name() {
+                        match name {
+                            Name::S => return Ok(Ap::new(Ap::new(z, x.clone()), Ap::new(y, x))),
+                            Name::C => return Ok(Ap::new(Ap::new(z, x), y)),
+                            Name::B => return Ok(Ap::new(z, Ap::new(y, x))),
+                            Name::Cons => return Ok(Ap::new(Ap::new(x, z), y)),
+                            _ => (),
+                        }
                     }
                 }
             }
         }
+        _ => (),
     }
 
     Ok(expr)
