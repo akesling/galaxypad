@@ -860,13 +860,13 @@ fn eval_iterative(
                                         continue;
                                     }
                                     _ => {
-                                        if !TWO_ARG_OPERATORS.contains(&atom.name) && !THREE_ARG_OPERATORS.contains(&atom.name) {
+                                        if !TWO_ARG_OPERATORS.contains(&atom.name)
+                                            && !THREE_ARG_OPERATORS.contains(&atom.name)
+                                        {
                                             // None of the two-arg operators matched, try
                                             // unwrapping the outermost ap to evaluate.
                                             stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
-                                            stack.push(
-                                                next_to_evaluate.borrow().func().unwrap(),
-                                            );
+                                            stack.push(next_to_evaluate.borrow().func().unwrap());
                                             continue;
                                         }
                                     }
