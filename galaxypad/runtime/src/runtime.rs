@@ -20,11 +20,11 @@ enum Name {
     Int(i64),
 
     // Bookkeeping
-    Thunk1,
-    Thunk2,
-    FuncThunk1,
-    FuncThunk2,
-    FuncThunk3,
+    EagerThunk1,
+    EagerThunk2,
+    LazyThunk1,
+    LazyThunk2,
+    LazyThunk3,
 
     // Operators
     Add,
@@ -595,8 +595,8 @@ fn eval_iterative(
 
             next_to_evaluate = match *next_to_evaluate.clone().borrow() {
                 Expr::Atom(ref atom) => match atom.name {
-                    Name::Thunk1 => Ap::new(args.pop().unwrap(), args.pop().unwrap()),
-                    Name::Thunk2 => Ap::new(
+                    Name::EagerThunk1 => Ap::new(args.pop().unwrap(), args.pop().unwrap()),
+                    Name::EagerThunk2 => Ap::new(
                         Ap::new(args.pop().unwrap(), args.pop().unwrap()),
                         args.pop().unwrap(),
                     ),
@@ -633,7 +633,7 @@ fn eval_iterative(
                         Expr::Atom(ref atom) => match (*atom).name {
                             Name::Placeholder(ref name) => {
                                 if let Some(f) = functions.get(name) {
-                                    stack.push(Ap::new(Atom::new(Name::FuncThunk1), ap1.arg()));
+                                    stack.push(Ap::new(Atom::new(Name::LazyThunk1), ap1.arg()));
                                     stack.push(f.clone());
                                     continue;
                                 } else if name.starts_with('x') {
@@ -646,7 +646,7 @@ fn eval_iterative(
                                     return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
                                 }
                             }
-                            Name::FuncThunk1 => {
+                            Name::LazyThunk1 => {
                                 stack.push(Ap::new(args.pop().unwrap(), x));
                                 continue;
                             }
@@ -660,7 +660,7 @@ fn eval_iterative(
 
                                 let neg = Atom::new(Name::Neg);
                                 neg.borrow_mut().set_evaluated(neg.clone())?;
-                                stack.push(Atom::new(Name::Thunk1));
+                                stack.push(Atom::new(Name::EagerThunk1));
                                 stack.push(neg);
                                 stack.push(x);
                                 continue;
@@ -702,7 +702,7 @@ fn eval_iterative(
                                     Name::Placeholder(ref name) => {
                                         if let Some(f) = functions.get(name) {
                                             stack.push(Ap::new(
-                                                Ap::new(Atom::new(Name::FuncThunk2), y),
+                                                Ap::new(Atom::new(Name::LazyThunk2), y),
                                                 x,
                                             ));
                                             stack.push(f.clone());
@@ -722,7 +722,7 @@ fn eval_iterative(
                                             return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
                                         }
                                     }
-                                    Name::FuncThunk2 => {
+                                    Name::LazyThunk2 => {
                                         stack.push(Ap::new(Ap::new(args.pop().unwrap(), y), x));
                                         continue;
                                     }
@@ -748,7 +748,7 @@ fn eval_iterative(
 
                                         let add = Atom::new(Name::Add);
                                         add.borrow_mut().set_evaluated(add.clone())?;
-                                        stack.push(Atom::new(Name::Thunk2));
+                                        stack.push(Atom::new(Name::EagerThunk2));
                                         stack.push(add);
                                         stack.push(x);
                                         stack.push(y);
@@ -768,7 +768,7 @@ fn eval_iterative(
 
                                         let mul = Atom::new(Name::Mul);
                                         mul.borrow_mut().set_evaluated(mul.clone())?;
-                                        stack.push(Atom::new(Name::Thunk2));
+                                        stack.push(Atom::new(Name::EagerThunk2));
                                         stack.push(mul);
                                         stack.push(x);
                                         stack.push(y);
@@ -788,7 +788,7 @@ fn eval_iterative(
 
                                         let div = Atom::new(Name::Div);
                                         div.borrow_mut().set_evaluated(div.clone())?;
-                                        stack.push(Atom::new(Name::Thunk2));
+                                        stack.push(Atom::new(Name::EagerThunk2));
                                         stack.push(div);
                                         stack.push(y);
                                         stack.push(x);
@@ -810,7 +810,7 @@ fn eval_iterative(
 
                                         let eq = Atom::new(Name::Eq);
                                         eq.borrow_mut().set_evaluated(eq.clone())?;
-                                        stack.push(Atom::new(Name::Thunk2));
+                                        stack.push(Atom::new(Name::EagerThunk2));
                                         stack.push(eq);
                                         stack.push(y);
                                         stack.push(x);
@@ -832,7 +832,7 @@ fn eval_iterative(
 
                                         let lt = Atom::new(Name::Lt);
                                         lt.borrow_mut().set_evaluated(lt.clone())?;
-                                        stack.push(Atom::new(Name::Thunk2));
+                                        stack.push(Atom::new(Name::EagerThunk2));
                                         stack.push(lt);
                                         stack.push(y);
                                         stack.push(x);
@@ -853,7 +853,7 @@ fn eval_iterative(
 
                                         let cons = Atom::new(Name::Cons);
                                         cons.borrow_mut().set_evaluated(cons.clone())?;
-                                        stack.push(Atom::new(Name::Thunk2));
+                                        stack.push(Atom::new(Name::EagerThunk2));
                                         stack.push(cons);
                                         stack.push(y);
                                         stack.push(x);
@@ -865,7 +865,7 @@ fn eval_iterative(
                                         {
                                             // None of the two-arg operators matched, try
                                             // unwrapping the outermost ap to evaluate.
-                                            stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
+                                            stack.push(Ap::new(Atom::new(Name::LazyThunk1), x));
                                             stack.push(next_to_evaluate.borrow().func().unwrap());
                                             continue;
                                         }
@@ -881,7 +881,7 @@ fn eval_iterative(
                                                 if let Some(f) = functions.get(name) {
                                                     stack.push(Ap::new(
                                                         Ap::new(
-                                                            Ap::new(Atom::new(Name::FuncThunk3), z),
+                                                            Ap::new(Atom::new(Name::LazyThunk3), z),
                                                             y,
                                                         ),
                                                         x,
@@ -908,7 +908,7 @@ fn eval_iterative(
                                                     return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
                                                 }
                                             }
-                                            Name::FuncThunk3 => {
+                                            Name::LazyThunk3 => {
                                                 stack.push(Ap::new(
                                                     Ap::new(Ap::new(args.pop().unwrap(), z), y),
                                                     x,
@@ -938,7 +938,7 @@ fn eval_iterative(
                                             _ => {
                                                 // None of the three-arg combinators matched, try
                                                 // unwrapping the outermost ap to evaluate.
-                                                stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
+                                                stack.push(Ap::new(Atom::new(Name::LazyThunk1), x));
                                                 stack.push(
                                                     next_to_evaluate.borrow().func().unwrap(),
                                                 );
@@ -948,7 +948,7 @@ fn eval_iterative(
                                         _ => {
                                             // More than three ap's are applied, try unwrapping the
                                             // outermost ap to evaluate.
-                                            stack.push(Ap::new(Atom::new(Name::FuncThunk1), x));
+                                            stack.push(Ap::new(Atom::new(Name::LazyThunk1), x));
                                             stack.push(next_to_evaluate.borrow().func().unwrap());
                                             continue;
                                         }
