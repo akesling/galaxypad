@@ -33,6 +33,13 @@ class Display {
         this.data = this.ctx.getImageData(0, 0, this.WIDTH, this.HEIGHT);
     }
 
+    drawLayers(layers, colors) {
+        this.clear();
+        for (let i=layers.length-1; i >= 0; i--) {
+            this.drawPoints(layers[i], colors[i]);
+        }
+    }
+
     drawPoints(points, RGBA) {
         points.forEach((p, index) => {
             this.setPixel(this.data, this.HALF_WIDTH+p[0], this.HALF_HEIGHT+p[1], RGBA);
@@ -69,13 +76,24 @@ class Display {
 
 window.galaxyPadDisplay = new Display(document.getElementById('canvas'));
 
+const LAYER_COLORS = [
+    [0, 0, 0, 255], // #000000ff
+    [255, 102, 89, 255], // #ff6659ff
+    [123, 31, 162, 255], // #7b1fa2ff
+    [48, 63, 159, 255], // #303f9fff
+    [2, 136, 209, 255], // #0288d1ff
+    [0, 121, 107], // #00796bff
+    [104, 159, 56], // #689f38ff
+    [245, 124, 0], // #f57c00ff
+]
+
 rust
   .then(m => {
       console.log("Before", performance.now());
       try {
-        const renderer = (points) => {
-            console.log(`Javascript rendering: [${points}]`, points);
-            window.galaxyPadDisplay.drawPoints(points, [0, 0, 0, 255]);
+        const renderer = (layers) => {
+            console.log(`Javascript rendering: `, layers);
+            window.galaxyPadDisplay.drawLayers(layers, LAYER_COLORS);
         }
         m.start_galaxy_pad(renderer);
       } catch (e) {
