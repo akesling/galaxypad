@@ -16,7 +16,8 @@ struct Constants {
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 enum Name {
-    Placeholder(String),
+    Function(u32),
+    Variable(u32),
     Int(i64),
 
     // Bookkeeping
@@ -334,8 +335,16 @@ fn parse_token(candidate_token: &str, stack: &mut Vec<ExprRef>) -> Result<ExprRe
         return Ok(Atom::new(Name::Int(i)));
     }
 
-    if candidate_token.starts_with(':') || candidate_token.starts_with('x') {
-        return Ok(Atom::new(Name::Placeholder(candidate_token.to_string())));
+    if candidate_token.starts_with(':') {
+        if let Ok(i) = candidate_token[1..].parse::<u32>() {
+            return Ok(Atom::new(Name::Function(i)));
+        }
+    }
+
+    if candidate_token.starts_with('x') {
+        if let Ok(i) = candidate_token[1..].parse::<u32>() {
+            return Ok(Atom::new(Name::Variable(i)));
+        }
     }
 
     Err(format!("Could not parse '{}'", candidate_token))
@@ -368,7 +377,7 @@ fn deserialize(tokens: &[&str]) -> Result<ExprRef, String> {
 
 /// Loads a function definition, which must be of the form:
 /// <name> = <body expr>
-fn load_function(line: &str) -> Result<(String, ExprRef), String> {
+fn load_function(line: &str) -> Result<(u32, ExprRef), String> {
     let left_and_right: Box<Vec<&str>> =
         Box::new(line.split('=').filter(|s| !s.is_empty()).collect());
     assert!(
@@ -384,7 +393,7 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
         left_tokens.len() == 1,
         format!("Function name was longer than expected {:?}", left_tokens)
     );
-    let function_name = left_tokens[0].to_owned();
+    let function_name = left_tokens[0][1..].parse::<u32>().unwrap();
 
     let right_tokens: Box<Vec<&str>> = Box::new(
         left_and_right[1]
@@ -402,7 +411,7 @@ fn load_function(line: &str) -> Result<(String, ExprRef), String> {
 /// definition (pretty much just for galaxy.txt)
 fn load_function_definitions(
     script_contents: &str,
-    functions: &mut HashMap<String, ExprRef>,
+    functions: &mut HashMap<u32, ExprRef>,
 ) -> Result<(), String> {
     let lines = Box::new(script_contents.split('\n'));
     for line in lines {
@@ -420,13 +429,14 @@ fn load_function_definitions(
 fn interact(
     state: ExprRef,
     event: ExprRef,
-    functions: &HashMap<String, ExprRef>,
+    functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
     describe_progress: &dyn Fn(&str),
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap::new(
-        Ap::new(Atom::new(Name::Placeholder(":galaxy".to_string())), state),
+        // Galaxy function is :841463
+        Ap::new(Atom::new(Name::Function(841463)), state),
         event,
     );
     describe_progress("Evaluating :galaxy...");
@@ -572,7 +582,7 @@ fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
 
 fn eval_iterative(
     expr: ExprRef,
-    functions: &HashMap<String, ExprRef>,
+    functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
@@ -611,44 +621,45 @@ fn eval_iterative(
 
             match *next_to_evaluate.clone().borrow() {
                 Expr::Atom(Atom {
-                    name: Name::Placeholder(ref name),
+                    name: Name::Function(ref id),
                     _evaluated: _,
                 }) => {
-                    if let Some(f) = functions.get(name) {
+                    if let Some(f) = functions.get(id) {
                         stack.push(f.clone());
                         continue;
-                    } else if name.starts_with('x') {
-                        let res = Atom::new(Name::Placeholder(name.clone()));
-                        res.borrow_mut().set_evaluated(res.clone())?;
-                        stack.push(res);
-                        continue;
-                    } else {
-                        return Err(format!(
-                            "Unexpected placeholder symbol encountered {} in expression {}",
-                            name,
-                            next_to_evaluate.borrow()
-                        ));
+                    }  else {
+                        return Err(format!("Unexpected function symbol encountered {} in expression {}", id, next_to_evaluate.borrow()));
                     }
+                }
+                Expr::Atom(Atom {
+                    name: Name::Variable(id),
+                    _evaluated: _,
+                }) => {
+                    let res = Atom::new(Name::Variable(id));
+                    res.borrow_mut().set_evaluated(res.clone())?;
+                    stack.push(res);
+                    continue;
                 }
                 Expr::Ap(ref ap1) => {
                     // println!("Evaluating ap1 {:?}", ap1);
                     let x = ap1.arg();
                     match *ap1.func().clone().borrow() {
                         Expr::Atom(ref atom) => match (*atom).name {
-                            Name::Placeholder(ref name) => {
-                                if let Some(f) = functions.get(name) {
+                            Name::Function(ref id) => {
+                                if let Some(f) = functions.get(id) {
                                     stack.push(Ap::new(Atom::new(Name::LazyThunk1), ap1.arg()));
                                     stack.push(f.clone());
                                     continue;
-                                } else if name.starts_with('x') {
-                                    let res =
-                                        Ap::new(Atom::new(Name::Placeholder(name.clone())), x);
-                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                    stack.push(res);
-                                    continue;
                                 } else {
-                                    return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
+                                    return Err(format!("Unexpected function symbol encountered {} in expression {}", id, next_to_evaluate.borrow()));
                                 }
+                            }
+                            Name::Variable(id) => {
+                                let res =
+                                    Ap::new(Atom::new(Name::Variable(id)), x);
+                                res.borrow_mut().set_evaluated(res.clone())?;
+                                stack.push(res);
+                                continue;
                             }
                             Name::LazyThunk1 => {
                                 stack.push(Ap::new(args.pop().unwrap(), x));
@@ -703,28 +714,29 @@ fn eval_iterative(
                             let y = ap2.arg();
                             match *ap2.func().clone().borrow() {
                                 Expr::Atom(ref atom) => match atom.name {
-                                    Name::Placeholder(ref name) => {
-                                        if let Some(f) = functions.get(name) {
+                                    Name::Function(ref id) => {
+                                        if let Some(f) = functions.get(id) {
                                             stack.push(Ap::new(
                                                 Ap::new(Atom::new(Name::LazyThunk2), y),
                                                 x,
                                             ));
                                             stack.push(f.clone());
                                             continue;
-                                        } else if name.starts_with('x') {
-                                            let res = Ap::new(
-                                                Ap::new(
-                                                    Atom::new(Name::Placeholder(name.clone())),
-                                                    y,
-                                                ),
-                                                x,
-                                            );
-                                            res.borrow_mut().set_evaluated(res.clone())?;
-                                            stack.push(res);
-                                            continue;
                                         } else {
-                                            return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
+                                            return Err(format!("Unexpected function symbol encountered {} in expression {}", id, next_to_evaluate.borrow()));
                                         }
+                                    }
+                                    Name::Variable(id) => {
+                                        let res = Ap::new(
+                                            Ap::new(
+                                                Atom::new(Name::Variable(id)),
+                                                y,
+                                            ),
+                                            x,
+                                        );
+                                        res.borrow_mut().set_evaluated(res.clone())?;
+                                        stack.push(res);
+                                        continue;
                                     }
                                     Name::LazyThunk2 => {
                                         stack.push(Ap::new(Ap::new(args.pop().unwrap(), y), x));
@@ -880,9 +892,9 @@ fn eval_iterative(
                                     let z = ap3.arg();
                                     match *ap3.func().clone().borrow() {
                                         Expr::Atom(ref atom) => match atom.name {
-                                            Name::Placeholder(ref name) => {
+                                            Name::Function(ref id) => {
                                                 // println!("Found ap3 placeholder {}", name);
-                                                if let Some(f) = functions.get(name) {
+                                                if let Some(f) = functions.get(id) {
                                                     stack.push(Ap::new(
                                                         Ap::new(
                                                             Ap::new(Atom::new(Name::LazyThunk3), z),
@@ -892,25 +904,27 @@ fn eval_iterative(
                                                     ));
                                                     stack.push(f.clone());
                                                     continue;
-                                                } else if name.starts_with('x') {
-                                                    let res = Ap::new(
-                                                        Ap::new(
-                                                            Ap::new(
-                                                                Atom::new(Name::Placeholder(
-                                                                    name.clone(),
-                                                                )),
-                                                                z,
-                                                            ),
-                                                            y,
-                                                        ),
-                                                        x,
-                                                    );
-                                                    res.borrow_mut().set_evaluated(res.clone())?;
-                                                    stack.push(res);
-                                                    continue;
                                                 } else {
-                                                    return Err(format!("Unexpected placeholder symbol encountered {} in expression {}", name, next_to_evaluate.borrow()));
+                                                    return Err(format!("Unexpected function symbol encountered {} in expression {}", id, next_to_evaluate.borrow()));
                                                 }
+                                            }
+                                            Name::Variable(id) => {
+                                                // println!("Found ap3 placeholder {}", name);
+                                                let res = Ap::new(
+                                                    Ap::new(
+                                                        Ap::new(
+                                                            Atom::new(Name::Variable(
+                                                                id
+                                                            )),
+                                                            z,
+                                                        ),
+                                                        y,
+                                                    ),
+                                                    x,
+                                                );
+                                                res.borrow_mut().set_evaluated(res.clone())?;
+                                                stack.push(res);
+                                                continue;
                                             }
                                             Name::LazyThunk3 => {
                                                 stack.push(Ap::new(
@@ -985,7 +999,7 @@ fn eval_iterative(
 
 fn _eval(
     expr: ExprRef,
-    functions: &HashMap<String, ExprRef>,
+    functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
@@ -1007,7 +1021,7 @@ fn _eval(
 #[allow(clippy::all)]
 fn _try_eval(
     expr: ExprRef,
-    functions: &HashMap<String, ExprRef>,
+    functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     if let Some(x) = expr.borrow().evaluated() {
@@ -1016,10 +1030,10 @@ fn _try_eval(
 
     match *expr.borrow() {
         Expr::Atom(Atom {
-            name: Name::Placeholder(ref name),
+            name: Name::Function(ref id),
             _evaluated: _,
         }) => {
-            if let Some(f) = functions.get(name) {
+            if let Some(f) = functions.get(id) {
                 return Ok(f.clone());
             }
         }
@@ -1160,7 +1174,7 @@ fn _try_eval(
 fn _eval_cons(
     head: ExprRef,
     tail: ExprRef,
-    functions: &HashMap<String, ExprRef>,
+    functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     let res = Ap::new(
@@ -1240,7 +1254,7 @@ fn iterate(
     state: ExprRef,
     point: &Point,
     constants: &Constants,
-    functions: &HashMap<String, ExprRef>,
+    functions: &HashMap<u32, ExprRef>,
     render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
     describe_progress: &dyn Fn(&str),
 ) -> ExprRef {
@@ -1267,7 +1281,7 @@ fn iterate(
 
 pub struct Callback {
     state: ExprRef,
-    functions: HashMap<String, ExprRef>,
+    functions: HashMap<u32, ExprRef>,
     constants: Constants,
 }
 impl Callback {
@@ -1347,7 +1361,7 @@ mod tests {
         Ok(expr)
     }
 
-    fn build_test_functions(text: &str) -> Result<HashMap<String, ExprRef>, String> {
+    fn build_test_functions(text: &str) -> Result<HashMap<u32, ExprRef>, String> {
         text.split('\n')
             .filter(|s| !s.is_empty())
             .map(|line| load_function(line))
@@ -1357,7 +1371,7 @@ mod tests {
     fn assert_expression_evaluates_to(
         expr: &str,
         expected: ExprRef,
-        functions: &HashMap<String, ExprRef>,
+        functions: &HashMap<u32, ExprRef>,
     ) {
         let constants = get_constants();
         let parsed = str_to_expr(expr).unwrap();
@@ -1421,9 +1435,9 @@ mod tests {
             Ap::new(
                 Ap::new(
                     Atom::new(Name::Cons),
-                    Atom::new(Name::Placeholder("x0".to_owned())),
+                    Atom::new(Name::Variable(0)),
                 ),
-                Atom::new(Name::Placeholder("x1".to_owned())),
+                Atom::new(Name::Variable(1)),
             ),
             &functions,
         );
@@ -1436,10 +1450,10 @@ mod tests {
             "ap ap ap cons x0 x1 x2",
             Ap::new(
                 Ap::new(
-                    Atom::new(Name::Placeholder("x2".to_owned())),
-                    Atom::new(Name::Placeholder("x0".to_owned())),
+                    Atom::new(Name::Variable(2)),
+                    Atom::new(Name::Variable(0)),
                 ),
-                Atom::new(Name::Placeholder("x1".to_owned())),
+                Atom::new(Name::Variable(1)),
             ),
             &functions,
         );
@@ -1447,10 +1461,10 @@ mod tests {
             "ap ap ap ap cons x0 x1 cons x2",
             Ap::new(
                 Ap::new(
-                    Atom::new(Name::Placeholder("x2".to_owned())),
-                    Atom::new(Name::Placeholder("x0".to_owned())),
+                    Atom::new(Name::Variable(2)),
+                    Atom::new(Name::Variable(0)),
                 ),
-                Atom::new(Name::Placeholder("x1".to_owned())),
+                Atom::new(Name::Variable(1)),
             ),
             &functions,
         );
@@ -1467,24 +1481,25 @@ mod tests {
     #[test]
     fn true_combinator() {
         let functions = build_test_functions(
-            ":inc = ap ap c add 1
-            :dec = ap ap c add -1",
+            // Increment and decrement
+            ":0 = ap ap c add 1
+            :1 = ap ap c add -1",
         )
         .unwrap();
         assert_expression_evaluates_to(
             "ap ap t x0 x1",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap ap t x0 x1",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
         assert_expression_evaluates_to("ap ap t 1 5", Atom::new(Name::Int(1)), &functions);
         assert_expression_evaluates_to("ap ap t t i", Atom::new(Name::T), &functions);
-        assert_expression_evaluates_to("ap ap t t ap :inc 5", Atom::new(Name::T), &functions);
-        assert_expression_evaluates_to("ap ap t ap :inc 5 t", Atom::new(Name::Int(6)), &functions);
+        assert_expression_evaluates_to("ap ap t t ap :0 5", Atom::new(Name::T), &functions);
+        assert_expression_evaluates_to("ap ap t ap :0 5 t", Atom::new(Name::Int(6)), &functions);
     }
 
     #[test]
@@ -1492,7 +1507,7 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap ap f x0 x1",
-            Atom::new(Name::Placeholder("x1".to_owned())),
+            Atom::new(Name::Variable(1)),
             &functions,
         );
     }
@@ -1502,12 +1517,12 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap i x0",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap i ap i x0",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
         assert_expression_evaluates_to("ap i i", Atom::new(Name::I), &functions);
@@ -1567,12 +1582,12 @@ mod tests {
             "ap ap ap s x0 x1 x2",
             Ap::new(
                 Ap::new(
-                    Atom::new(Name::Placeholder("x0".to_owned())),
-                    Atom::new(Name::Placeholder("x2".to_owned())),
+                    Atom::new(Name::Variable(0)),
+                    Atom::new(Name::Variable(2)),
                 ),
                 Ap::new(
-                    Atom::new(Name::Placeholder("x1".to_owned())),
-                    Atom::new(Name::Placeholder("x2".to_owned())),
+                    Atom::new(Name::Variable(1)),
+                    Atom::new(Name::Variable(2)),
                 ),
             ),
             &functions,
@@ -1596,10 +1611,10 @@ mod tests {
             "ap ap ap c x0 x1 x2",
             Ap::new(
                 Ap::new(
-                    Atom::new(Name::Placeholder("x0".to_owned())),
-                    Atom::new(Name::Placeholder("x2".to_owned())),
+                    Atom::new(Name::Variable(0)),
+                    Atom::new(Name::Variable(2)),
                 ),
-                Atom::new(Name::Placeholder("x1".to_owned())),
+                Atom::new(Name::Variable(1)),
             ),
             &functions,
         );
@@ -1609,22 +1624,23 @@ mod tests {
     #[test]
     fn b_combinator() {
         let functions = build_test_functions(
-            ":inc = ap ap c add 1
-            :dec = ap ap c add -1",
+            // increment and decrement
+            ":0 = ap ap c add 1
+            :1 = ap ap c add -1",
         )
         .unwrap();
         assert_expression_evaluates_to(
-            "ap ap ap b :inc :dec 0",
+            "ap ap ap b :0 :1 0",
             Atom::new(Name::Int(0)),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap ap ap b x0 x1 x2",
             Ap::new(
-                Atom::new(Name::Placeholder("x0".to_owned())),
+                Atom::new(Name::Variable(0)),
                 Ap::new(
-                    Atom::new(Name::Placeholder("x1".to_owned())),
-                    Atom::new(Name::Placeholder("x2".to_owned())),
+                    Atom::new(Name::Variable(1)),
+                    Atom::new(Name::Variable(2)),
                 ),
             ),
             &functions,
@@ -1636,13 +1652,13 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap car ap ap cons x0 x1",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap car x0",
             Ap::new(
-                Atom::new(Name::Placeholder("x0".to_owned())),
+                Atom::new(Name::Variable(0)),
                 Atom::new(Name::T),
             ),
             &functions,
@@ -1654,13 +1670,13 @@ mod tests {
         let functions = hashmap! {};
         assert_expression_evaluates_to(
             "ap cdr ap ap cons x0 x2",
-            Atom::new(Name::Placeholder("x2".to_owned())),
+            Atom::new(Name::Variable(2)),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap cdr x0",
             Ap::new(
-                Atom::new(Name::Placeholder("x0".to_owned())),
+                Atom::new(Name::Variable(0)),
                 Atom::new(Name::F),
             ),
             &functions,
@@ -1683,12 +1699,12 @@ mod tests {
 
         assert_expression_evaluates_to(
             "ap :2000 x0",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
         assert_expression_evaluates_to(
             "ap :1000 x0",
-            Atom::new(Name::Placeholder("x0".to_owned())),
+            Atom::new(Name::Variable(0)),
             &functions,
         );
     }
