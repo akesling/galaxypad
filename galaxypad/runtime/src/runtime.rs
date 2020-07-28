@@ -428,7 +428,7 @@ fn interact(
         Ap::new(Atom::new(Name::Placeholder(":galaxy".to_string())), state),
         event,
     );
-    let res: ExprRef = eval_iterative(expr, functions, constants).unwrap();
+    let res: ExprRef = _eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
@@ -502,7 +502,7 @@ fn flatten_point(points_expr: ExprRef) -> Result<(i64, i64), String> {
             .arg()
             .ok_or_else(|| "arg expected on second of flatten_point")?,
     )?;
-    Ok((first_num, second_num))
+    Ok((second_num, first_num))
 }
 
 fn get_list_items_from_expr(expr: ExprRef) -> Result<Vec<ExprRef>, String> {
@@ -1297,7 +1297,28 @@ pub fn entry_point(
     describe_progress("Initialized callback");
     load_function_definitions(&galaxy_script, &mut callback.functions).unwrap();
     describe_progress("Parsed functions from galaxy script");
-    callback.call(Point { x: 0, y: 0 }, render_to_display, describe_progress);
+    let bootup_sequence = vec![
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (8, 4),
+      (2, -8),
+      (3, 6),
+      (0, -14),
+      (-4, 10),
+      (9, -3),
+      (-4, 10),
+      (1, 4),
+    ];
+    for (i, p) in bootup_sequence.iter().enumerate() {
+        describe_progress(&format!("Executed iteration {} of bootup sequence", i));
+        callback.call(Point { x: p.0, y: p.1 }, render_to_display, describe_progress);
+    }
     describe_progress("Executed first iteration");
 
     callback
@@ -1336,7 +1357,7 @@ mod tests {
     ) {
         let constants = get_constants();
         let parsed = str_to_expr(expr).unwrap();
-        let result = eval_iterative(parsed, functions, &constants).unwrap();
+        let result = _eval(parsed, functions, &constants).unwrap();
         assert!(
             result.borrow().equals(expected.clone()),
             format!("{} => {} != {}", expr, result.borrow(), expected.borrow())

@@ -34,8 +34,8 @@ class Display {
             const canvas_x = this.WIDTH * (event.layerX / this.canvas.clientWidth);
             const canvas_y = this.HEIGHT * (event.layerY / this.canvas.clientHeight);
             // Then, adjust to have <0, 0> be in the center of the canvas
-            const game_x = this.HALF_WIDTH - canvas_x;
-            const game_y = this.HALF_HEIGHT - canvas_y;
+            const game_x = canvas_x - this.HALF_WIDTH;
+            const game_y = canvas_y - this.HALF_HEIGHT;
             console.log(`Registered click at Element(${click_x}, ${click_y}) => Canvas(${canvas_x}, ${canvas_y}) => Game(${game_x}, ${game_y})`);
             onClickHandler(game_x, game_y);
         };
