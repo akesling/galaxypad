@@ -422,14 +422,17 @@ fn interact(
     event: ExprRef,
     functions: &HashMap<String, ExprRef>,
     constants: &Constants,
+    describe_progress: &dyn Fn(&str),
 ) -> (ExprRef, ExprRef) {
     // See https://message-from-space.readthedocs.io/en/latest/message38.html
     let expr: ExprRef = Ap::new(
         Ap::new(Atom::new(Name::Placeholder(":galaxy".to_string())), state),
         event,
     );
-    let res: ExprRef = _eval(expr, functions, constants).unwrap();
+    describe_progress("Evaluating :galaxy...");
+    let res: ExprRef = eval_iterative(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
+    describe_progress("Parsing resulting items...");
     let items = get_list_items_from_expr(res).unwrap();
     if items.len() < 3 {
         panic!(
@@ -442,7 +445,8 @@ fn interact(
         return (new_state, data);
     }
 
-    interact(new_state, send_to_alien_proxy(data), functions, constants)
+    describe_progress("Recursing into interact...");
+    interact(new_state, send_to_alien_proxy(data), functions, constants, describe_progress)
 }
 
 fn send_to_alien_proxy(_expr: ExprRef) -> ExprRef {
@@ -1209,12 +1213,12 @@ fn print_images(point_lists: Vec<Vec<(i64, i64)>>) {
         }
 
         // save the canvas as an svg
-        render::save(
-            &canvas,
-            "tests/svg/basic_end_to_end.svg",
-            SvgRenderer::new(),
-        )
-        .expect("Failed to save");
+//        render::save(
+//            &canvas,
+//            "tests/svg/basic_end_to_end.svg",
+//            SvgRenderer::new(),
+//        )
+//        .expect("Failed to save");
     }
 }
 
@@ -1240,7 +1244,7 @@ fn iterate(
     render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
     describe_progress: &dyn Fn(&str),
 ) -> ExprRef {
-    describe_progress("Iterating");
+    describe_progress("Iterating...");
     let click = Ap::new(
         Ap::new(constants.cons.clone(), Atom::new(Name::Int(point.x))),
         Atom::new(Name::Int(point.y)),
@@ -1248,7 +1252,7 @@ fn iterate(
     describe_progress(&format!("Click inflated {:?}", point));
 
     describe_progress("Executing interact...");
-    let (new_state, images) = interact(state, click, &functions, &constants);
+    let (new_state, images) = interact(state, click, &functions, &constants, describe_progress);
     describe_progress("Interact executed");
     let image_lists = get_list_items_from_expr(images).unwrap();
     describe_progress("Image lists parsed");
@@ -1299,21 +1303,21 @@ pub fn entry_point(
     describe_progress("Parsed functions from galaxy script");
     let bootup_sequence = vec![
       (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (8, 4),
-      (2, -8),
-      (3, 6),
-      (0, -14),
-      (-4, 10),
-      (9, -3),
-      (-4, 10),
-      (1, 4),
+//      (0, 0),
+//      (0, 0),
+//      (0, 0),
+//      (0, 0),
+//      (0, 0),
+//      (0, 0),
+//      (0, 0),
+//      (8, 4),
+//      (2, -8),
+//      (3, 6),
+//      (0, -14),
+//      (-4, 10),
+//      (9, -3),
+//      (-4, 10),
+//      (1, 4),
     ];
     for (i, p) in bootup_sequence.iter().enumerate() {
         describe_progress(&format!("Executed iteration {} of bootup sequence", i));
