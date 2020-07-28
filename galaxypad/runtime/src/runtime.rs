@@ -309,10 +309,10 @@ impl Ap {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Point {
-    pub x: u64,
-    pub y: u64,
+    pub x: i64,
+    pub y: i64,
 }
 
 fn parse_token(candidate_token: &str, stack: &mut Vec<ExprRef>) -> Result<ExprRef, String> {
@@ -1242,11 +1242,12 @@ fn iterate(
 ) -> ExprRef {
     describe_progress("Iterating");
     let click = Ap::new(
-        Ap::new(constants.cons.clone(), Atom::new(Name::Int(point.x as i64))),
-        Atom::new(Name::Int(point.y as i64)),
+        Ap::new(constants.cons.clone(), Atom::new(Name::Int(point.x))),
+        Atom::new(Name::Int(point.y)),
     );
-    describe_progress("Click inflated");
+    describe_progress(&format!("Click inflated {:?}", point));
 
+    describe_progress("Executing interact...");
     let (new_state, images) = interact(state, click, &functions, &constants);
     describe_progress("Interact executed");
     let image_lists = get_list_items_from_expr(images).unwrap();
@@ -1260,34 +1261,28 @@ fn iterate(
     new_state
 }
 
-pub struct Callback<'a> {
+pub struct Callback {
     state: ExprRef,
-    point: Point,
     functions: HashMap<String, ExprRef>,
-    render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
-    request_click_from_user: &'a dyn Fn() -> Point,
-    describe_progress: &'a dyn Fn(&str),
     constants: Constants,
 }
-impl<'a> Callback<'a> {
-    fn call(&mut self) {
+impl Callback {
+    pub fn call(&mut self, click: Point, render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>), describe_progress: &dyn Fn(&str)) {
         self.state = iterate(
             self.state.clone(),
-            &self.point,
+            &click,
             &self.constants,
             &self.functions,
-            self.render_to_display,
-            self.describe_progress,
+            render_to_display,
+            describe_progress,
         );
-        self.point = (self.request_click_from_user)();
     }
 }
 
-pub fn entry_point<'a>(
-    request_click_from_user: &'a dyn Fn() -> Point,
-    render_to_display: &'a dyn Fn(Vec<Vec<(i64, i64)>>),
-    describe_progress: &'a dyn Fn(&str),
-) -> Box<Callback<'a>> {
+pub fn entry_point(
+    render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
+    describe_progress: &dyn Fn(&str),
+) -> Box<Callback> {
     describe_progress("Entered entrypoint");
     let galaxy_script = Box::new(std::include_str!("../galaxy.txt"));
     describe_progress("Loaded galaxy script");
@@ -1296,17 +1291,13 @@ pub fn entry_point<'a>(
 
     let mut callback = Box::new(Callback {
         state: constants.nil.clone(),
-        point: Point { x: 0, y: 0 },
-        render_to_display,
-        request_click_from_user,
-        describe_progress,
         functions: HashMap::new(),
         constants,
     });
     describe_progress("Initialized callback");
     load_function_definitions(&galaxy_script, &mut callback.functions).unwrap();
     describe_progress("Parsed functions from galaxy script");
-    callback.call();
+    callback.call(Point { x: 0, y: 0 }, render_to_display, describe_progress);
     describe_progress("Executed first iteration");
 
     callback
@@ -1314,9 +1305,9 @@ pub fn entry_point<'a>(
 
 #[allow(dead_code)]
 fn main() {
-    let mut callback = entry_point(&request_click_from_user, &print_images, &|d| println!("{}", d));
+    let mut callback = entry_point(&print_images, &|d| println!("{}", d));
     loop {
-        callback.call();
+        callback.call(request_click_from_user(), &print_images, &|d| println!("{}", d));
     }
 }
 

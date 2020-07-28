@@ -1,7 +1,7 @@
 mod utils;
 
 use wasm_bindgen::prelude::*;
-use runtime::{entry_point, Point};
+use runtime::{entry_point, Point, Callback};
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -62,6 +62,19 @@ pub fn test_stack_size() {
 }
 
 #[wasm_bindgen]
-pub fn start_galaxy_pad(renderer: &js_sys::Function) {
-    let callback = entry_point(&click_panic, &|layers| render_layers(layers, renderer), &log);
+pub struct Cb {
+    callback: Box<Callback>,
+}
+
+#[wasm_bindgen]
+pub fn start_galaxy_pad(renderer: &js_sys::Function) -> Cb {
+    Cb {callback: entry_point(&|layers| render_layers(layers, renderer), &log)}
+}
+
+#[wasm_bindgen]
+pub fn call_callback(cb: &mut Cb, x: i32, y: i32, renderer: &js_sys::Function) {
+    let pt: Point = Point {x: x as i64, y: y as i64};
+    let render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>) = &|layers| render_layers(layers, renderer);
+    let describe_progress: &dyn Fn(&str) = &log;
+    cb.callback.call(pt, render_to_display, describe_progress);
 }

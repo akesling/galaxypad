@@ -24,8 +24,23 @@ class Display {
         this.canvas.height = this.HEIGHT;
 
         this.clear();
+    }
 
-//        this.drawPoints([[0, 0], [1, 0], [1, 1], [2, 2], [3, 3], [4, 4]], [0, 0, 0, 255]);
+    registerCallback(onClickHandler) {
+        const click = (event) => {
+            const click_x = event.layerX;
+            const click_y = event.layerY;
+            // First, convert to canvas pixel coordinate
+            const canvas_x = this.WIDTH * (event.layerX / this.canvas.clientWidth);
+            const canvas_y = this.HEIGHT * (event.layerY / this.canvas.clientHeight);
+            // Then, adjust to have <0, 0> be in the center of the canvas
+            const game_x = this.HALF_WIDTH - canvas_x;
+            const game_y = this.HALF_HEIGHT - canvas_y;
+            console.log(`Registered click at Element(${click_x}, ${click_y}) => Canvas(${canvas_x}, ${canvas_y}) => Game(${game_x}, ${game_y})`);
+            onClickHandler(game_x, game_y);
+        };
+
+        this.canvas.addEventListener('mouseup', click);
     }
 
     clear() {
@@ -90,16 +105,16 @@ const LAYER_COLORS = [
 rust
   .then(m => {
       console.log("Before", performance.now());
-      try {
-        const renderer = (layers) => {
-            console.log(`Javascript rendering: `, layers);
-            window.galaxyPadDisplay.drawLayers(layers, LAYER_COLORS);
-        }
-        m.start_galaxy_pad(renderer);
-      } catch (e) {
-          console.log("Caught", e);
-          console.log("Continuing...");
-      }
-      console.log("After", performance.now());
+    const renderer = (layers) => {
+        console.log(`Javascript rendering: `, layers);
+        window.galaxyPadDisplay.drawLayers(layers, LAYER_COLORS);
+    }
+    const galaxyCallback = m.start_galaxy_pad(renderer);
+    window.galaxyPadDisplay.registerCallback((x, y) => {
+        console.log("Starting callback", performance.now());
+        m.call_callback(galaxyCallback, x, y, renderer);
+        console.log("Callback finished", performance.now());
+    });
+    console.log("After", performance.now());
   })
   .catch(console.error);
