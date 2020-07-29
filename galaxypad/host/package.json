@@ -15,8 +15,8 @@
     "webpack-dev-server": "^3.11.0"
   },
   "scripts": {
-    "build": "export RUSTFLAGS="-C link-args=-zstack-size=40194304"; webpack",
-    "serve": "export RUSTFLAGS="-C link-args=-zstack-size=40194304"; webpack-dev-server"
+    "build": "export RUSTFLAGS=\"-C link-args=-zstack-size=40194304\"; webpack",
+    "serve": "export RUSTFLAGS=\"-C link-args=-zstack-size=40194304\"; webpack-dev-server"
   },
   "dependencies": {
     "html-webpack-plugin": "^4.3.0"

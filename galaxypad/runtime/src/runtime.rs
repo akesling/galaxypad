@@ -1,11 +1,11 @@
 use lazy_static::lazy_static;
 use maplit::{hashmap, hashset};
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ptr;
-use std::rc::{Rc, Weak};
+
+use gc::{Finalize, Gc, GcCell, Trace};
 
 struct Constants {
     cons: ExprRef,
@@ -14,7 +14,7 @@ struct Constants {
     nil: ExprRef,
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, Trace, Finalize)]
 enum Name {
     Function(u32),
     Variable(u32),
@@ -106,9 +106,9 @@ lazy_static! {
     };
 }
 
-type ExprRef = Rc<RefCell<Expr>>;
-type WeakExprRef = Weak<RefCell<Expr>>;
+type ExprRef = Gc<GcCell<Expr>>;
 
+#[derive(Trace, Finalize)]
 enum Expr {
     Atom(Atom),
     Ap(Ap),
@@ -202,8 +202,9 @@ impl Debug for Expr {
     }
 }
 
+#[derive(Trace, Finalize)]
 struct Atom {
-    _evaluated: Option<WeakExprRef>,
+    evaluated: Option<ExprRef>,
 
     name: Name,
 }
@@ -218,21 +219,21 @@ impl std::fmt::Display for Atom {
 impl Atom {
     #[allow(clippy::new_ret_no_self)]
     fn new(name: Name) -> ExprRef {
-        Rc::new(RefCell::new(Expr::Atom(Atom {
+        Gc::new(GcCell::new(Expr::Atom(Atom {
             name,
-            _evaluated: None,
+            evaluated: None,
         })))
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        match &self._evaluated {
-            Some(weak) => weak.upgrade(),
+        match &self.evaluated {
+            Some(expr_ref) => Some(expr_ref.clone()),
             None => None,
         }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        self._evaluated = Some(Rc::downgrade(&expr));
+        self.evaluated = Some(expr);
         Ok(())
     }
 
@@ -244,8 +245,9 @@ impl Atom {
     }
 }
 
+#[derive(Trace, Finalize)]
 struct Ap {
-    _evaluated: Option<WeakExprRef>,
+    evaluated: Option<ExprRef>,
 
     func: ExprRef,
     arg: ExprRef,
@@ -254,10 +256,10 @@ struct Ap {
 impl Ap {
     #[allow(clippy::new_ret_no_self)]
     fn new(func: ExprRef, arg: ExprRef) -> ExprRef {
-        Rc::new(RefCell::new(Expr::Ap(Ap {
+        Gc::new(GcCell::new(Expr::Ap(Ap {
             func,
             arg,
-            _evaluated: None,
+            evaluated: None,
         })))
     }
 }
@@ -289,14 +291,14 @@ impl Ap {
     }
 
     fn evaluated(&self) -> Option<ExprRef> {
-        match &self._evaluated {
-            Some(weak) => weak.upgrade(),
+        match &self.evaluated {
+            Some(expr_ref) => Some(expr_ref.clone()),
             None => None,
         }
     }
 
     fn set_evaluated(&mut self, expr: ExprRef) -> Result<(), String> {
-        self._evaluated = Some(Rc::downgrade(&expr));
+        self.evaluated = Some(expr);
         Ok(())
     }
 
@@ -440,7 +442,7 @@ fn interact(
         event,
     );
     describe_progress("Evaluating :galaxy...");
-    let res: ExprRef = eval_iterative(expr, functions, constants).unwrap();
+    let res: ExprRef = eval(expr, functions, constants).unwrap();
     // Note: res will be modulatable here (consists of cons, nil and numbers only)
     describe_progress("Parsing resulting items...");
     let items = get_list_items_from_expr(res).unwrap();
@@ -622,7 +624,7 @@ fn eval_iterative(
             match *next_to_evaluate.clone().borrow() {
                 Expr::Atom(Atom {
                     name: Name::Function(ref id),
-                    _evaluated: _,
+                    evaluated: _,
                 }) => {
                     if let Some(f) = functions.get(id) {
                         stack.push(f.clone());
@@ -633,7 +635,7 @@ fn eval_iterative(
                 }
                 Expr::Atom(Atom {
                     name: Name::Variable(id),
-                    _evaluated: _,
+                    evaluated: _,
                 }) => {
                     let res = Atom::new(Name::Variable(id));
                     res.borrow_mut().set_evaluated(res.clone())?;
@@ -997,7 +999,7 @@ fn eval_iterative(
     }
 }
 
-fn _eval(
+fn eval(
     expr: ExprRef,
     functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
@@ -1009,7 +1011,7 @@ fn _eval(
     let initial_expr = expr.clone();
     let mut current_expr = expr;
     loop {
-        let result = _try_eval(current_expr.clone(), functions, constants)?;
+        let result = try_eval(current_expr.clone(), functions, constants)?;
         if ptr::eq(current_expr.as_ref(), result.as_ref()) || result.borrow().equals(current_expr) {
             initial_expr.borrow_mut().set_evaluated(result.clone())?;
             return Ok(result);
@@ -1019,7 +1021,7 @@ fn _eval(
 }
 
 #[allow(clippy::all)]
-fn _try_eval(
+fn try_eval(
     expr: ExprRef,
     functions: &HashMap<u32, ExprRef>,
     constants: &Constants,
@@ -1031,14 +1033,14 @@ fn _try_eval(
     match *expr.borrow() {
         Expr::Atom(Atom {
             name: Name::Function(ref id),
-            _evaluated: _,
+            evaluated: _,
         }) => {
             if let Some(f) = functions.get(id) {
                 return Ok(f.clone());
             }
         }
         Expr::Ap(_) => {
-            let func = _eval(
+            let func = eval(
                 expr.borrow()
                     .func()
                     .ok_or_else(|| "func expected on expr of try_eval")?,
@@ -1052,7 +1054,7 @@ fn _try_eval(
             if let Some(name) = func.clone().borrow().name() {
                 match name {
                     Name::Neg => {
-                        return Ok(Atom::new(Name::Int(-as_num(_eval(
+                        return Ok(Atom::new(Name::Int(-as_num(eval(
                             x, functions, constants,
                         )?)?)));
                     }
@@ -1080,7 +1082,7 @@ fn _try_eval(
                     _ => (),
                 }
             } else {
-                let func2 = _eval(
+                let func2 = eval(
                     func.borrow()
                         .func()
                         .ok_or_else(|| "func expected on func of try_eval")?,
@@ -1101,25 +1103,25 @@ fn _try_eval(
                         }
                         Name::Add => {
                             return Ok(Atom::new(Name::Int(
-                                as_num(_eval(x, functions, constants)?)?
-                                    + as_num(_eval(y, functions, constants)?)?,
+                                as_num(eval(x, functions, constants)?)?
+                                    + as_num(eval(y, functions, constants)?)?,
                             )));
                         }
                         Name::Mul => {
                             return Ok(Atom::new(Name::Int(
-                                as_num(_eval(x, functions, constants)?)?
-                                    * as_num(_eval(y, functions, constants)?)?,
+                                as_num(eval(x, functions, constants)?)?
+                                    * as_num(eval(y, functions, constants)?)?,
                             )));
                         }
                         Name::Div => {
                             return Ok(Atom::new(Name::Int(
-                                as_num(_eval(y, functions, constants)?)?
-                                    / as_num(_eval(x, functions, constants)?)?,
+                                as_num(eval(y, functions, constants)?)?
+                                    / as_num(eval(x, functions, constants)?)?,
                             )));
                         }
                         Name::Eq => {
-                            let are_equal = as_num(_eval(x, functions, constants)?)?
-                                == as_num(_eval(y, functions, constants)?)?;
+                            let are_equal = as_num(eval(x, functions, constants)?)?
+                                == as_num(eval(y, functions, constants)?)?;
                             return Ok(if are_equal {
                                 constants.t.clone()
                             } else {
@@ -1127,8 +1129,8 @@ fn _try_eval(
                             });
                         }
                         Name::Lt => {
-                            let is_less_than = as_num(_eval(y, functions, constants)?)?
-                                < as_num(_eval(x, functions, constants)?)?;
+                            let is_less_than = as_num(eval(y, functions, constants)?)?
+                                < as_num(eval(x, functions, constants)?)?;
                             return Ok(if is_less_than {
                                 constants.t.clone()
                             } else {
@@ -1141,7 +1143,7 @@ fn _try_eval(
                         _ => (),
                     }
                 } else {
-                    let func3 = _eval(
+                    let func3 = eval(
                         func2
                             .borrow()
                             .func()
@@ -1178,8 +1180,8 @@ fn _eval_cons(
     constants: &Constants,
 ) -> Result<ExprRef, String> {
     let res = Ap::new(
-        Ap::new(constants.cons.clone(), _eval(head, functions, constants)?),
-        _eval(tail, functions, constants)?,
+        Ap::new(constants.cons.clone(), eval(head, functions, constants)?),
+        eval(tail, functions, constants)?,
     );
     res.borrow_mut().set_evaluated(res.clone())?;
 
@@ -1317,21 +1319,21 @@ pub fn entry_point(
     describe_progress("Parsed functions from galaxy script");
     let bootup_sequence = vec![
       (0, 0),
-//      (0, 0),
-//      (0, 0),
-//      (0, 0),
-//      (0, 0),
-//      (0, 0),
-//      (0, 0),
-//      (0, 0),
-//      (8, 4),
-//      (2, -8),
-//      (3, 6),
-//      (0, -14),
-//      (-4, 10),
-//      (9, -3),
-//      (-4, 10),
-//      (1, 4),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (0, 0),
+      (8, 4),
+      (2, -8),
+      (3, 6),
+      (0, -14),
+      (-4, 10),
+      (9, -3),
+      (-4, 10),
+      (1, 4),
     ];
     for (i, p) in bootup_sequence.iter().enumerate() {
         describe_progress(&format!("Executed iteration {} of bootup sequence", i));
@@ -1375,7 +1377,7 @@ mod tests {
     ) {
         let constants = get_constants();
         let parsed = str_to_expr(expr).unwrap();
-        let result = _eval(parsed, functions, &constants).unwrap();
+        let result = eval(parsed, functions, &constants).unwrap();
         assert!(
             result.borrow().equals(expected.clone()),
             format!("{} => {} != {}", expr, result.borrow(), expected.borrow())
