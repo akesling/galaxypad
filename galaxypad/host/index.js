@@ -1,5 +1,3 @@
-const rust = import('./pkg');
-
 class Display {
     constructor(canvas) {
         this.WIDTH = 512;
@@ -91,6 +89,30 @@ class Display {
 
 window.galaxyPadDisplay = new Display(document.getElementById('canvas'));
 
+const runtimeWorker = new Worker('./worker.js', { name: "runtime", type: 'module' });
+runtimeWorker.onmessage = function({data}) {
+    const msg = data;
+
+    if (msg.err !== undefined) {
+        console.log(msg.err);
+        return;
+    }
+
+    if (msg.layers === undefined) {
+        console.error("Unknown message received from runtime worker", msg);
+        return;
+    }
+
+    console.log(`Javascript rendering: `, msg.layers);
+    window.galaxyPadDisplay.drawLayers(msg.layers, LAYER_COLORS);
+}
+runtimeWorker.postMessage("initialize");
+
+window.galaxyPadDisplay.registerCallback((x, y) => {
+    console.log("Sending click to runtime worker", performance.now());
+    runtimeWorker.postMessage({click: {x, y}});
+});
+
 const LAYER_COLORS = [
     [255, 102, 89, 255], // #ff6659ff
     [123, 31, 162, 255], // #7b1fa2ff
@@ -101,20 +123,3 @@ const LAYER_COLORS = [
     [245, 124, 0, 255], // #f57c00ff
     [0, 0, 0, 255], // #000000ff
 ]
-
-rust
-  .then(m => {
-      console.log("Before", performance.now());
-    const renderer = (layers) => {
-        console.log(`Javascript rendering: `, layers);
-        window.galaxyPadDisplay.drawLayers(layers, LAYER_COLORS);
-    }
-    const galaxyCallback = m.start_galaxy_pad(renderer);
-    window.galaxyPadDisplay.registerCallback((x, y) => {
-        console.log("Starting callback", performance.now());
-        m.call_callback(galaxyCallback, x, y, renderer);
-        console.log("Callback finished", performance.now());
-    });
-    console.log("After", performance.now());
-  })
-  .catch(console.error);

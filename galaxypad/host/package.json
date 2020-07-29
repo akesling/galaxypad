@@ -19,6 +19,7 @@
     "serve": "export RUSTFLAGS=\"-C link-args=-zstack-size=40194304\"; webpack-dev-server"
   },
   "dependencies": {
-    "html-webpack-plugin": "^4.3.0"
+    "html-webpack-plugin": "^4.3.0",
+    "worker-plugin": "^4.0.3"
   }
 }
