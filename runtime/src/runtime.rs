@@ -1308,7 +1308,7 @@ pub fn entry_point(
     describe_progress: &dyn Fn(&str),
 ) -> Box<Callback> {
     describe_progress("Entered entrypoint");
-    let galaxy_script = Box::new(std::include_str!("../galaxy.txt"));
+    let galaxy_script = Box::new(std::include_str!("../../third_party/numeric_galaxy.txt"));
     describe_progress("Loaded galaxy script");
     let constants = get_constants();
     describe_progress("Loaded constants");
