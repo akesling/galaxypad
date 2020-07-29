@@ -1,5 +1,0 @@
-# https://en.wikipedia.org/wiki/B,_C,_K,_W_system
-# b
-ap ap ap b x0 x1 x2   =   ap x0 ap x1 x2
-ap ap ap b inc dec x0   =   x0
-...

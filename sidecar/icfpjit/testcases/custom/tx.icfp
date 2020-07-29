@@ -1,5 +1,0 @@
-# Presuming the "server" returns the identity of the transmitted message
-x0  :=  4
-ap send x0 := 4
-ap send 10 := 10
-...

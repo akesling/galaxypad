@@ -1,7 +1,0 @@
-# Increment
-:1000 = ap ap add 1
-ap inc 1 = :1000 1
-
-# Double increment
-:2000 = :1000 :1000
-3 = :2000 1
