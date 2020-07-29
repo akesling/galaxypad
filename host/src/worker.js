@@ -1,4 +1,4 @@
-const rust = import('./pkg');
+const rust = import('../pkg');
 
 const INITIALIZED = 0
 const WORKING = 1

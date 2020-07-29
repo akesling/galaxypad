@@ -5,7 +5,7 @@ const WasmPackPlugin = require("@wasm-tool/wasm-pack-plugin");
 const WorkerPlugin = require('worker-plugin');
 
 module.exports = {
-    entry: './index.js',
+    entry: './src/index.js',
     output: {
         path: path.resolve(__dirname, 'dist'),
         filename: 'index.js',
@@ -14,7 +14,7 @@ module.exports = {
         new WorkerPlugin(),
         new HtmlWebpackPlugin({
             title: "Galaxy Pad",
-            template: "./index.html",
+            template: "./src/index.html",
         }),
         new WasmPackPlugin({
             crateDirectory: path.resolve(__dirname, "."),
