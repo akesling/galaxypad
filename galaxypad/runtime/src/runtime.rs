@@ -458,7 +458,13 @@ fn interact(
     }
 
     describe_progress("Recursing into interact...");
-    interact(new_state, send_to_alien_proxy(data), functions, constants, describe_progress)
+    interact(
+        new_state,
+        send_to_alien_proxy(data),
+        functions,
+        constants,
+        describe_progress,
+    )
 }
 
 fn send_to_alien_proxy(_expr: ExprRef) -> ExprRef {
@@ -629,8 +635,12 @@ fn eval_iterative(
                     if let Some(f) = functions.get(id) {
                         stack.push(f.clone());
                         continue;
-                    }  else {
-                        return Err(format!("Unexpected function symbol encountered {} in expression {}", id, next_to_evaluate.borrow()));
+                    } else {
+                        return Err(format!(
+                            "Unexpected function symbol encountered {} in expression {}",
+                            id,
+                            next_to_evaluate.borrow()
+                        ));
                     }
                 }
                 Expr::Atom(Atom {
@@ -657,8 +667,7 @@ fn eval_iterative(
                                 }
                             }
                             Name::Variable(id) => {
-                                let res =
-                                    Ap::new(Atom::new(Name::Variable(id)), x);
+                                let res = Ap::new(Atom::new(Name::Variable(id)), x);
                                 res.borrow_mut().set_evaluated(res.clone())?;
                                 stack.push(res);
                                 continue;
@@ -729,13 +738,8 @@ fn eval_iterative(
                                         }
                                     }
                                     Name::Variable(id) => {
-                                        let res = Ap::new(
-                                            Ap::new(
-                                                Atom::new(Name::Variable(id)),
-                                                y,
-                                            ),
-                                            x,
-                                        );
+                                        let res =
+                                            Ap::new(Ap::new(Atom::new(Name::Variable(id)), y), x);
                                         res.borrow_mut().set_evaluated(res.clone())?;
                                         stack.push(res);
                                         continue;
@@ -914,12 +918,7 @@ fn eval_iterative(
                                                 // println!("Found ap3 placeholder {}", name);
                                                 let res = Ap::new(
                                                     Ap::new(
-                                                        Ap::new(
-                                                            Atom::new(Name::Variable(
-                                                                id
-                                                            )),
-                                                            z,
-                                                        ),
+                                                        Ap::new(Atom::new(Name::Variable(id)), z),
                                                         y,
                                                     ),
                                                     x,
@@ -1229,12 +1228,12 @@ fn print_images(point_lists: Vec<Vec<(i64, i64)>>) {
         }
 
         // save the canvas as an svg
-//        render::save(
-//            &canvas,
-//            "tests/svg/basic_end_to_end.svg",
-//            SvgRenderer::new(),
-//        )
-//        .expect("Failed to save");
+        //        render::save(
+        //            &canvas,
+        //            "tests/svg/basic_end_to_end.svg",
+        //            SvgRenderer::new(),
+        //        )
+        //        .expect("Failed to save");
     }
 }
 
@@ -1287,7 +1286,12 @@ pub struct Callback {
     constants: Constants,
 }
 impl Callback {
-    pub fn call(&mut self, click: Point, render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>), describe_progress: &dyn Fn(&str)) {
+    pub fn call(
+        &mut self,
+        click: Point,
+        render_to_display: &dyn Fn(Vec<Vec<(i64, i64)>>),
+        describe_progress: &dyn Fn(&str),
+    ) {
         self.state = iterate(
             self.state.clone(),
             &click,
@@ -1318,26 +1322,30 @@ pub fn entry_point(
     load_function_definitions(&galaxy_script, &mut callback.functions).unwrap();
     describe_progress("Parsed functions from galaxy script");
     let bootup_sequence = vec![
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (0, 0),
-      (8, 4),
-      (2, -8),
-      (3, 6),
-      (0, -14),
-      (-4, 10),
-      (9, -3),
-      (-4, 10),
-      (1, 4),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+        (0, 0),
+        (8, 4),
+        (2, -8),
+        (3, 6),
+        (0, -14),
+        (-4, 10),
+        (9, -3),
+        (-4, 10),
+        (1, 4),
     ];
     for (i, p) in bootup_sequence.iter().enumerate() {
         describe_progress(&format!("Executed iteration {} of bootup sequence", i));
-        callback.call(Point { x: p.0, y: p.1 }, render_to_display, describe_progress);
+        callback.call(
+            Point { x: p.0, y: p.1 },
+            render_to_display,
+            describe_progress,
+        );
     }
     describe_progress("Executed first iteration");
 
@@ -1348,7 +1356,9 @@ pub fn entry_point(
 fn main() {
     let mut callback = entry_point(&print_images, &|d| println!("{}", d));
     loop {
-        callback.call(request_click_from_user(), &print_images, &|d| println!("{}", d));
+        callback.call(request_click_from_user(), &print_images, &|d| {
+            println!("{}", d)
+        });
     }
 }
 
@@ -1435,10 +1445,7 @@ mod tests {
         assert_expression_evaluates_to(
             "ap ap cons x0 x1",
             Ap::new(
-                Ap::new(
-                    Atom::new(Name::Cons),
-                    Atom::new(Name::Variable(0)),
-                ),
+                Ap::new(Atom::new(Name::Cons), Atom::new(Name::Variable(0))),
                 Atom::new(Name::Variable(1)),
             ),
             &functions,
@@ -1451,10 +1458,7 @@ mod tests {
         assert_expression_evaluates_to(
             "ap ap ap cons x0 x1 x2",
             Ap::new(
-                Ap::new(
-                    Atom::new(Name::Variable(2)),
-                    Atom::new(Name::Variable(0)),
-                ),
+                Ap::new(Atom::new(Name::Variable(2)), Atom::new(Name::Variable(0))),
                 Atom::new(Name::Variable(1)),
             ),
             &functions,
@@ -1462,10 +1466,7 @@ mod tests {
         assert_expression_evaluates_to(
             "ap ap ap ap cons x0 x1 cons x2",
             Ap::new(
-                Ap::new(
-                    Atom::new(Name::Variable(2)),
-                    Atom::new(Name::Variable(0)),
-                ),
+                Ap::new(Atom::new(Name::Variable(2)), Atom::new(Name::Variable(0))),
                 Atom::new(Name::Variable(1)),
             ),
             &functions,
@@ -1488,16 +1489,8 @@ mod tests {
             :1 = ap ap c add -1",
         )
         .unwrap();
-        assert_expression_evaluates_to(
-            "ap ap t x0 x1",
-            Atom::new(Name::Variable(0)),
-            &functions,
-        );
-        assert_expression_evaluates_to(
-            "ap ap t x0 x1",
-            Atom::new(Name::Variable(0)),
-            &functions,
-        );
+        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new(Name::Variable(0)), &functions);
+        assert_expression_evaluates_to("ap ap t x0 x1", Atom::new(Name::Variable(0)), &functions);
         assert_expression_evaluates_to("ap ap t 1 5", Atom::new(Name::Int(1)), &functions);
         assert_expression_evaluates_to("ap ap t t i", Atom::new(Name::T), &functions);
         assert_expression_evaluates_to("ap ap t t ap :0 5", Atom::new(Name::T), &functions);
@@ -1507,26 +1500,14 @@ mod tests {
     #[test]
     fn false_combinator() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to(
-            "ap ap f x0 x1",
-            Atom::new(Name::Variable(1)),
-            &functions,
-        );
+        assert_expression_evaluates_to("ap ap f x0 x1", Atom::new(Name::Variable(1)), &functions);
     }
 
     #[test]
     fn identity() {
         let functions = hashmap! {};
-        assert_expression_evaluates_to(
-            "ap i x0",
-            Atom::new(Name::Variable(0)),
-            &functions,
-        );
-        assert_expression_evaluates_to(
-            "ap i ap i x0",
-            Atom::new(Name::Variable(0)),
-            &functions,
-        );
+        assert_expression_evaluates_to("ap i x0", Atom::new(Name::Variable(0)), &functions);
+        assert_expression_evaluates_to("ap i ap i x0", Atom::new(Name::Variable(0)), &functions);
         assert_expression_evaluates_to("ap i i", Atom::new(Name::I), &functions);
     }
 
@@ -1583,14 +1564,8 @@ mod tests {
         assert_expression_evaluates_to(
             "ap ap ap s x0 x1 x2",
             Ap::new(
-                Ap::new(
-                    Atom::new(Name::Variable(0)),
-                    Atom::new(Name::Variable(2)),
-                ),
-                Ap::new(
-                    Atom::new(Name::Variable(1)),
-                    Atom::new(Name::Variable(2)),
-                ),
+                Ap::new(Atom::new(Name::Variable(0)), Atom::new(Name::Variable(2))),
+                Ap::new(Atom::new(Name::Variable(1)), Atom::new(Name::Variable(2))),
             ),
             &functions,
         );
@@ -1612,10 +1587,7 @@ mod tests {
         assert_expression_evaluates_to(
             "ap ap ap c x0 x1 x2",
             Ap::new(
-                Ap::new(
-                    Atom::new(Name::Variable(0)),
-                    Atom::new(Name::Variable(2)),
-                ),
+                Ap::new(Atom::new(Name::Variable(0)), Atom::new(Name::Variable(2))),
                 Atom::new(Name::Variable(1)),
             ),
             &functions,
@@ -1631,19 +1603,12 @@ mod tests {
             :1 = ap ap c add -1",
         )
         .unwrap();
-        assert_expression_evaluates_to(
-            "ap ap ap b :0 :1 0",
-            Atom::new(Name::Int(0)),
-            &functions,
-        );
+        assert_expression_evaluates_to("ap ap ap b :0 :1 0", Atom::new(Name::Int(0)), &functions);
         assert_expression_evaluates_to(
             "ap ap ap b x0 x1 x2",
             Ap::new(
                 Atom::new(Name::Variable(0)),
-                Ap::new(
-                    Atom::new(Name::Variable(1)),
-                    Atom::new(Name::Variable(2)),
-                ),
+                Ap::new(Atom::new(Name::Variable(1)), Atom::new(Name::Variable(2))),
             ),
             &functions,
         );
@@ -1659,10 +1624,7 @@ mod tests {
         );
         assert_expression_evaluates_to(
             "ap car x0",
-            Ap::new(
-                Atom::new(Name::Variable(0)),
-                Atom::new(Name::T),
-            ),
+            Ap::new(Atom::new(Name::Variable(0)), Atom::new(Name::T)),
             &functions,
         );
     }
@@ -1677,10 +1639,7 @@ mod tests {
         );
         assert_expression_evaluates_to(
             "ap cdr x0",
-            Ap::new(
-                Atom::new(Name::Variable(0)),
-                Atom::new(Name::F),
-            ),
+            Ap::new(Atom::new(Name::Variable(0)), Atom::new(Name::F)),
             &functions,
         );
     }
@@ -1699,15 +1658,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_expression_evaluates_to(
-            "ap :2000 x0",
-            Atom::new(Name::Variable(0)),
-            &functions,
-        );
-        assert_expression_evaluates_to(
-            "ap :1000 x0",
-            Atom::new(Name::Variable(0)),
-            &functions,
-        );
+        assert_expression_evaluates_to("ap :2000 x0", Atom::new(Name::Variable(0)), &functions);
+        assert_expression_evaluates_to("ap :1000 x0", Atom::new(Name::Variable(0)), &functions);
     }
 }
