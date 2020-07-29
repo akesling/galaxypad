@@ -1,8 +1,8 @@
 class Display {
     constructor(canvas) {
-        this.WIDTH = 512;
+        this.WIDTH = 400;
         this.HALF_WIDTH = this.WIDTH / 2;
-        this.HEIGHT = 512;
+        this.HEIGHT = 400;
         this.HALF_HEIGHT = this.HEIGHT / 2;
 
         this.canvas = canvas;
