@@ -1,7 +1,11 @@
 ## Intellij
 .idea/
-## Vim
 
+## Javascript
+node_modules/
+.firebase/
+
+## Vim
 *.swp
 
 ## Rust

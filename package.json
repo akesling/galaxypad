@@ -1,0 +1,10 @@
+{
+  "name": "galaxypad",
+  "version": "1.0.0",
+  "repository": "github.com:akesling/galaxypad.git",
+  "author": "Alex Kesling <alex@kesling.co>",
+  "license": "MIT",
+  "dependencies": {
+    "firebase-tools": "^8.6.0"
+  }
+}
